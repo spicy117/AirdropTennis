@@ -930,6 +930,10 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
                 is_booked: false,
                 max_capacity: parseInt(formData.maxCapacity || '10', 10), // Use capacity from form, default to 10
               };
+              // Only include court_id if provided (column may not exist in schema)
+              if (formData.selectedCourtId) {
+                slot.court_id = formData.selectedCourtId;
+              }
               slots.push(slot);
             }
 
@@ -990,22 +994,30 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         console.log(`Inserting batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(slots.length / batchSize)} (${processedBatch.length} slots)`);
         console.log('Batch sample (first slot):', JSON.stringify(processedBatch[0], null, 2));
 
-        // Try inserting with max_capacity first
+        // Try inserting with all fields first
         let { data, error } = await supabase
           .from('availabilities')
           .insert(processedBatch)
           .select();
         
-        // If max_capacity column doesn't exist, retry without it
-        if (error && error.code === 'PGRST204' && error.message?.includes('max_capacity')) {
-          console.log('max_capacity column not found, retrying without it...');
-          const batchWithoutMaxCapacity = processedBatch.map(({ max_capacity, ...slot }) => slot);
-          const retryResult = await supabase
-            .from('availabilities')
-            .insert(batchWithoutMaxCapacity)
-            .select();
-          data = retryResult.data;
-          error = retryResult.error;
+        // If column doesn't exist (PGRST204), retry without optional columns
+        if (error && error.code === 'PGRST204') {
+          const hasMaxCapacityError = error.message?.includes('max_capacity');
+          const hasCourtIdError = error.message?.includes('court_id');
+          
+          if (hasMaxCapacityError || hasCourtIdError) {
+            console.log('Optional columns not found, retrying without them...');
+            const batchWithoutOptional = processedBatch.map((slot) => {
+              const { max_capacity, court_id, ...rest } = slot;
+              return rest;
+            });
+            const retryResult = await supabase
+              .from('availabilities')
+              .insert(batchWithoutOptional)
+              .select();
+            data = retryResult.data;
+            error = retryResult.error;
+          }
         }
         
         console.log(`=== BATCH ${Math.floor(i / batchSize) + 1} RESULT ===`);

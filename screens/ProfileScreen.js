@@ -2,9 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 
 export default function ProfileScreen({ onSignOut }) {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
 
   const displayName =
     [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
@@ -12,7 +16,7 @@ export default function ProfileScreen({ onSignOut }) {
       .join(' ') ||
     user?.user_metadata?.full_name ||
     user?.email?.split('@')[0] ||
-    'Student';
+    t('student');
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -23,7 +27,7 @@ export default function ProfileScreen({ onSignOut }) {
         <Text style={styles.name}>{displayName}</Text>
         <Text style={styles.email}>{user?.email}</Text>
         <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>Student</Text>
+          <Text style={styles.roleText}>{t('student')}</Text>
         </View>
       </View>
 
@@ -31,11 +35,11 @@ export default function ProfileScreen({ onSignOut }) {
         style={styles.signOutButton}
         onPress={onSignOut}
         accessible={true}
-        accessibilityLabel="Sign out"
+        accessibilityLabel={t('signOut')}
         accessibilityRole="button"
       >
         <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-        <Text style={styles.signOutText}>Sign Out</Text>
+        <Text style={styles.signOutText}>{t('signOut')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

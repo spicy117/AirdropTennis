@@ -11,16 +11,465 @@ import {
   Animated,
   Modal,
   Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
 
+// Conditionally import MapView for native platforms
+let MapView, Marker;
+if (Platform.OS !== 'web') {
+  const Maps = require('react-native-maps');
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+}
+
 const { width } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && width > 768;
 const DATE_CARD_WIDTH = 70;
 const DATE_CARD_GAP = 12;
+
+// Service duration rules (in hours)
+const SERVICE_DURATION_RULES = {
+  'Boot Camp': 3, // Fixed at 3 hours
+  'Stroke Clinic': 1, // Fixed at 1 hour
+  'UTR Points Play': 2, // Fixed at 2 hours
+  'Private Lessons': 1, // Fixed at 1 hour (same as Stroke Clinic)
+};
+
+// Service badge color styles (pastel, modern, sleek)
+const SERVICE_STYLES = {
+  'Boot Camp': { bg: '#FEF9E7', text: '#B45309', border: '#F5D78E' },
+  'Private Lessons': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'UTR Points Play': { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
+  'Stroke Clinic': { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+};
+
+// Default style for unknown services
+const DEFAULT_SERVICE_STYLE = { bg: '#F9FAFB', text: '#4B5563', border: '#E5E7EB' };
+
+// Custom map style (Silver/Pastel aesthetic)
+const CUSTOM_MAP_STYLE = [
+  {
+    elementType: 'geometry',
+    stylers: [{ color: '#f5f5f5' }],
+  },
+  {
+    elementType: 'labels.icon',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#616161' }],
+  },
+  {
+    elementType: 'labels.text.stroke',
+    stylers: [{ color: '#f5f5f5' }],
+  },
+  {
+    featureType: 'administrative.land_parcel',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#bdbdbd' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'geometry',
+    stylers: [{ color: '#eeeeee' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#757575' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'geometry',
+    stylers: [{ color: '#e5e5e5' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#9e9e9e' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#ffffff' }],
+  },
+  {
+    featureType: 'road.arterial',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#757575' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#dadada' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#616161' }],
+  },
+  {
+    featureType: 'road.local',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#9e9e9e' }],
+  },
+  {
+    featureType: 'transit.line',
+    elementType: 'geometry',
+    stylers: [{ color: '#e5e5e5' }],
+  },
+  {
+    featureType: 'transit.station',
+    elementType: 'geometry',
+    stylers: [{ color: '#eeeeee' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#c9c9c9' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#9e9e9e' }],
+  },
+];
+
+// LocationMapModal component
+const LocationMapModal = ({ visible, location, onClose }) => {
+  if (!location) return null;
+
+  const hasCoordinates = location.latitude && location.longitude;
+  const latitude = hasCoordinates ? parseFloat(location.latitude) : -33.8688;
+  const longitude = hasCoordinates ? parseFloat(location.longitude) : 151.2093;
+
+  const handleGetDirections = () => {
+    const scheme = Platform.select({
+      ios: 'maps:',
+      android: 'geo:',
+      web: 'https://www.google.com/maps/dir/?api=1&destination=',
+    });
+
+    if (Platform.OS === 'web') {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+      window.open(url, '_blank');
+    } else if (Platform.OS === 'ios') {
+      const url = `maps:?daddr=${latitude},${longitude}`;
+      Linking.openURL(url);
+    } else {
+      const url = `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodeURIComponent(location.name)})`;
+      Linking.openURL(url);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={mapModalStyles.overlay}>
+        <View style={mapModalStyles.container}>
+          {/* Header */}
+          <View style={mapModalStyles.header}>
+            <View style={mapModalStyles.headerContent}>
+              <View style={mapModalStyles.headerIcon}>
+                <Ionicons name="location" size={20} color="#000" />
+              </View>
+              <View style={mapModalStyles.headerText}>
+                <Text style={mapModalStyles.title}>{location.name}</Text>
+                {location.address && (
+                  <Text style={mapModalStyles.address}>{location.address}</Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity style={mapModalStyles.closeButton} onPress={onClose}>
+              <Ionicons name="close" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Map */}
+          <View style={mapModalStyles.mapContainer}>
+            <View style={mapModalStyles.mapWrapper}>
+              {Platform.OS !== 'web' && MapView ? (
+                <MapView
+                  style={mapModalStyles.map}
+                  initialRegion={{
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.025,
+                    longitudeDelta: 0.025,
+                  }}
+                  customMapStyle={CUSTOM_MAP_STYLE}
+                  showsUserLocation
+                  showsMyLocationButton={false}
+                  showsCompass={false}
+                  showsScale={false}
+                  pitchEnabled={false}
+                  rotateEnabled={false}
+                >
+                  <Marker
+                    coordinate={{ latitude, longitude }}
+                    title={location.name}
+                    description={location.address}
+                  >
+                    <View style={mapModalStyles.customMarker}>
+                      <View style={mapModalStyles.markerOuter}>
+                        <View style={mapModalStyles.markerInner}>
+                          <Ionicons name="tennisball" size={18} color="#fff" />
+                        </View>
+                      </View>
+                      <View style={mapModalStyles.markerTail} />
+                    </View>
+                  </Marker>
+                </MapView>
+              ) : (
+                // Web fallback - show an embedded Google Map
+                <View style={mapModalStyles.webMapFallback}>
+                  {hasCoordinates ? (
+                    <iframe
+                      src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${latitude},${longitude}&zoom=14&maptype=roadmap`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        borderRadius: 16,
+                      }}
+                      allowFullScreen
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  ) : (
+                    <View style={mapModalStyles.webMapContent}>
+                      <Ionicons name="map-outline" size={48} color="#C7C7CC" />
+                      <Text style={mapModalStyles.webMapText}>
+                        {location.name}
+                      </Text>
+                      {location.address && (
+                        <Text style={mapModalStyles.webMapAddress}>
+                          {location.address}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Actions */}
+          <View style={mapModalStyles.actions}>
+            <TouchableOpacity
+              style={mapModalStyles.directionsButton}
+              onPress={handleGetDirections}
+            >
+              <Ionicons name="navigate" size={18} color="#fff" />
+              <Text style={mapModalStyles.directionsButtonText}>Get Directions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={mapModalStyles.dismissButton}
+              onPress={onClose}
+            >
+              <Text style={mapModalStyles.dismissButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// Map modal styles
+const mapModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  container: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    minHeight: 400,
+    ...(Platform.OS === 'web' && {
+      maxWidth: 500,
+      marginHorizontal: 'auto',
+      marginBottom: 40,
+      borderRadius: 24,
+      maxHeight: '80%',
+    }),
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+    gap: 12,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  address: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapContainer: {
+    height: 300,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+  },
+  mapWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    }),
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    }),
+  },
+  map: {
+    flex: 1,
+    borderRadius: 16,
+  },
+  customMarker: {
+    alignItems: 'center',
+  },
+  markerOuter: {
+    padding: 4,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  markerInner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  markerTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#000',
+    marginTop: -4,
+  },
+  webMapFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  webMapContent: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  webMapText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  webMapAddress: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  webMapCoords: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  actions: {
+    padding: 20,
+    gap: 12,
+  },
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  directionsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dismissButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  dismissButtonText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});
 
 // Skeleton loader component
 const SkeletonChip = () => {
@@ -60,7 +509,7 @@ const SkeletonChip = () => {
   );
 };
 
-export default function BookingDiscoveryScreen({ onNext, onBack }) {
+export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter = null }) {
   const insets = useSafeAreaInsets();
   // Initialize selectedDate as Sydney local date string
   const [selectedDate, setSelectedDate] = useState(getSydneyToday());
@@ -84,8 +533,16 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
   const [availabilityHeatmap, setAvailabilityHeatmap] = useState({}); // { dateStr: boolean }
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const heatmapCacheRef = useRef({}); // Cache for heatmap data
+  const [mapModalVisible, setMapModalVisible] = useState(false);
+  const [selectedMapLocation, setSelectedMapLocation] = useState(null);
   // Use Sydney local time for today
   const todayStr = getSydneyToday();
+
+  // Handle location name click to open map
+  const handleLocationPress = (locationData) => {
+    setSelectedMapLocation(locationData);
+    setMapModalVisible(true);
+  };
 
   // Generate date cards for a range (lazy loading) - using Sydney local time
   const generateDateCards = (startOffset, count = 14) => {
@@ -301,7 +758,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
     if (selectedDate) {
       loadAvailabilities();
     }
-  }, [selectedDate, selectedLocationId]);
+  }, [selectedDate, selectedLocationId, serviceFilter]);
 
   // Clear cache when location filter changes
   useEffect(() => {
@@ -315,7 +772,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
     } else if (viewMode === 'monthly') {
       loadMonthlyHeatmap();
     }
-  }, [dateCards, selectedLocationId, viewMode, calendarMonth, calendarYear]);
+  }, [dateCards, selectedLocationId, serviceFilter, viewMode, calendarMonth, calendarYear]);
 
   // Scroll to selected date when it changes
   useEffect(() => {
@@ -401,7 +858,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
         .from('availabilities')
         .select(`
           *,
-          locations:location_id (id, name)
+          locations:location_id (id, name, address, latitude, longitude)
         `)
         .eq('is_booked', false)
         .gte('start_time', startOfDay.toISOString())
@@ -411,6 +868,11 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       // Apply location filter if selected
       if (selectedLocationId) {
         query = query.eq('location_id', selectedLocationId);
+      }
+
+      // Apply service filter if provided
+      if (serviceFilter) {
+        query = query.eq('service_name', serviceFilter);
       }
 
       const { data, error } = await query;
@@ -437,7 +899,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       const lastDate = dateCards[dateCards.length - 1].dateStr;
       
       // Check cache
-      const cacheKey = `${firstDate}-${lastDate}-${selectedLocationId || 'all'}`;
+      const cacheKey = `${firstDate}-${lastDate}-${selectedLocationId || 'all'}-${serviceFilter || 'all'}`;
       if (heatmapCacheRef.current[cacheKey]) {
         setAvailabilityHeatmap(heatmapCacheRef.current[cacheKey]);
         setHeatmapLoading(false);
@@ -458,6 +920,11 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       // Apply location filter if selected
       if (selectedLocationId) {
         query = query.eq('location_id', selectedLocationId);
+      }
+
+      // Apply service filter if provided
+      if (serviceFilter) {
+        query = query.eq('service_name', serviceFilter);
       }
 
       const { data, error } = await query;
@@ -507,7 +974,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       const firstDayUTC = sydneyDateToUTCStart(firstDayStr);
       const lastDayUTC = sydneyDateToUTCEnd(lastDayStr);
       
-      const cacheKey = `${calendarYear}-${calendarMonth}-${selectedLocationId || 'all'}`;
+      const cacheKey = `${calendarYear}-${calendarMonth}-${selectedLocationId || 'all'}-${serviceFilter || 'all'}`;
       if (heatmapCacheRef.current[cacheKey]) {
         setAvailabilityHeatmap(heatmapCacheRef.current[cacheKey]);
         setHeatmapLoading(false);
@@ -524,6 +991,11 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       // Apply location filter if selected
       if (selectedLocationId) {
         query = query.eq('location_id', selectedLocationId);
+      }
+
+      // Apply service filter if provided
+      if (serviceFilter) {
+        query = query.eq('service_name', serviceFilter);
       }
 
       const { data, error } = await query;
@@ -576,6 +1048,13 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
           locationId: av.location_id,
           locationName,
           serviceName,
+          locationData: {
+            id: av.location_id,
+            name: av.locations?.name || 'Unknown Location',
+            address: av.locations?.address || null,
+            latitude: av.locations?.latitude || null,
+            longitude: av.locations?.longitude || null,
+          },
           slots: [],
         };
       }
@@ -660,117 +1139,93 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
     return null;
   };
 
-  // Get the end slot of current selection for a location
-  const getEndSlot = (locationId) => {
-    const locationSlots = getSelectedSlotsForLocation(locationId);
-    return locationSlots.length > 0 ? locationSlots[locationSlots.length - 1] : null;
+  // Find consecutive slots starting from a given slot
+  const findConsecutiveSlots = (startSlot, count) => {
+    // Find the slot in groupedAvailabilities to get the full slot object
+    let actualStartSlot = null;
+    for (const group of groupedAvailabilities) {
+      if (group.locationId === startSlot.locationId) {
+        actualStartSlot = group.slots.find((s) => s.time24 === startSlot.time24);
+        if (actualStartSlot) break;
+      }
+    }
+    
+    if (!actualStartSlot) return null;
+    
+    const slots = [actualStartSlot];
+    let currentSlot = actualStartSlot;
+    
+    for (let i = 1; i < count; i++) {
+      const nextSlot = findNextSlot(currentSlot);
+      if (!nextSlot) {
+        return null; // Not enough consecutive slots available
+      }
+      slots.push(nextSlot);
+      currentSlot = nextSlot;
+    }
+    
+    return slots;
   };
 
-  // Handle slot selection with streamlined logic
+  // Handle slot selection with service-based auto-allocation
   const handleSlotClick = (slot) => {
     const isSelected = isSlotSelected(slot);
     const locationSlots = getSelectedSlotsForLocation(slot.locationId);
+    const serviceName = slot.serviceName || 'Private Lessons';
+    const requiredDuration = SERVICE_DURATION_RULES[serviceName] || 1; // Default to 1 hour if not found
 
     if (isSelected) {
-      // Deselection: Clear entire range if it would result in < 1 hour
-      const remainingSlots = selectedSlots.filter(
-        (s) => !(s.time === slot.time && s.locationId === slot.locationId)
-      );
-      const remainingForLocation = remainingSlots.filter(
-        (s) => s.locationId === slot.locationId
-      );
-
-      // If removing this slot would leave less than 2 slots for this location, clear all
-      if (remainingForLocation.length < 2) {
-        setSelectedSlots(remainingSlots.filter((s) => s.locationId !== slot.locationId));
-      } else {
-        setSelectedSlots(remainingSlots);
-      }
+      // Deselection: Clear entire selection for this location
+      setSelectedSlots(selectedSlots.filter((s) => s.locationId !== slot.locationId));
     } else {
       // Selection logic
+      const requiredSlotsCount = requiredDuration * 2; // Convert hours to 30-min slots
+
       if (locationSlots.length === 0) {
-        // Initial selection: Auto-select this slot + next consecutive block
-        const nextSlot = findNextSlot(slot);
+        // Initial selection: Auto-select based on service type
+        const consecutiveSlots = findConsecutiveSlots(slot, requiredSlotsCount);
         
-        if (!nextSlot) {
+        if (!consecutiveSlots || consecutiveSlots.length < requiredSlotsCount) {
           Alert.alert(
             'Cannot Select',
-            'This slot requires a following 30-minute block to meet the 1-hour minimum.',
+            `This service requires ${requiredDuration} hour${requiredDuration > 1 ? 's' : ''} (${requiredSlotsCount} consecutive 30-minute slots). Not enough consecutive slots available.`,
             [{ text: 'OK' }]
           );
           return;
         }
 
-        // Select both slots
-        setSelectedSlots([
-          ...selectedSlots,
-          {
-            time: slot.time,
-            time24: slot.time24,
-            locationId: slot.locationId,
-            serviceName: slot.serviceName,
-          },
-          {
-            time: nextSlot.time,
-            time24: nextSlot.time24,
-            locationId: nextSlot.locationId,
-            serviceName: nextSlot.serviceName,
-          },
-        ]);
+        // Select all required slots
+        const newSlots = consecutiveSlots.map((s) => ({
+          time: s.time,
+          time24: s.time24,
+          locationId: s.locationId,
+          serviceName: s.serviceName || serviceName,
+        }));
+
+        setSelectedSlots([...selectedSlots, ...newSlots]);
       } else {
-        // Extension logic: Check if this is the slot immediately after the end
-        const endSlot = getEndSlot(slot.locationId);
-        if (endSlot) {
-          const [endHours, endMinutes] = endSlot.time24.split(':').map(Number);
-          const endTotalMinutes = endHours * 60 + endMinutes;
-          const [slotHours, slotMinutes] = slot.time24.split(':').map(Number);
-          const slotTotalMinutes = slotHours * 60 + slotMinutes;
-
-          // Check if this slot is exactly 30 minutes after the end
-          if (slotTotalMinutes === endTotalMinutes + 30) {
-            // Extend the selection
-            setSelectedSlots([
-              ...selectedSlots,
-              {
-                time: slot.time,
-                time24: slot.time24,
-                locationId: slot.locationId,
-                serviceName: slot.serviceName,
-              },
-            ]);
-          } else {
-            // Not consecutive - start a new selection
-            const nextSlot = findNextSlot(slot);
-            if (!nextSlot) {
-              Alert.alert(
-                'Cannot Select',
-                'This slot requires a following 30-minute block to meet the 1-hour minimum.',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-
-            // Clear existing selection for this location and start new
-            const otherLocationSlots = selectedSlots.filter(
-              (s) => s.locationId !== slot.locationId
-            );
-            setSelectedSlots([
-              ...otherLocationSlots,
-              {
-                time: slot.time,
-                time24: slot.time24,
-                locationId: slot.locationId,
-                serviceName: slot.serviceName,
-              },
-              {
-                time: nextSlot.time,
-                time24: nextSlot.time24,
-                locationId: nextSlot.locationId,
-                serviceName: nextSlot.serviceName,
-              },
-            ]);
-          }
+        // Already have slots selected for this location - clear and reselect at new position
+        const otherLocationSlots = selectedSlots.filter(
+          (s) => s.locationId !== slot.locationId
+        );
+        const consecutiveSlots = findConsecutiveSlots(slot, requiredSlotsCount);
+        
+        if (!consecutiveSlots || consecutiveSlots.length < requiredSlotsCount) {
+          Alert.alert(
+            'Cannot Select',
+            `This service requires ${requiredDuration} hour${requiredDuration > 1 ? 's' : ''} (${requiredSlotsCount} consecutive 30-minute slots). Not enough consecutive slots available.`,
+            [{ text: 'OK' }]
+          );
+          return;
         }
+
+        const newSlots = consecutiveSlots.map((s) => ({
+          time: s.time,
+          time24: s.time24,
+          locationId: s.locationId,
+          serviceName: s.serviceName || serviceName,
+        }));
+        setSelectedSlots([...otherLocationSlots, ...newSlots]);
       }
     }
   };
@@ -853,6 +1308,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
       credits,
     };
   };
+
 
   const formatTime12 = (time24) => {
     const [hours, minutes] = time24.split(':').map(Number);
@@ -1260,13 +1716,41 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
             </Text>
           </View>
         ) : (
-          groupedAvailabilities.map((group, groupIndex) => (
+          groupedAvailabilities.map((group, groupIndex) => {
+            const serviceStyle = SERVICE_STYLES[group.serviceName] || DEFAULT_SERVICE_STYLE;
+            return (
             <View key={groupIndex} style={styles.group}>
               <View style={styles.groupHeader}>
-                <Ionicons name="location" size={20} color="#000" />
-                <Text style={styles.groupLocation}>{group.locationName}</Text>
+                <TouchableOpacity
+                  style={styles.groupHeaderTop}
+                  onPress={() => handleLocationPress(group.locationData)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.locationPinIcon}>
+                    <Ionicons name="location" size={18} color="#000" />
+                  </View>
+                  <Text style={styles.groupLocation}>{group.locationName}</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                </TouchableOpacity>
                 {group.serviceName && group.serviceName !== 'General' && (
-                  <Text style={styles.groupService}>• {group.serviceName}</Text>
+                  <View
+                    style={[
+                      styles.serviceBadge,
+                      {
+                        backgroundColor: serviceStyle.bg,
+                        borderColor: serviceStyle.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.serviceBadgeText,
+                        { color: serviceStyle.text },
+                      ]}
+                    >
+                      {group.serviceName}
+                    </Text>
+                  </View>
                 )}
               </View>
               <View style={styles.slotsContainer}>
@@ -1313,7 +1797,8 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
                 })}
               </View>
             </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
 
@@ -1343,6 +1828,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
                 </Text>
               </View>
             </View>
+            
             <TouchableOpacity
               style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
               onPress={() => canProceed && onNext && onNext(selectedSlots, summary, selectedDate)}
@@ -1360,6 +1846,16 @@ export default function BookingDiscoveryScreen({ onNext, onBack }) {
           </View>
         </View>
       )}
+
+      {/* Location Map Modal */}
+      <LocationMapModal
+        visible={mapModalVisible}
+        location={selectedMapLocation}
+        onClose={() => {
+          setMapModalVisible(false);
+          setSelectedMapLocation(null);
+        }}
+      />
     </View>
   );
 }
@@ -1877,19 +2373,49 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   groupHeader: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  groupHeaderTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
     gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginLeft: -8,
+    borderRadius: 8,
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
+  },
+  locationPinIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   groupLocation: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#000',
+    flex: 1,
   },
-  groupService: {
-    fontSize: 16,
-    color: '#8E8E93',
+  serviceBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderWidth: 0.5,
+  },
+  serviceBadgeText: {
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   slotsContainer: {
     flexDirection: 'row',
@@ -2033,5 +2559,40 @@ const styles = StyleSheet.create({
   },
   nextButtonTextDisabled: {
     color: '#8E8E93',
+  },
+  durationPickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 8,
+  },
+  durationPickerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  durationPickerOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  durationOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#fff',
+  },
+  durationOptionActive: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  durationOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  durationOptionTextActive: {
+    color: '#fff',
   },
 });

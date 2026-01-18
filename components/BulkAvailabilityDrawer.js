@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../lib/supabase';
+
+// Service options for dropdown
+const SERVICES = ['Stroke Clinic', 'Boot Camp', 'Private Lessons', 'UTR Points Play'];
 
 // Simple Calendar Date Picker Component - Just the button
 const CalendarDatePicker = ({ value, onChange, placeholder, onOpen }) => {
@@ -240,12 +244,20 @@ const CalendarModal = ({ visible, onClose, value, onChange, minDate }) => {
 export default function BulkAvailabilityDrawer({
   visible,
   onClose,
-  locations = [],
   onCreate,
 }) {
+  // Data fetching state
+  const [locations, setLocations] = useState([]);
+  const [allCourts, setAllCourts] = useState([]);
+  
+  // Selection state
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [filteredCourts, setFilteredCourts] = useState([]);
+  const [selectedCourt, setSelectedCourt] = useState(null);
+  const [serviceName, setServiceName] = useState('');
+
   const [formData, setFormData] = useState({
-    selectedLocationIds: [], // Array of selected location IDs
-    serviceName: '',
+    selectedLocationIds: [], // Array of selected location IDs (for backward compatibility)
     startDate: '',
     endDate: '',
     daysOfWeek: {
@@ -265,12 +277,98 @@ export default function BulkAvailabilityDrawer({
   const [loading, setLoading] = useState(false);
   const [openCalendar, setOpenCalendar] = useState(null); // 'startDate' or 'endDate' or null
 
+  // Fetch locations and courts on component mount
+  useEffect(() => {
+    if (visible) {
+      loadLocationsAndCourts();
+    }
+  }, [visible]);
+
+  // Filter courts when selectedLocation changes
+  useEffect(() => {
+    if (selectedLocation && allCourts.length > 0) {
+      // Filter courts - convert both to strings to handle UUID comparison
+      const filtered = allCourts.filter(court => {
+        const courtLocationId = String(court.location_id || '').trim();
+        const selectedLocationId = String(selectedLocation || '').trim();
+        return courtLocationId === selectedLocationId;
+      });
+      
+      console.log(`Filtered ${filtered.length} courts for location ${selectedLocation}`);
+      setFilteredCourts(filtered);
+      // Reset court selection when location changes
+      setSelectedCourt(null);
+    } else {
+      setFilteredCourts([]);
+      setSelectedCourt(null);
+    }
+  }, [selectedLocation, allCourts]);
+
+  // Service name is now manual input, no auto-population needed
+
+  const loadLocationsAndCourts = async () => {
+    try {
+      // Fetch all locations
+      const { data: locationsData, error: locationsError } = await supabase
+        .from('locations')
+        .select('*')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('name');
+
+      if (locationsError) {
+        console.error('Error loading locations:', locationsError);
+        Alert.alert('Error', 'Failed to load locations: ' + locationsError.message);
+        setLocations([]);
+      } else {
+        console.log('✅ Locations loaded successfully:', locationsData?.length || 0, 'locations');
+        if (locationsData && locationsData.length > 0) {
+          console.log('Sample location data:', {
+            id: locationsData[0].id,
+            name: locationsData[0].name,
+          });
+        }
+        setLocations(locationsData || []);
+      }
+
+      // Fetch all courts with id, name, and location_id
+      const { data: courtsData, error: courtsError } = await supabase
+        .from('courts')
+        .select('id, location_id, name')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('name');
+
+      if (courtsError) {
+        console.error('Error loading courts:', courtsError);
+        // If courts table doesn't exist, that's okay - we'll handle it gracefully
+        if (!courtsError.message?.includes('does not exist')) {
+          Alert.alert('Error', 'Failed to load courts: ' + courtsError.message);
+        }
+        setAllCourts([]);
+      } else {
+        console.log('✅ Courts loaded successfully:', courtsData?.length || 0, 'courts');
+        if (courtsData && courtsData.length > 0) {
+          console.log('Sample court data:', {
+            id: courtsData[0].id,
+            name: courtsData[0].name,
+            location_id: courtsData[0].location_id,
+          });
+          // Log all location_ids to see what we have
+          const uniqueLocationIds = [...new Set(courtsData.map(c => c.location_id))];
+          console.log('Unique location_ids in courts:', uniqueLocationIds);
+        }
+        setAllCourts(courtsData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Error', 'An error occurred while loading data: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   // Reset form when drawer closes
   React.useEffect(() => {
     if (!visible) {
       setFormData({
         selectedLocationIds: [],
-        serviceName: '',
         startDate: '',
         endDate: '',
         daysOfWeek: {
@@ -286,6 +384,10 @@ export default function BulkAvailabilityDrawer({
         endTime: '17:00',
         maxCapacity: '10',
       });
+      setSelectedLocation(null);
+      setSelectedCourt(null);
+      setServiceName('');
+      setFilteredCourts([]);
       setLoading(false);
     }
   }, [visible]);
@@ -300,42 +402,32 @@ export default function BulkAvailabilityDrawer({
     });
   };
 
-  const handleLocationToggle = (locationId) => {
-    const currentIds = formData.selectedLocationIds || [];
-    const isSelected = currentIds.includes(locationId);
-    
-      setFormData({
-        ...formData,
-        selectedLocationIds: isSelected
-          ? currentIds.filter((id) => id !== locationId)
-          : [...currentIds, locationId],
-      });
-  };
-
-  const handleSelectAllLocations = () => {
-    const allLocationIds = locations.map((loc) => loc.id);
-    const allSelected = allLocationIds.every((id) => 
-      formData.selectedLocationIds?.includes(id)
-    );
-    
-    setFormData({
-      ...formData,
-      selectedLocationIds: allSelected ? [] : allLocationIds,
-    });
-  };
-
   const handleGenerate = async () => {
     console.log('=== Generate Button Clicked ===');
     console.log('Form Data:', JSON.stringify(formData, null, 2));
-    console.log('Selected Location IDs:', formData.selectedLocationIds);
+    console.log('Selected Location:', selectedLocation);
+    console.log('Selected Court:', selectedCourt);
+    console.log('Service Name:', serviceName);
     console.log('Start Date:', formData.startDate);
     console.log('End Date:', formData.endDate);
     
     try {
       // Validation
-      if (!formData.selectedLocationIds || formData.selectedLocationIds.length === 0) {
-        console.log('Validation failed: No locations selected');
-        Alert.alert('Validation Error', 'Please select at least one location');
+      if (!selectedLocation) {
+        console.log('Validation failed: No location selected');
+        Alert.alert('Validation Error', 'Please select a location');
+        return;
+      }
+
+      if (!selectedCourt) {
+        console.log('Validation failed: No court selected');
+        Alert.alert('Validation Error', 'Please select a court');
+        return;
+      }
+
+      if (!serviceName) {
+        console.log('Validation failed: No service name selected');
+        Alert.alert('Validation Error', 'Please select a service name');
         return;
       }
 
@@ -364,16 +456,24 @@ export default function BulkAvailabilityDrawer({
 
       console.log('✅ All validation passed');
       console.log('Selected days:', selectedDays);
-      console.log('Selected locations:', formData.selectedLocationIds.length);
+      console.log('Selected location:', selectedLocation);
+      console.log('Selected court:', selectedCourt);
 
-      // Proceed directly (same behavior for single or multiple locations)
+      // Proceed with creation
       console.log('Proceeding with creation...');
       try {
         setLoading(true);
-        console.log('Calling onCreate with formData:', formData);
+        // Prepare formData with selected location, court, and service name
+        const formDataToSubmit = {
+          ...formData,
+          selectedLocationIds: [selectedLocation], // Single location
+          selectedCourtId: selectedCourt, // Selected court ID
+          serviceName: serviceName || '', // Manually typed service name
+        };
+        console.log('Calling onCreate with formData:', formDataToSubmit);
         
         try {
-          await onCreate(formData);
+          await onCreate(formDataToSubmit);
           console.log('✅ onCreate completed successfully');
           // Success alert will be shown by the parent component
           // Don't close drawer immediately - let user see the success message
@@ -402,9 +502,6 @@ export default function BulkAvailabilityDrawer({
     }
   };
 
-  const allLocationsSelected = locations.length > 0 && 
-    formData.selectedLocationIds?.length === locations.length;
-
   return (
     <>
     <Modal
@@ -427,65 +524,103 @@ export default function BulkAvailabilityDrawer({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
           >
-            {/* Locations - Multi-select with checkboxes */}
+            {/* Location Dropdown */}
             <View style={styles.field}>
-              <View style={styles.fieldHeader}>
-                <Text style={styles.label}>Locations *</Text>
-                <TouchableOpacity
-                  onPress={handleSelectAllLocations}
-                  style={styles.selectAllButton}
-                >
-                  <Text style={styles.selectAllText}>
-                    {allLocationsSelected ? 'Deselect All' : 'Select All'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.checkboxContainer}>
-                {locations.map((location) => {
-                  const isSelected = formData.selectedLocationIds?.includes(location.id);
-                  return (
+              <Text style={styles.label}>Location *</Text>
+              {locations.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>Loading locations...</Text>
+                </View>
+              ) : (
+                <View style={styles.selectContainer}>
+                  {locations.map((location) => (
                     <TouchableOpacity
                       key={location.id}
-                      style={styles.checkboxOption}
-                      onPress={() => handleLocationToggle(location.id)}
+                      style={[
+                        styles.selectOption,
+                        selectedLocation === location.id && styles.selectOptionActive,
+                      ]}
+                      onPress={() => setSelectedLocation(location.id)}
                     >
-                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                        {isSelected && (
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                        )}
-                      </View>
-                      <Text style={[styles.checkboxLabel, isSelected && styles.checkboxLabelChecked]}>
+                      <Text
+                        style={[
+                          styles.selectOptionText,
+                          selectedLocation === location.id && styles.selectOptionTextActive,
+                        ]}
+                      >
                         {location.name}
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {formData.selectedLocationIds?.length > 0 && (
-                <Text style={styles.selectedCount}>
-                  {formData.selectedLocationIds.length} location(s) selected
-                </Text>
+                  ))}
+                </View>
               )}
             </View>
 
-            {formData.selectedLocationIds?.length > 0 && (
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={20} color="#007AFF" />
-                <Text style={styles.infoText}>
-                  Availability will be created for {formData.selectedLocationIds.length} location(s). Multiple locations can share the same time slot.
-                </Text>
+            {/* Court Dropdown - Only shown when location is selected */}
+            {selectedLocation && (
+              <View style={styles.field}>
+                <Text style={styles.label}>Court *</Text>
+                {allCourts.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>Loading courts...</Text>
+                  </View>
+                ) : filteredCourts.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>
+                      No courts available for this location
+                      {allCourts.length > 0 && ` (${allCourts.length} total courts in system)`}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.selectContainer}>
+                    {filteredCourts.map((court) => (
+                      <TouchableOpacity
+                        key={court.id}
+                        style={[
+                          styles.selectOption,
+                          selectedCourt === court.id && styles.selectOptionActive,
+                        ]}
+                        onPress={() => setSelectedCourt(court.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.selectOptionText,
+                            selectedCourt === court.id && styles.selectOptionTextActive,
+                          ]}
+                        >
+                          {court.name || `Court ${court.id}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Service Name */}
+            {/* Service Name - Dropdown */}
             <View style={styles.field}>
-              <Text style={styles.label}>Service Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Tennis Lesson, Court Rental"
-                value={formData.serviceName}
-                onChangeText={(text) => setFormData({ ...formData, serviceName: text })}
-              />
+              <Text style={styles.label}>Service Name *</Text>
+              <View style={styles.selectContainer}>
+                {SERVICES.map((service) => (
+                  <TouchableOpacity
+                    key={service}
+                    style={[
+                      styles.selectOption,
+                      serviceName === service && styles.selectOptionActive,
+                    ]}
+                    onPress={() => setServiceName(service)}
+                  >
+                    <Text
+                      style={[
+                        styles.selectOptionText,
+                        serviceName === service && styles.selectOptionTextActive,
+                      ]}
+                    >
+                      {service}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Date Range */}
@@ -872,6 +1007,20 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginBottom: 8,
     marginTop: -4,
+  },
+  emptyState: {
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+  },
+  inputReadOnly: {
+    backgroundColor: '#F5F5F5',
   },
   datePickerContainer: {
     position: 'relative',

@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import { getTranslation } from '../utils/translations';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd } from '../utils/timezone';
 import BookingEditModal from '../components/BookingEditModal';
 
 export default function BookingsScreen({ onBookLesson }) {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,16 +121,16 @@ export default function BookingsScreen({ onBookLesson }) {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Upcoming Bookings</Text>
+        <Text style={styles.title}>{t('upcomingBookings')}</Text>
         <TouchableOpacity
           style={styles.bookButton}
           onPress={onBookLesson}
           accessible={true}
-          accessibilityLabel="Book a lesson"
+          accessibilityLabel={t('bookLesson')}
           accessibilityRole="button"
         >
           <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.bookButtonText}>Book Lesson</Text>
+          <Text style={styles.bookButtonText}>{t('bookLesson')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -137,18 +141,18 @@ export default function BookingsScreen({ onBookLesson }) {
       ) : bookings.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
-          <Text style={styles.emptyTitle}>No upcoming bookings</Text>
+          <Text style={styles.emptyTitle}>{t('noUpcomingBookings')}</Text>
           <Text style={styles.emptyText}>
-            Book your first lesson to get started
+            {t('bookLesson')}
           </Text>
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={onBookLesson}
             accessible={true}
-            accessibilityLabel="Book a lesson"
+            accessibilityLabel={t('bookLesson')}
             accessibilityRole="button"
           >
-            <Text style={styles.emptyButtonText}>Book a Lesson</Text>
+            <Text style={styles.emptyButtonText}>{t('bookLesson')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -168,7 +172,7 @@ export default function BookingsScreen({ onBookLesson }) {
                   }}
                 >
                   <Ionicons name="create-outline" size={20} color="#007AFF" />
-                  <Text style={styles.editButtonText}>Edit</Text>
+                  <Text style={styles.editButtonText}>{t('edit')}</Text>
                 </TouchableOpacity>
               </View>
               
@@ -182,20 +186,20 @@ export default function BookingsScreen({ onBookLesson }) {
                 <View style={styles.bookingRow}>
                   <Ionicons name="location-outline" size={18} color="#8E8E93" />
                   <Text style={styles.bookingDetailText}>
-                    {booking.locations?.name || 'Location TBD'}
+                    {booking.locations?.name || t('location')}
                   </Text>
                 </View>
                 <View style={styles.bookingRow}>
                   <Ionicons name="hourglass-outline" size={18} color="#8E8E93" />
                   <Text style={styles.bookingDetailText}>
-                    {formatDuration(booking.start_time, booking.end_time)} {formatDuration(booking.start_time, booking.end_time) === '1.0' ? 'hour' : 'hours'}
+                    {formatDuration(booking.start_time, booking.end_time)} {formatDuration(booking.start_time, booking.end_time) === '1.0' ? t('hour') : t('hours')}
                   </Text>
                 </View>
                 {booking.coachName && (
                   <View style={styles.bookingRow}>
                     <Ionicons name="person-circle-outline" size={18} color="#8E8E93" />
                     <Text style={styles.bookingDetailText}>
-                      Coach: {booking.coachName}
+                      {t('coach')}: {booking.coachName}
                     </Text>
                   </View>
                 )}

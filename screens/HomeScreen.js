@@ -9,6 +9,7 @@ import DashboardScreen from './DashboardScreen';
 import BookingsScreen from './BookingsScreen';
 import ProfileScreen from './ProfileScreen';
 import BookingDiscoveryScreen from './BookingDiscoveryScreen';
+import ServicesScreen from './ServicesScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
 import AdminStudentsScreen from './AdminStudentsScreen';
 import AdminManageAvailabilityScreen from './AdminManageAvailabilityScreen';
@@ -31,12 +32,13 @@ export default function HomeScreen() {
   // Initialize with a safe default, will be updated when userRole is available
   const [activeScreen, setActiveScreen] = useState(() => {
     // Try to get initial screen from userRole if available immediately
-    // Otherwise default to dashboard
+    // Otherwise default to dashboard for students
     return 'dashboard';
   });
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
   const [initialScreenSet, setInitialScreenSet] = useState(false);
+  const [serviceFilter, setServiceFilter] = useState(null);
 
   // Set initial screen based on user role (only once when role is first determined)
   useEffect(() => {
@@ -46,7 +48,7 @@ export default function HomeScreen() {
       } else if (userRole === 'admin') {
         setActiveScreen('admin-dashboard');
       } else {
-        setActiveScreen('dashboard');
+        setActiveScreen('dashboard'); // Students start on Dashboard screen
       }
       setInitialScreenSet(true);
     }
@@ -67,7 +69,9 @@ export default function HomeScreen() {
   };
 
   const handleBookLesson = () => {
-    // Navigate to booking discovery screen
+    // Navigate to booking discovery screen and clear any service filter
+    // so all availabilities are shown (not filtered by a specific service)
+    setServiceFilter(null);
     setActiveScreen('booking-discovery');
   };
 
@@ -326,9 +330,15 @@ export default function HomeScreen() {
   };
 
   const handleNavigateToDashboard = () => {
-    setActiveScreen('dashboard');
-    // Trigger refresh by updating the key
-    setDashboardRefreshKey(prev => prev + 1);
+    setActiveScreen('services'); // Navigate to services instead of dashboard
+  };
+
+  const handleViewAvailability = (serviceId, serviceName) => {
+    // Navigate to booking discovery when a service is selected
+    // Store the service filter to pass to BookingDiscoveryScreen
+    setActiveScreen('booking-discovery');
+    // Store service filter in state to pass to BookingDiscoveryScreen
+    setServiceFilter(serviceName);
   };
 
   const handleNavigate = (screen) => {
@@ -342,8 +352,20 @@ export default function HomeScreen() {
   const renderScreen = () => {
     switch (activeScreen) {
       // User screens
+      case 'services':
+        return <ServicesScreen onViewAvailability={handleViewAvailability} />;
       case 'dashboard':
-        return <DashboardScreen key={dashboardRefreshKey} onBookLesson={handleBookLesson} refreshTrigger={dashboardRefreshKey} />;
+        return (
+          <DashboardScreen
+            key={dashboardRefreshKey}
+            onBookLesson={handleBookLesson}
+            onSelectService={(serviceName) => {
+              setServiceFilter(serviceName);
+              setActiveScreen('booking-discovery');
+            }}
+            refreshTrigger={dashboardRefreshKey}
+          />
+        );
       case 'bookings':
         return <BookingsScreen onBookLesson={handleBookLesson} />;
       case 'history':
@@ -354,7 +376,11 @@ export default function HomeScreen() {
         return (
           <BookingDiscoveryScreen
             onNext={handleBookingNext}
-            onBack={handleNavigateToDashboard}
+            onBack={() => {
+              setActiveScreen('dashboard');
+              setServiceFilter(null); // Clear filter when going back
+            }}
+            serviceFilter={serviceFilter}
           />
         );
       // Admin screens
@@ -371,7 +397,17 @@ export default function HomeScreen() {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         } else {
           // Redirect students to their dashboard
-          return <DashboardScreen key={dashboardRefreshKey} onBookLesson={handleBookLesson} refreshTrigger={dashboardRefreshKey} />;
+          return (
+            <DashboardScreen
+              key={dashboardRefreshKey}
+              onBookLesson={handleBookLesson}
+              onSelectService={(serviceName) => {
+                setServiceFilter(serviceName);
+                setActiveScreen('booking-discovery');
+              }}
+              refreshTrigger={dashboardRefreshKey}
+            />
+          );
         }
       case 'admin-locations-courts':
         return <AdminLocationsCourtsScreen />;
@@ -383,7 +419,31 @@ export default function HomeScreen() {
       case 'coach-dashboard':
         return <CoachDashboardScreen onNavigate={handleNavigate} />;
       default:
-        return <DashboardScreen key={dashboardRefreshKey} onBookLesson={handleBookLesson} refreshTrigger={dashboardRefreshKey} />;
+        // Default to dashboard for students
+        if (userRole === 'student' || (!userRole || (userRole !== 'admin' && userRole !== 'coach'))) {
+          return (
+            <DashboardScreen
+              key={dashboardRefreshKey}
+              onBookLesson={handleBookLesson}
+              onSelectService={(serviceName) => {
+                setServiceFilter(serviceName);
+                setActiveScreen('booking-discovery');
+              }}
+              refreshTrigger={dashboardRefreshKey}
+            />
+          );
+        }
+        return (
+          <DashboardScreen
+            key={dashboardRefreshKey}
+            onBookLesson={handleBookLesson}
+            onSelectService={(serviceName) => {
+              setServiceFilter(serviceName);
+              setActiveScreen('booking-discovery');
+            }}
+            refreshTrigger={dashboardRefreshKey}
+          />
+        );
     }
   };
 

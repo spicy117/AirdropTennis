@@ -60,8 +60,8 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
   const isUserCoach = userRole === 'coach';
 
   const userMenuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'bookings', label: 'Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
+    { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
+    { id: 'bookings', label: 'My Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
     { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
     { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
   ];
