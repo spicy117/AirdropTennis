@@ -16,10 +16,42 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
 
+// Service color configuration
+const SERVICE_COLORS = {
+  'Stroke Clinic': { primary: '#0D9488', light: 'rgba(13, 148, 136, 0.1)', border: 'rgba(13, 148, 136, 0.3)' },
+  'Boot Camp': { primary: '#D97706', light: 'rgba(217, 119, 6, 0.1)', border: 'rgba(217, 119, 6, 0.3)' },
+  'UTR Points Play': { primary: '#7C3AED', light: 'rgba(124, 58, 237, 0.1)', border: 'rgba(124, 58, 237, 0.3)' },
+  'Private Lesson': { primary: '#2563EB', light: 'rgba(37, 99, 235, 0.1)', border: 'rgba(37, 99, 235, 0.3)' },
+  default: { primary: '#0D9488', light: 'rgba(13, 148, 136, 0.1)', border: 'rgba(13, 148, 136, 0.3)' },
+};
+
+const getServiceColor = (serviceName) => {
+  return SERVICE_COLORS[serviceName] || SERVICE_COLORS.default;
+};
+
+// Get initials from name
+const getInitials = (name) => {
+  if (!name || name === 'Unknown Student') return '?';
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return (parts[0]?.[0] || '?').toUpperCase();
+};
+
+// Generate avatar color from name
+const getAvatarColor = (name) => {
+  const colors = ['#0D9488', '#7C3AED', '#2563EB', '#D97706', '#DC2626', '#059669', '#6366F1', '#EC4899'];
+  if (!name) return colors[0];
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+};
+
 export default function AdminHistoryScreen() {
   const { user, userRole } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
+  const [groupedBookings, setGroupedBookings] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,35 +60,39 @@ export default function AdminHistoryScreen() {
     if (userRole === 'admin') {
       loadBookings();
     } else {
-      // Redirect if not admin
-      Alert.alert(
-        'Access Denied',
-        'This page is only accessible to administrators.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Access Denied', 'This page is only accessible to administrators.', [{ text: 'OK' }]);
     }
   }, [userRole]);
 
   useEffect(() => {
-    // Filter bookings based on search query
-    if (!searchQuery.trim()) {
-      setFilteredBookings(bookings);
-    } else {
+    let filtered = bookings;
+    if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      const filtered = bookings.filter((booking) => {
+      filtered = bookings.filter((booking) => {
         const studentName = booking.studentName?.toLowerCase() || '';
         const coachName = booking.coachName?.toLowerCase() || '';
-        return studentName.includes(query) || coachName.includes(query);
+        const serviceName = booking.service_name?.toLowerCase() || '';
+        return studentName.includes(query) || coachName.includes(query) || serviceName.includes(query);
       });
-      setFilteredBookings(filtered);
     }
+    setFilteredBookings(filtered);
+    
+    // Group by date
+    const grouped = {};
+    filtered.forEach((booking) => {
+      const dateKey = utcToSydneyDate(booking.end_time);
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(booking);
+    });
+    setGroupedBookings(grouped);
   }, [searchQuery, bookings]);
 
   const loadBookings = async () => {
     try {
       setLoading(true);
 
-      // Server-side verification: Check admin role
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -72,7 +108,6 @@ export default function AdminHistoryScreen() {
         throw new Error('Access denied: Admin role required');
       }
 
-      // Fetch all past bookings (end_time < current time)
       const now = new Date().toISOString();
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
@@ -81,17 +116,15 @@ export default function AdminHistoryScreen() {
           locations:location_id (id, name)
         `)
         .lt('end_time', now)
-        .order('end_time', { ascending: false }); // Most recent first
+        .order('end_time', { ascending: false });
 
       if (bookingsError) throw bookingsError;
 
-      // Fetch student and coach names for each booking
       const bookingsWithNames = await Promise.all(
         (bookingsData || []).map(async (booking) => {
           let studentName = 'Unknown Student';
           let coachName = null;
 
-          // Fetch student name
           if (booking.user_id) {
             try {
               const { data: studentProfile, error: studentError } = await supabase
@@ -114,7 +147,6 @@ export default function AdminHistoryScreen() {
             }
           }
 
-          // Fetch coach name if assigned
           if (booking.coach_id) {
             try {
               const { data: coachProfile, error: coachError } = await supabase
@@ -162,22 +194,139 @@ export default function AdminHistoryScreen() {
     loadBookings();
   };
 
-  const formatDate = (dateString) => {
-    return utcToSydneyDate(dateString);
-  };
-
   const formatTime = (dateString) => {
     return utcToSydneyTime(dateString);
   };
 
+  // Tennis Court SVG for empty state
+  const TennisCourtIcon = () => {
+    if (Platform.OS === 'web') {
+      return (
+        <div style={{
+          width: 120,
+          height: 80,
+          opacity: 0.15,
+          marginBottom: 20,
+        }}>
+          <svg viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="116" height="76" rx="4" stroke="#0D9488" strokeWidth="2"/>
+            <line x1="60" y1="2" x2="60" y2="78" stroke="#0D9488" strokeWidth="2"/>
+            <line x1="2" y1="40" x2="118" y2="40" stroke="#0D9488" strokeWidth="1.5"/>
+            <rect x="20" y="15" width="80" height="50" rx="2" stroke="#0D9488" strokeWidth="1.5" strokeDasharray="4 2"/>
+          </svg>
+        </div>
+      );
+    }
+    return (
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="tennisball-outline" size={48} color="#0D9488" style={{ opacity: 0.3 }} />
+      </View>
+    );
+  };
+
+  // History Row Component (for admin view)
+  const HistoryRow = ({ booking }) => {
+    const serviceColor = getServiceColor(booking.service_name);
+    const isSeasonPass = booking.is_season_pass_booking;
+
+    return (
+      <View style={styles.rowWrapper}>
+        {Platform.OS === 'web' ? (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.5)',
+            backdropFilter: 'blur(30px)',
+            WebkitBackdropFilter: 'blur(30px)',
+            borderRadius: '14px',
+            border: `0.5px solid ${serviceColor.border}`,
+            overflow: 'hidden',
+          }}>
+            <View style={styles.rowContent}>
+              {/* Student Avatar */}
+              <View style={[styles.studentAvatar, { backgroundColor: getAvatarColor(booking.studentName) }]}>
+                <Text style={styles.studentAvatarText}>{getInitials(booking.studentName)}</Text>
+              </View>
+
+              {/* Student Name */}
+              <View style={styles.studentInfo}>
+                <Text style={styles.studentName} numberOfLines={1}>{booking.studentName}</Text>
+                <Text style={styles.timeText}>{formatTime(booking.start_time)}</Text>
+              </View>
+
+              {/* Service Type */}
+              <View style={[styles.serviceTag, { backgroundColor: serviceColor.light }]}>
+                <Text style={[styles.serviceTagText, { color: serviceColor.primary }]} numberOfLines={1}>
+                  {booking.service_name || 'Session'}
+                </Text>
+              </View>
+
+              {/* Credit/Pass Indicator */}
+              <View style={styles.indicatorContainer}>
+                {isSeasonPass ? (
+                  <View style={styles.passBadge}>
+                    <Ionicons name="star" size={12} color="#D97706" />
+                    <Text style={styles.passBadgeText}>Pass</Text>
+                  </View>
+                ) : (
+                  <View style={styles.creditBadge}>
+                    <Text style={styles.creditText}>${booking.credit_cost?.toFixed(0) || '0'}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </div>
+        ) : (
+          <View style={[styles.nativeRow, { borderColor: serviceColor.border }]}>
+            <View style={styles.rowContent}>
+              <View style={[styles.studentAvatar, { backgroundColor: getAvatarColor(booking.studentName) }]}>
+                <Text style={styles.studentAvatarText}>{getInitials(booking.studentName)}</Text>
+              </View>
+              <View style={styles.studentInfo}>
+                <Text style={styles.studentName} numberOfLines={1}>{booking.studentName}</Text>
+                <Text style={styles.timeText}>{formatTime(booking.start_time)}</Text>
+              </View>
+              <View style={[styles.serviceTag, { backgroundColor: serviceColor.light }]}>
+                <Text style={[styles.serviceTagText, { color: serviceColor.primary }]} numberOfLines={1}>
+                  {booking.service_name || 'Session'}
+                </Text>
+              </View>
+              <View style={styles.indicatorContainer}>
+                {isSeasonPass ? (
+                  <View style={styles.passBadge}>
+                    <Ionicons name="star" size={12} color="#D97706" />
+                    <Text style={styles.passBadgeText}>Pass</Text>
+                  </View>
+                ) : (
+                  <View style={styles.creditBadge}>
+                    <Text style={styles.creditText}>${booking.credit_cost?.toFixed(0) || '0'}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Date Header Component
+  const DateHeader = ({ date }) => (
+    <View style={styles.dateHeader}>
+      <View style={styles.dateHeaderLine} />
+      <Text style={styles.dateHeaderText}>{date}</Text>
+      <View style={styles.dateHeaderLine} />
+    </View>
+  );
+
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#0D9488" />
         <Text style={styles.loadingText}>Loading booking history...</Text>
       </View>
     );
   }
+
+  const dateKeys = Object.keys(groupedBookings);
 
   return (
     <ScrollView
@@ -193,22 +342,48 @@ export default function AdminHistoryScreen() {
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#8E8E93" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by Student Name or Coach Name..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#8E8E93"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setSearchQuery('')}
-            style={styles.clearButton}
-          >
-            <Ionicons name="close-circle" size={20} color="#8E8E93" />
-          </TouchableOpacity>
+      <View style={styles.searchWrapper}>
+        {Platform.OS === 'web' ? (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '14px',
+            border: '0.5px solid rgba(13, 148, 136, 0.2)',
+            overflow: 'hidden',
+          }}>
+            <View style={styles.searchContent}>
+              <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search students, coaches, or services..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#9CA3AF"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </div>
+        ) : (
+          <View style={styles.searchContainer}>
+            <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search students, coaches, or services..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#9CA3AF"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -220,53 +395,27 @@ export default function AdminHistoryScreen() {
         </Text>
       </View>
 
-      {/* Bookings List */}
-      {filteredBookings.length === 0 ? (
+      {/* Bookings List Grouped by Date */}
+      {dateKeys.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="time-outline" size={64} color="#C7C7CC" />
-          <Text style={styles.emptyText}>
-            {searchQuery ? 'No matching sessions found' : 'No past sessions'}
+          <TennisCourtIcon />
+          <Text style={styles.emptyTitle}>
+            {searchQuery ? 'No matching sessions' : 'No past sessions found'}
           </Text>
           <Text style={styles.emptySubtext}>
             {searchQuery
               ? 'Try adjusting your search query'
-              : 'Completed bookings will appear here'}
+              : 'Completed bookings and session data will appear here.'}
           </Text>
         </View>
       ) : (
         <View style={styles.bookingsList}>
-          {filteredBookings.map((booking) => (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <View style={styles.dateTimeContainer}>
-                  <Text style={styles.dateText}>{formatDate(booking.end_time)}</Text>
-                  <Text style={styles.timeText}>
-                    {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.bookingDetails}>
-                <View style={styles.detailRow}>
-                  <Ionicons name="person-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailLabel}>Student:</Text>
-                  <Text style={styles.detailValue}>{booking.studentName}</Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Ionicons name="shield-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailLabel}>Coach:</Text>
-                  <Text style={styles.detailValue}>
-                    {booking.coachName || 'Not assigned'}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Ionicons name="location-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailLabel}>Court:</Text>
-                  <Text style={styles.detailValue}>{booking.locationName}</Text>
-                </View>
-              </View>
+          {dateKeys.map((date) => (
+            <View key={date}>
+              <DateHeader date={date} />
+              {groupedBookings[date].map((booking) => (
+                <HistoryRow key={booking.id} booking={booking} />
+              ))}
             </View>
           ))}
         </View>
@@ -282,6 +431,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -292,128 +442,198 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#6B7280',
   },
   header: {
     marginBottom: 24,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#000',
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 6,
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
   },
   subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  // Search
+  searchWrapper: {
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: 'rgba(13, 148, 136, 0.2)',
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 16,
-    ...(Platform.OS !== 'web' && {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    }),
+    gap: 10,
   },
-  searchIcon: {
-    marginRight: 12,
+  searchContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#000',
+    fontSize: 15,
+    color: '#1F2937',
     padding: 0,
-  },
-  clearButton: {
-    padding: 4,
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none',
+    }),
   },
   resultsContainer: {
     marginBottom: 16,
   },
   resultsText: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 13,
+    color: '#6B7280',
     fontWeight: '500',
   },
-  bookingsList: {
-    gap: 12,
-  },
-  bookingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    ...(Platform.OS !== 'web' && {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    }),
-  },
-  bookingHeader: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  dateTimeContainer: {
-    gap: 4,
-  },
-  dateText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-  },
-  timeText: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  bookingDetails: {
-    gap: 12,
-  },
-  detailRow: {
+  // Date Header
+  dateHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 20,
+    marginBottom: 12,
   },
-  detailLabel: {
+  dateHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  dateHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    paddingHorizontal: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Row Styles
+  bookingsList: {
+    gap: 0,
+  },
+  rowWrapper: {
+    marginVertical: 4,
+  },
+  nativeRow: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    overflow: 'hidden',
+  },
+  rowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    paddingHorizontal: 14,
+  },
+  studentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  studentAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  studentInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  studentName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000',
-    minWidth: 70,
+    color: '#111827',
+    marginBottom: 2,
   },
-  detailValue: {
-    fontSize: 14,
-    color: '#000',
-    flex: 1,
+  timeText: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
+  serviceTag: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginRight: 10,
+    maxWidth: 120,
+  },
+  serviceTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  indicatorContainer: {
+    alignItems: 'flex-end',
+    minWidth: 50,
+  },
+  passBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(217, 119, 6, 0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  passBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+  creditBadge: {
+    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  creditText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  // Empty State
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginTop: 16,
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#8E8E93',
-    marginTop: 8,
+    color: '#6B7280',
     textAlign: 'center',
     paddingHorizontal: 40,
+    lineHeight: 20,
   },
 });

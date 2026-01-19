@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import AuthSelectionScreen from './screens/AuthSelectionScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -333,11 +334,13 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LanguageProvider>
-        <AppNavigator />
-      </LanguageProvider>
-    </AuthProvider>
+    <GlobalErrorBoundary>
+      <AuthProvider>
+        <LanguageProvider>
+          <AppNavigator />
+        </LanguageProvider>
+      </AuthProvider>
+    </GlobalErrorBoundary>
   );
 }
 

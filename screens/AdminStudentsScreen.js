@@ -42,6 +42,7 @@ export default function StudentsScreen() {
         return {
           id: profile.id,
           email: profile.email || 'N/A',
+          phone: profile.phone || null,
           fullName: nameFromParts || profile.full_name || 'N/A',
           createdAt: profile.created_at,
           emailVerified: true, // Assume verified if profile exists
@@ -111,6 +112,12 @@ export default function StudentsScreen() {
               <View style={styles.studentInfo}>
                 <Text style={styles.studentName}>{student.fullName}</Text>
                 <Text style={styles.studentEmail}>{student.email}</Text>
+                {student.phone && (
+                  <View style={styles.phoneRow}>
+                    <Ionicons name="call-outline" size={12} color="#8E8E93" />
+                    <Text style={styles.studentPhone}>{student.phone}</Text>
+                  </View>
+                )}
               </View>
               {student.emailVerified && (
                 <View style={styles.verifiedBadge}>
@@ -208,6 +215,16 @@ const styles = StyleSheet.create({
   studentEmail: {
     fontSize: 14,
     color: '#8E8E93',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  studentPhone: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   verifiedBadge: {
     marginLeft: 8,

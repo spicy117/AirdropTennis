@@ -63,6 +63,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    phone: '',
   });
 
   // Real-time password validation
@@ -157,6 +158,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
     const trimmedFirstName = formData.firstName.trim();
     const trimmedLastName = formData.lastName.trim();
     const trimmedEmail = formData.email.trim();
+    const trimmedPhone = formData.phone.trim();
     
     // First name validation
     if (!trimmedFirstName) {
@@ -183,6 +185,13 @@ export default function SignUpScreen({ navigation, embedded = false }) {
       newFieldErrors.email = 'Please enter a valid email address';
     } else if (trimmedEmail.length > 254) {
       newFieldErrors.email = 'Email address is too long';
+    }
+    
+    // Phone validation
+    if (!trimmedPhone) {
+      newFieldErrors.phone = 'Mobile phone is required';
+    } else if (trimmedPhone.length < 8) {
+      newFieldErrors.phone = 'Please enter a valid phone number';
     }
     
     // Password validation
@@ -223,6 +232,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
       full_name: fullName,
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
+      phone: trimmedPhone,
       role: 'student', // Automatically set role to student
     });
 
@@ -372,6 +382,32 @@ export default function SignUpScreen({ navigation, embedded = false }) {
           />
           {fieldErrors.email && (
             <Text style={styles.fieldError}>{fieldErrors.email}</Text>
+          )}
+        </View>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[
+              styles.input,
+              styles.phoneInput,
+              fieldErrors.phone && styles.inputError,
+            ]}
+            placeholder="Mobile Phone"
+            value={formData.phone}
+            onChangeText={(text) => {
+              setFormData({ ...formData, phone: text });
+              setFieldErrors((prev) => ({ ...prev, phone: null }));
+            }}
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+            autoCorrect={false}
+            fontSize={16}
+            accessible={true}
+            accessibilityLabel="Mobile phone number"
+            accessibilityHint="Enter your mobile phone number"
+          />
+          {fieldErrors.phone && (
+            <Text style={styles.fieldError}>{fieldErrors.phone}</Text>
           )}
         </View>
 
@@ -588,6 +624,9 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     // Additional styles for password inputs
+  },
+  phoneInput: {
+    paddingRight: 15, // No toggle button needed
   },
   inputError: {
     borderColor: '#FF3B30',

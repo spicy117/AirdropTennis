@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getTranslation } from '../utils/translations';
-import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd } from '../utils/timezone';
 import BookingEditModal from '../components/BookingEditModal';
+
+// Service color configuration
+const SERVICE_COLORS = {
+  'Stroke Clinic': { primary: '#0D9488', light: 'rgba(13, 148, 136, 0.1)', border: 'rgba(13, 148, 136, 0.3)' },
+  'Boot Camp': { primary: '#D97706', light: 'rgba(217, 119, 6, 0.1)', border: 'rgba(217, 119, 6, 0.3)' },
+  'UTR Points Play': { primary: '#7C3AED', light: 'rgba(124, 58, 237, 0.1)', border: 'rgba(124, 58, 237, 0.3)' },
+  'Private Lesson': { primary: '#2563EB', light: 'rgba(37, 99, 235, 0.1)', border: 'rgba(37, 99, 235, 0.3)' },
+  default: { primary: '#0D9488', light: 'rgba(13, 148, 136, 0.1)', border: 'rgba(13, 148, 136, 0.3)' },
+};
+
+const getServiceColor = (serviceName) => {
+  return SERVICE_COLORS[serviceName] || SERVICE_COLORS.default;
+};
 
 export default function BookingsScreen({ onBookLesson }) {
   const { user } = useAuth();
@@ -36,12 +57,11 @@ export default function BookingsScreen({ onBookLesson }) {
           locations:location_id (id, name)
         `)
         .eq('user_id', user.id)
-        .gte('start_time', new Date().toISOString()) // Only upcoming bookings
+        .gte('start_time', new Date().toISOString())
         .order('start_time', { ascending: true });
 
       if (error) throw error;
 
-      // Fetch coach information for bookings that have a coach_id
       const bookingsWithCoaches = await Promise.all(
         (data || []).map(async (booking) => {
           if (booking.coach_id) {
@@ -56,14 +76,15 @@ export default function BookingsScreen({ onBookLesson }) {
                 const coachFirstName = coachProfile.first_name || null;
                 const coachLastName = coachProfile.last_name || null;
                 let coachName = null;
+                let coachInitials = '?';
                 if (coachFirstName || coachLastName) {
-                  coachName = [coachFirstName, coachLastName]
-                    .filter(Boolean)
-                    .join(' ');
+                  coachName = [coachFirstName, coachLastName].filter(Boolean).join(' ');
+                  coachInitials = (coachFirstName?.[0] || '') + (coachLastName?.[0] || '');
                 } else {
                   coachName = coachProfile.email || 'Unknown Coach';
+                  coachInitials = coachName[0]?.toUpperCase() || '?';
                 }
-                return { ...booking, coachName };
+                return { ...booking, coachName, coachInitials: coachInitials.toUpperCase() };
               }
             } catch (err) {
               console.error('Error fetching coach profile:', err);
@@ -87,13 +108,11 @@ export default function BookingsScreen({ onBookLesson }) {
     loadBookings();
   };
 
-  const formatDate = (dateString) => {
+  const formatDateCompact = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    const day = date.getDate();
+    const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    return { day, month };
   };
 
   const formatTime = (dateString) => {
@@ -107,9 +126,129 @@ export default function BookingsScreen({ onBookLesson }) {
   const formatDuration = (startTime, endTime) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const minutes = (end - start) / (1000 * 60);
-    const hours = minutes / 60;
-    return hours.toFixed(1);
+    const hours = (end - start) / (1000 * 60 * 60);
+    if (hours === 1) return '1 hr';
+    if (hours < 1) return `${Math.round(hours * 60)} min`;
+    return `${hours} hrs`;
+  };
+
+  const getStatusInfo = (startTime) => {
+    const now = new Date();
+    const bookingDate = new Date(startTime);
+    const diffMs = bookingDate - now;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return { text: 'Today', color: '#DC2626', bgColor: 'rgba(220, 38, 38, 0.1)' };
+    } else if (diffDays === 1) {
+      return { text: 'Tomorrow', color: '#D97706', bgColor: 'rgba(217, 119, 6, 0.1)' };
+    } else if (diffDays <= 7) {
+      return { text: `In ${diffDays} days`, color: '#0D9488', bgColor: 'rgba(13, 148, 136, 0.1)' };
+    } else {
+      return { text: 'Confirmed', color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.1)' };
+    }
+  };
+
+  // Elite Booking Card Component
+  const BookingCard = ({ booking }) => {
+    const dateInfo = formatDateCompact(booking.start_time);
+    const serviceColor = getServiceColor(booking.service_name);
+    const statusInfo = getStatusInfo(booking.start_time);
+    const duration = formatDuration(booking.start_time, booking.end_time);
+
+    const CardContent = () => (
+      <TouchableOpacity
+        activeOpacity={0.95}
+        onPress={() => {
+          setSelectedBooking(booking);
+          setEditModalVisible(true);
+        }}
+        style={styles.cardTouchable}
+      >
+        {/* Status Pill - Top Right */}
+        <View style={[styles.statusPill, { backgroundColor: statusInfo.bgColor }]}>
+          <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.text}</Text>
+        </View>
+
+        <View style={styles.cardLayout}>
+          {/* Left: Date Block */}
+          <View style={[styles.dateBlock, { backgroundColor: serviceColor.light }]}>
+            <Text style={[styles.dateDay, { color: serviceColor.primary }]}>{dateInfo.day}</Text>
+            <Text style={[styles.dateMonth, { color: serviceColor.primary }]}>{dateInfo.month}</Text>
+          </View>
+
+          {/* Middle: Info Section */}
+          <View style={styles.infoSection}>
+            {/* Service Name */}
+            <Text style={styles.serviceName} numberOfLines={1}>
+              {booking.service_name || 'Tennis Session'}
+            </Text>
+
+            {/* Time & Duration */}
+            <View style={styles.timeRow}>
+              <Ionicons name="time-outline" size={14} color="#6B7280" />
+              <Text style={styles.timeText}>
+                {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+              </Text>
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>{duration}</Text>
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color="#9CA3AF" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {booking.locations?.name || 'Location TBD'}
+              </Text>
+            </View>
+
+            {/* Coach with Avatar */}
+            {booking.coachName && (
+              <View style={styles.coachRow}>
+                <View style={[styles.coachAvatar, { backgroundColor: serviceColor.primary }]}>
+                  <Text style={styles.coachAvatarText}>{booking.coachInitials || '?'}</Text>
+                </View>
+                <Text style={styles.coachName}>{booking.coachName}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Right: Chevron Arrow */}
+          <View style={styles.chevronContainer}>
+            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+
+    // Web: Glassmorphism with CSS
+    if (Platform.OS === 'web') {
+      return (
+        <View style={styles.cardWrapper}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.5)',
+            backdropFilter: 'blur(40px)',
+            WebkitBackdropFilter: 'blur(40px)',
+            borderRadius: '24px',
+            border: `0.5px solid ${serviceColor.border}`,
+            overflow: 'hidden',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+          }}>
+            <CardContent />
+          </div>
+        </View>
+      );
+    }
+
+    // Native fallback
+    return (
+      <View style={styles.cardWrapper}>
+        <View style={[styles.nativeCard, { borderColor: serviceColor.border }]}>
+          <CardContent />
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -121,7 +260,12 @@ export default function BookingsScreen({ onBookLesson }) {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>{t('upcomingBookings')}</Text>
+        <View>
+          <Text style={styles.title}>{t('upcomingBookings')}</Text>
+          <Text style={styles.subtitle}>
+            {bookings.length} {bookings.length === 1 ? 'session' : 'sessions'} scheduled
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.bookButton}
           onPress={onBookLesson}
@@ -136,14 +280,17 @@ export default function BookingsScreen({ onBookLesson }) {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#000" />
+          <ActivityIndicator size="large" color="#0D9488" />
+          <Text style={styles.loadingText}>Loading your sessions...</Text>
         </View>
       ) : bookings.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="calendar-outline" size={48} color="#0D9488" />
+          </View>
           <Text style={styles.emptyTitle}>{t('noUpcomingBookings')}</Text>
           <Text style={styles.emptyText}>
-            {t('bookLesson')}
+            Ready to hit the court? Book your next session now.
           </Text>
           <TouchableOpacity
             style={styles.emptyButton}
@@ -152,59 +299,14 @@ export default function BookingsScreen({ onBookLesson }) {
             accessibilityLabel={t('bookLesson')}
             accessibilityRole="button"
           >
+            <Ionicons name="add-circle" size={20} color="#fff" />
             <Text style={styles.emptyButtonText}>{t('bookLesson')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.bookingsList}>
           {bookings.map((booking) => (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <View style={styles.bookingDateContainer}>
-                  <Ionicons name="calendar" size={20} color="#007AFF" />
-                  <Text style={styles.bookingDate}>{formatDate(booking.start_time)}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => {
-                    setSelectedBooking(booking);
-                    setEditModalVisible(true);
-                  }}
-                >
-                  <Ionicons name="create-outline" size={20} color="#007AFF" />
-                  <Text style={styles.editButtonText}>{t('edit')}</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.bookingDetails}>
-                <View style={styles.bookingRow}>
-                  <Ionicons name="time-outline" size={18} color="#8E8E93" />
-                  <Text style={styles.bookingDetailText}>
-                    {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
-                  </Text>
-                </View>
-                <View style={styles.bookingRow}>
-                  <Ionicons name="location-outline" size={18} color="#8E8E93" />
-                  <Text style={styles.bookingDetailText}>
-                    {booking.locations?.name || t('location')}
-                  </Text>
-                </View>
-                <View style={styles.bookingRow}>
-                  <Ionicons name="hourglass-outline" size={18} color="#8E8E93" />
-                  <Text style={styles.bookingDetailText}>
-                    {formatDuration(booking.start_time, booking.end_time)} {formatDuration(booking.start_time, booking.end_time) === '1.0' ? t('hour') : t('hours')}
-                  </Text>
-                </View>
-                {booking.coachName && (
-                  <View style={styles.bookingRow}>
-                    <Ionicons name="person-circle-outline" size={18} color="#8E8E93" />
-                    <Text style={styles.bookingDetailText}>
-                      {t('coach')}: {booking.coachName}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
+            <BookingCard key={booking.id} booking={booking} />
           ))}
         </View>
       )}
@@ -216,6 +318,9 @@ export default function BookingsScreen({ onBookLesson }) {
           setSelectedBooking(null);
         }}
         booking={selectedBooking}
+        onBookingCancelled={() => {
+          loadBookings();
+        }}
       />
     </ScrollView>
   );
@@ -228,31 +333,51 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
+    alignItems: 'flex-start',
+    marginBottom: 28,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#000',
+    color: '#111827',
+    marginBottom: 4,
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   bookButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
+    backgroundColor: '#0D9488',
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
+    gap: 6,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 2px 8px rgba(13, 148, 136, 0.3)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#0D9488',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    }),
   },
   bookButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -260,30 +385,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 80,
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    paddingVertical: 60,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(13, 148, 136, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#000',
-    marginTop: 24,
+    color: '#111827',
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 15,
+    color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
+    maxWidth: 280,
+    lineHeight: 22,
   },
   emptyButton: {
-    backgroundColor: '#000',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0D9488',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
   },
   emptyButtonText: {
     color: '#fff',
@@ -291,70 +434,139 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bookingsList: {
-    gap: 16,
+    gap: 0, // We use marginVertical on cards instead
   },
-  bookingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+  // Card Styles
+  cardWrapper: {
+    marginVertical: 12,
   },
-  bookingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  nativeCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    borderWidth: 0.5,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  bookingDateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  cardTouchable: {
+    padding: 18,
   },
-  bookingDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
+  statusPill: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#F5F5F5',
-  },
-  statusBadgeConfirmed: {
-    backgroundColor: '#E3F2FD',
+    borderRadius: 10,
+    zIndex: 1,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#007AFF',
-    textTransform: 'capitalize',
+    letterSpacing: 0.3,
   },
-  bookingDetails: {
-    gap: 8,
-  },
-  bookingRow: {
+  cardLayout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  bookingDetailText: {
-    fontSize: 14,
-    color: '#8E8E93',
+  // Date Block
+  dateBlock: {
+    width: 56,
+    height: 64,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  editButton: {
+  dateDay: {
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  dateMonth: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    opacity: 0.8,
+  },
+  // Info Section
+  infoSection: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  serviceName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    paddingRight: 60, // Space for status pill
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
+  },
+  timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#E3F2FD',
+    marginBottom: 6,
     gap: 6,
   },
-  editButtonText: {
+  timeText: {
     fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  durationBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  durationText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#6B7280',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    flex: 1,
+  },
+  // Coach Row
+  coachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  coachAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachAvatarText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  coachName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  // Chevron
+  chevronContainer: {
+    paddingLeft: 8,
   },
 });

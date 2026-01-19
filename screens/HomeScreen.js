@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform, Dimensions, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  Dimensions,
+  Alert,
+  Modal,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -39,6 +49,14 @@ export default function HomeScreen() {
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
   const [initialScreenSet, setInitialScreenSet] = useState(false);
   const [serviceFilter, setServiceFilter] = useState(null);
+  
+  // Booking result modal state
+  const [bookingModal, setBookingModal] = useState({
+    visible: false,
+    success: false,
+    title: '',
+    message: '',
+  });
 
   // Set initial screen based on user role (only once when role is first determined)
   useEffect(() => {
@@ -279,19 +297,13 @@ export default function HomeScreen() {
         if (updateError) throw updateError;
       }
 
-      Alert.alert(
-        'Booking Success! ✅',
-        `Your booking has been confirmed.\n\nDuration: ${summary.duration.toFixed(1)} ${summary.duration === 1 ? 'hour' : 'hours'}\nCredits: ${summary.credits.toFixed(1)}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate back to dashboard or bookings screen
-              setActiveScreen('bookings');
-            },
-          },
-        ]
-      );
+      // Show success modal
+      setBookingModal({
+        visible: true,
+        success: true,
+        title: 'Booking Confirmed!',
+        message: `Your lesson has been booked successfully.\n\nDuration: ${summary.duration.toFixed(1)} ${summary.duration === 1 ? 'hour' : 'hours'}`,
+      });
     } catch (error) {
       console.error('Error creating booking:', error);
       console.error('Error details:', {
@@ -303,30 +315,44 @@ export default function HomeScreen() {
         user_id: user?.id,
       });
       
-      // Check for RLS policy issues
+      // Show error modal
+      let errorMessage = error.message || 'Unknown error occurred';
+      
+      // Make error messages more user-friendly
       if (error.code === '42501' || error.status === 403 || error.message?.includes('permission denied')) {
-        const errorDetails = `Error Code: ${error.code || 'N/A'}\n` +
-          `Message: ${error.message || 'Permission denied'}\n` +
-          `User ID: ${user?.id || 'Not found'}\n\n` +
-          'This is likely an RLS (Row Level Security) policy issue.\n\n' +
-          'Please ensure:\n' +
-          '1. RLS policies are set up correctly (run fix_bookings_rls.sql)\n' +
-          '2. You have a profile entry in the profiles table\n' +
-          '3. Your user_id matches auth.uid()';
-        
-        Alert.alert(
-          'Permission Denied (403)',
-          errorDetails,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Booking Failed ❌',
-          `Unable to create booking:\n\n${error.message || 'Unknown error'}\n\nCode: ${error.code || 'N/A'}\n\nPlease try again.`,
-          [{ text: 'OK' }]
-        );
+        errorMessage = 'You do not have permission to make this booking. Please try logging out and back in.';
+      } else if (error.message?.includes('overlaps')) {
+        errorMessage = 'This time slot is no longer available. Please select a different time.';
+      } else if (error.message?.includes('no longer available')) {
+        errorMessage = error.message;
       }
+      
+      setBookingModal({
+        visible: true,
+        success: false,
+        title: 'Booking Failed',
+        message: errorMessage,
+      });
     }
+  };
+
+  const handleBookingModalClose = () => {
+    const wasSuccess = bookingModal.success;
+    
+    // First just hide the modal, keep other state to prevent icon flash
+    setBookingModal(prev => ({ ...prev, visible: false }));
+    
+    // Then reset state and navigate after modal animation completes
+    setTimeout(() => {
+      setBookingModal({ visible: false, success: false, title: '', message: '' });
+      
+      if (wasSuccess) {
+        // Navigate to My Bookings on success
+        setActiveScreen('bookings');
+        setDashboardRefreshKey(prev => prev + 1);
+      }
+      // On failure, stay on booking screen so user can try again
+    }, 300);
   };
 
   const handleNavigateToDashboard = () => {
@@ -472,6 +498,44 @@ export default function HomeScreen() {
           onNavigate={handleNavigate}
         />
       )}
+
+      {/* Booking Result Modal */}
+      <Modal
+        visible={bookingModal.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleBookingModalClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={[
+              styles.modalIconContainer,
+              bookingModal.success ? styles.successIconBg : styles.errorIconBg
+            ]}>
+              <Ionicons
+                name={bookingModal.success ? 'checkmark-circle' : 'close-circle'}
+                size={48}
+                color={bookingModal.success ? '#10B981' : '#EF4444'}
+              />
+            </View>
+            
+            <Text style={styles.modalTitle}>{bookingModal.title}</Text>
+            <Text style={styles.modalMessage}>{bookingModal.message}</Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                bookingModal.success ? styles.successButton : styles.errorButton
+              ]}
+              onPress={handleBookingModalClose}
+            >
+              <Text style={styles.modalButtonText}>
+                {bookingModal.success ? 'View My Bookings' : 'Try Again'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -487,5 +551,77 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       overflow: 'auto',
     }),
+  },
+  // Booking Result Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 10,
+    }),
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  successIconBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  errorIconBg: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 28,
+  },
+  modalButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successButton: {
+    backgroundColor: '#10B981',
+  },
+  errorButton: {
+    backgroundColor: '#1F2937',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

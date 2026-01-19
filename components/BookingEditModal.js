@@ -13,14 +13,63 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
+/**
+ * Check if cancellation is within the free cancellation window
+ * Free cancellation is allowed before 12pm (noon) the day before the booking
+ * @param {string} bookingStartTime - ISO string of booking start time
+ * @returns {boolean} - true if free cancellation is allowed
+ */
+const isFreeCancellationAllowed = (bookingStartTime) => {
+  const bookingDate = new Date(bookingStartTime);
+  const now = new Date();
+  
+  // Get the day before the booking at 12pm (noon)
+  const cancellationDeadline = new Date(bookingDate);
+  cancellationDeadline.setDate(cancellationDeadline.getDate() - 1);
+  cancellationDeadline.setHours(12, 0, 0, 0);
+  
+  // Free cancellation is allowed if current time is before the deadline
+  return now < cancellationDeadline;
+};
+
 export default function BookingEditModal({
   visible,
   onClose,
   booking,
+  onBookingCancelled, // Optional callback when booking is cancelled
 }) {
   const [requestType, setRequestType] = useState(null); // 'cancel' or 'raincheck'
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resultModal, setResultModal] = useState({
+    visible: false,
+    success: false,
+    title: '',
+    message: '',
+  });
+
+  // Check if free cancellation is available for this booking
+  const freeCancellationAvailable = booking ? isFreeCancellationAllowed(booking.start_time) : false;
+
+  const handleResultModalClose = () => {
+    const wasSuccess = resultModal.success;
+    const wasCancellation = resultModal.title.includes('Cancelled');
+    
+    // First just hide the modal, keep other state to prevent icon flash
+    setResultModal(prev => ({ ...prev, visible: false }));
+    
+    // Then reset state after modal animation completes
+    setTimeout(() => {
+      setResultModal({ visible: false, success: false, title: '', message: '' });
+      setRequestType(null);
+      setReason('');
+      
+      if (wasSuccess && wasCancellation) {
+        onBookingCancelled?.(); // Trigger refresh for cancellations
+      }
+      onClose();
+    }, 300);
+  };
 
   const handleCancelRequest = async () => {
     if (!reason.trim()) {
@@ -30,30 +79,54 @@ export default function BookingEditModal({
 
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('booking_requests')
-        .insert({
-          booking_id: booking.id,
-          request_type: 'cancel',
-          reason: reason.trim(),
-          status: 'pending',
-          requested_by: booking.user_id,
+
+      if (freeCancellationAvailable) {
+        // Free cancellation - directly delete the booking
+        const { error: deleteError } = await supabase
+          .from('bookings')
+          .delete()
+          .eq('id', booking.id);
+
+        if (deleteError) throw deleteError;
+
+        // Note: We don't log to booking_requests since the booking is deleted
+        // and would cause a foreign key violation
+
+        setResultModal({
+          visible: true,
+          success: true,
+          title: 'Booking Cancelled',
+          message: 'Your booking has been successfully cancelled and your credits have been refunded.',
         });
+      } else {
+        // Late cancellation - requires admin approval
+        const { error } = await supabase
+          .from('booking_requests')
+          .insert({
+            booking_id: booking.id,
+            request_type: 'cancel',
+            reason: reason.trim(),
+            status: 'pending',
+            user_id: booking.user_id,
+          });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      Alert.alert(
-        'Request Submitted',
-        'Your cancellation request has been submitted and is pending admin approval.',
-        [{ text: 'OK', onPress: () => {
-          setRequestType(null);
-          setReason('');
-          onClose();
-        }}]
-      );
+        setResultModal({
+          visible: true,
+          success: true,
+          title: 'Request Submitted',
+          message: 'Your cancellation request has been submitted and is pending admin approval.\n\nNote: Free cancellation is available until 12pm the day before your booking.',
+        });
+      }
     } catch (error) {
       console.error('Error submitting cancel request:', error);
-      Alert.alert('Error', 'Failed to submit cancellation request. Please try again.');
+      setResultModal({
+        visible: true,
+        success: false,
+        title: 'Error',
+        message: 'Failed to process cancellation. Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -74,23 +147,25 @@ export default function BookingEditModal({
           request_type: 'raincheck',
           reason: reason.trim(),
           status: 'pending',
-          requested_by: booking.user_id,
+          user_id: booking.user_id,
         });
 
       if (error) throw error;
 
-      Alert.alert(
-        'Request Submitted',
-        'Your rain check request has been submitted and is pending admin approval.',
-        [{ text: 'OK', onPress: () => {
-          setRequestType(null);
-          setReason('');
-          onClose();
-        }}]
-      );
+      setResultModal({
+        visible: true,
+        success: true,
+        title: 'Request Submitted',
+        message: 'Your rain check request has been submitted and is pending admin approval.',
+      });
     } catch (error) {
       console.error('Error submitting rain check request:', error);
-      Alert.alert('Error', 'Failed to submit rain check request. Please try again.');
+      setResultModal({
+        visible: true,
+        success: false,
+        title: 'Error',
+        message: 'Failed to submit rain check request. Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -135,14 +210,28 @@ export default function BookingEditModal({
                   style={styles.optionButton}
                   onPress={() => setRequestType('cancel')}
                 >
-                  <View style={styles.optionIconContainer}>
-                    <Ionicons name="close-circle-outline" size={24} color="#FF3B30" />
+                  <View style={[styles.optionIconContainer, freeCancellationAvailable && styles.optionIconContainerGreen]}>
+                    <Ionicons 
+                      name={freeCancellationAvailable ? "checkmark-circle-outline" : "close-circle-outline"} 
+                      size={24} 
+                      color={freeCancellationAvailable ? "#34C759" : "#FF3B30"} 
+                    />
                   </View>
                   <View style={styles.optionContent}>
-                    <Text style={styles.optionTitle}>Cancel Request</Text>
-                    <Text style={styles.optionDescription}>
-                      Request to cancel this booking. Requires admin approval.
+                    <Text style={styles.optionTitle}>
+                      {freeCancellationAvailable ? 'Cancel Booking' : 'Cancel Request'}
                     </Text>
+                    <Text style={styles.optionDescription}>
+                      {freeCancellationAvailable 
+                        ? 'Free cancellation available - cancel instantly without approval.'
+                        : 'Request to cancel this booking. Requires admin approval.'}
+                    </Text>
+                    {freeCancellationAvailable && (
+                      <View style={styles.freeCancelBadge}>
+                        <Ionicons name="time-outline" size={12} color="#34C759" />
+                        <Text style={styles.freeCancelBadgeText}>Free cancellation</Text>
+                      </View>
+                    )}
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
                 </TouchableOpacity>
@@ -174,8 +263,28 @@ export default function BookingEditModal({
                 </TouchableOpacity>
 
                 <Text style={styles.subtitle}>
-                  {requestType === 'cancel' ? 'Cancel Request' : 'Rain Check Request'}
+                  {requestType === 'cancel' 
+                    ? (freeCancellationAvailable ? 'Cancel Booking' : 'Cancel Request') 
+                    : 'Rain Check Request'}
                 </Text>
+
+                {requestType === 'cancel' && freeCancellationAvailable && (
+                  <View style={styles.freeCancelNotice}>
+                    <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                    <Text style={styles.freeCancelNoticeText}>
+                      You're within the free cancellation window. Your booking will be cancelled immediately.
+                    </Text>
+                  </View>
+                )}
+
+                {requestType === 'cancel' && !freeCancellationAvailable && (
+                  <View style={styles.lateCancelNotice}>
+                    <Ionicons name="information-circle" size={20} color="#FF9500" />
+                    <Text style={styles.lateCancelNoticeText}>
+                      Free cancellation ends at 12pm the day before your booking. This request requires admin approval.
+                    </Text>
+                  </View>
+                )}
 
                 <Text style={styles.label}>
                   Reason {requestType === 'cancel' ? 'for Cancellation' : 'for Rain Check'} *
@@ -204,6 +313,42 @@ export default function BookingEditModal({
           </ScrollView>
         </View>
       </View>
+
+      {/* Result Modal */}
+      <Modal
+        visible={resultModal.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleResultModalClose}
+      >
+        <View style={styles.resultOverlay}>
+          <View style={styles.resultContainer}>
+            <View style={[
+              styles.resultIconContainer,
+              resultModal.success ? styles.successIconBg : styles.errorIconBg
+            ]}>
+              <Ionicons
+                name={resultModal.success ? 'checkmark-circle' : 'close-circle'}
+                size={48}
+                color={resultModal.success ? '#10B981' : '#EF4444'}
+              />
+            </View>
+            
+            <Text style={styles.resultTitle}>{resultModal.title}</Text>
+            <Text style={styles.resultMessage}>{resultModal.message}</Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.resultButton,
+                resultModal.success ? styles.successButton : styles.errorButton
+              ]}
+              onPress={handleResultModalClose}
+            >
+              <Text style={styles.resultButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -271,6 +416,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+  optionIconContainerGreen: {
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+  },
+  freeCancelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  freeCancelBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#34C759',
+  },
+  freeCancelNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 10,
+  },
+  freeCancelNoticeText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1D6F42',
+    lineHeight: 20,
+  },
+  lateCancelNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 10,
+  },
+  lateCancelNoticeText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#996300',
+    lineHeight: 20,
+  },
   optionContent: {
     flex: 1,
   },
@@ -324,6 +518,78 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Result Modal Styles
+  resultOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  resultContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 360,
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 20,
+      elevation: 10,
+    }),
+  },
+  resultIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  successIconBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  errorIconBg: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  resultTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  resultMessage: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  resultButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  successButton: {
+    backgroundColor: '#10B981',
+  },
+  errorButton: {
+    backgroundColor: '#EF4444',
+  },
+  resultButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

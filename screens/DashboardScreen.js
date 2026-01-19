@@ -44,7 +44,7 @@ const SERVICES = [
     duration: '1 hour',
     icon: 'tennisball',
     tag: 'Popular',
-    price: 45,
+    price: 99.99,
     color: '#0D9488',
     bgColor: 'rgba(13, 148, 136, 0.08)',
     borderColor: 'rgba(13, 148, 136, 0.2)',
@@ -59,7 +59,7 @@ const SERVICES = [
     duration: '3 hours',
     icon: 'fitness',
     tag: 'Value',
-    price: 35,
+    price: 149.99,
     color: '#D97706',
     bgColor: 'rgba(217, 119, 6, 0.08)',
     borderColor: 'rgba(217, 119, 6, 0.2)',
@@ -74,7 +74,7 @@ const SERVICES = [
     duration: '1 hour',
     icon: 'person',
     tag: 'Premium',
-    price: 85,
+    price: 149.99,
     color: '#2563EB',
     bgColor: 'rgba(37, 99, 235, 0.08)',
     borderColor: 'rgba(37, 99, 235, 0.2)',
@@ -89,7 +89,7 @@ const SERVICES = [
     duration: '2 hours',
     icon: 'trophy',
     tag: null,
-    price: 55,
+    price: 149.99,
     color: '#7C3AED',
     bgColor: 'rgba(124, 58, 237, 0.08)',
     borderColor: 'rgba(124, 58, 237, 0.2)',
@@ -136,6 +136,12 @@ const SeasonPassHero = ({ onLearnMore }) => {
             background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(13, 148, 136, 0.3) 100%)',
           }}>
             <View style={heroStyles.card}>
+              {/* Coming Soon Badge */}
+              <View style={heroStyles.comingSoonBadge}>
+                <Ionicons name="time-outline" size={10} color="#D97706" />
+                <Text style={heroStyles.comingSoonText}>COMING SOON</Text>
+              </View>
+
               {/* Term Stamp - Vertical Serial Number */}
               <View style={heroStyles.termStamp}>
                 <Text style={heroStyles.termStampText}>T</Text>
@@ -213,6 +219,12 @@ const SeasonPassHero = ({ onLearnMore }) => {
           </div>
         ) : (
           <View style={heroStyles.nativeCard}>
+            {/* Coming Soon Badge */}
+            <View style={heroStyles.comingSoonBadge}>
+              <Ionicons name="time-outline" size={10} color="#D97706" />
+              <Text style={heroStyles.comingSoonText}>COMING SOON</Text>
+            </View>
+
             {/* Term Stamp - Vertical Serial Number */}
             <View style={heroStyles.termStamp}>
               <Text style={heroStyles.termStampText}>T</Text>
@@ -305,6 +317,25 @@ const heroStyles = StyleSheet.create({
     minHeight: isMobile ? 200 : 180,
     borderWidth: 1,
     borderColor: 'rgba(13, 148, 136, 0.2)',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    gap: 5,
+    zIndex: 10,
+  },
+  comingSoonText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#D97706',
+    letterSpacing: 1,
   },
   termStamp: {
     position: 'absolute',
@@ -910,7 +941,10 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
 
         {/* Footer */}
         <View style={cardStyles.footer}>
-          <Text style={[cardStyles.price, { color: service.color }]}>${service.price}</Text>
+          <View style={cardStyles.priceContainer}>
+            <Text style={[cardStyles.price, { color: service.color }]}>${service.price.toFixed(2)}</Text>
+            <Text style={cardStyles.duration}>{service.duration}</Text>
+          </View>
           <TouchableOpacity
             style={cardStyles.infoBtn}
             onPress={(e) => {
@@ -994,9 +1028,18 @@ const cardStyles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 'auto',
   },
+  priceContainer: {
+    flexDirection: 'column',
+  },
   price: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
+  },
+  duration: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
   },
   infoBtn: {
     paddingVertical: 4,
@@ -1409,8 +1452,8 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           )}
         </View>
 
-        {/* Season Pass Hero */}
-        <SeasonPassHero onLearnMore={() => setShowSeasonPassModal(true)} />
+        {/* Season Pass Hero - Hidden for now, will be re-enabled later */}
+        {/* <SeasonPassHero onLearnMore={() => setShowSeasonPassModal(true)} /> */}
 
         {/* Stats Row */}
         <View style={styles.statsRow}>

@@ -393,11 +393,16 @@ const mapModalStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 8,
+    }),
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+    }),
   },
   markerTail: {
     width: 0,
@@ -2002,11 +2007,16 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5EA',
     minWidth: 200,
     maxHeight: 300,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 20,
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 20,
+    }),
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    }),
   },
   dropdownMenu: {
     position: 'absolute',

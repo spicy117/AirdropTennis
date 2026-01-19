@@ -13,15 +13,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
+import CoachRainCheckModal from '../components/CoachRainCheckModal';
 
 export default function CoachDashboardScreen({ onNavigate }) {
   const { user, userRole } = useAuth();
-  const [bookings, setBookings] = useState([]);
+  const [groupedSessions, setGroupedSessions] = useState([]);
   const [pastBookings, setPastBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [rainCheckModalVisible, setRainCheckModalVisible] = useState(false);
+  const [pendingRainChecks, setPendingRainChecks] = useState(0);
 
   // Redirect if not a coach
   useEffect(() => {
@@ -50,8 +54,35 @@ export default function CoachDashboardScreen({ onNavigate }) {
     if (user && userRole === 'coach') {
       loadBookings();
       loadPastBookings();
+      loadPendingRainCheckCount();
     }
   }, [user, userRole]);
+
+  const loadPendingRainCheckCount = async () => {
+    if (!user || userRole !== 'coach') return;
+
+    try {
+      // Get all pending rain check requests
+      const { data, error } = await supabase
+        .from('booking_requests')
+        .select(`
+          id,
+          booking:booking_id (coach_id)
+        `)
+        .eq('status', 'pending')
+        .eq('request_type', 'raincheck');
+
+      if (error) throw error;
+
+      // Count only those assigned to this coach
+      const coachRainChecks = (data || []).filter(
+        request => request.booking?.coach_id === user.id
+      );
+      setPendingRainChecks(coachRainChecks.length);
+    } catch (error) {
+      console.error('Error loading rain check count:', error);
+    }
+  };
 
   const loadBookings = async () => {
     if (!user || userRole !== 'coach') return;
@@ -113,7 +144,9 @@ export default function CoachDashboardScreen({ onNavigate }) {
         })
       );
 
-      setBookings(bookingsWithDetails);
+      // Group bookings by session (same time slot and location)
+      const sessions = groupBookingsBySession(bookingsWithDetails);
+      setGroupedSessions(sessions);
     } catch (error) {
       console.error('Error loading bookings:', error);
       Alert.alert('Error', 'Failed to load bookings. Please try again.');
@@ -221,6 +254,7 @@ export default function CoachDashboardScreen({ onNavigate }) {
     setRefreshing(true);
     loadBookings();
     loadPastBookings();
+    loadPendingRainCheckCount();
   };
 
   const formatDate = (dateString) => {
@@ -255,6 +289,9 @@ export default function CoachDashboardScreen({ onNavigate }) {
     };
   };
 
+  // Count total students across all sessions
+  const totalStudents = groupedSessions.reduce((sum, session) => sum + session.students.length, 0);
+
   // Don't render if not a coach
   if (userRole && userRole !== 'coach') {
     return null;
@@ -269,86 +306,51 @@ export default function CoachDashboardScreen({ onNavigate }) {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Coach Dashboard</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Coach Dashboard</Text>
+          {/* Rain Check Requests Button */}
+          <TouchableOpacity
+            style={styles.rainCheckButton}
+            onPress={() => setRainCheckModalVisible(true)}
+          >
+            <Ionicons name="rainy" size={18} color="#007AFF" />
+            <Text style={styles.rainCheckButtonText}>Rain Checks</Text>
+            {pendingRainChecks > 0 && (
+              <View style={styles.rainCheckBadge}>
+                <Text style={styles.rainCheckBadgeText}>{pendingRainChecks}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>
-          {bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'} assigned
+          {groupedSessions.length} {groupedSessions.length === 1 ? 'session' : 'sessions'} • {totalStudents} {totalStudents === 1 ? 'student' : 'students'}
         </Text>
       </View>
 
-      {/* Current/Future Bookings Section */}
+      {/* Current/Future Sessions Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#000" />
-            <Text style={styles.loadingText}>Loading bookings...</Text>
+            <ActivityIndicator size="large" color="#0D9488" />
+            <Text style={styles.loadingText}>Loading sessions...</Text>
           </View>
-        ) : bookings.length === 0 ? (
+        ) : groupedSessions.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyText}>No bookings assigned</Text>
+            <Text style={styles.emptyText}>No sessions assigned</Text>
             <Text style={styles.emptySubtext}>
-              Bookings assigned to you will appear here
+              Sessions assigned to you will appear here
             </Text>
           </View>
         ) : (
-          bookings.map((booking) => {
-          const dateTime = formatDateTime(booking.start_time);
-          const endTime = formatTime(booking.end_time);
-
-          return (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <View style={styles.bookingInfo}>
-                  <Text style={styles.locationName}>
-                    {booking.locationName}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.bookingDetails}>
-                <View style={styles.detailRow}>
-                  <Ionicons name="calendar-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailText}>{dateTime.date}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="time-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailText}>
-                    {dateTime.time} - {endTime}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="location-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailText}>
-                    {booking.locationName}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="person-outline" size={16} color="#8E8E93" />
-                  <Text style={styles.detailText}>
-                    Student: {booking.studentName}
-                  </Text>
-                </View>
-                {booking.studentEmail && (
-                  <View style={styles.detailRow}>
-                    <Ionicons name="mail-outline" size={16} color="#8E8E93" />
-                    <Text style={styles.detailText}>
-                      {booking.studentEmail}
-                    </Text>
-                  </View>
-                )}
-                {booking.service_name && (
-                  <View style={styles.detailRow}>
-                    <Ionicons name="tennisball-outline" size={16} color="#8E8E93" />
-                    <Text style={styles.detailText}>
-                      {booking.service_name}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          );
-        })
+          groupedSessions.map((session) => (
+            <GroupedSessionCard
+              key={session.key}
+              session={session}
+              isAdmin={false}
+            />
+          ))
         )}
       </View>
 
@@ -419,6 +421,17 @@ export default function CoachDashboardScreen({ onNavigate }) {
           </>
         )}
       </View>
+
+      {/* Rain Check Modal */}
+      <CoachRainCheckModal
+        visible={rainCheckModalVisible}
+        onClose={() => setRainCheckModalVisible(false)}
+        coachId={user?.id}
+        onRequestProcessed={() => {
+          loadPendingRainCheckCount();
+          loadBookings();
+        }}
+      />
     </ScrollView>
   );
 }
@@ -434,15 +447,51 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#000',
-    marginBottom: 4,
+    color: '#1F2937',
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
+  },
+  rainCheckButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  rainCheckButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  rainCheckBadge: {
+    backgroundColor: '#FF3B30',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  rainCheckBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 15,
+    color: '#6B7280',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -452,76 +501,42 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#6B7280',
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 16,
+    ...(Platform.OS === 'web' && {
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }),
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000',
+    color: '#1F2937',
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#6B7280',
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 40,
-  },
-  bookingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    ...(Platform.OS !== 'web' && {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
-    }),
-  },
-  bookingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  bookingInfo: {
-    flex: 1,
-  },
-  locationName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 4,
-  },
-  bookingDetails: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F5F5F5',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#000',
-    marginLeft: 8,
   },
   section: {
     marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#000',
+    color: '#1F2937',
     marginBottom: 16,
+    ...(Platform.OS === 'web' && {
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+    }),
   },
   historyHeader: {
     flexDirection: 'row',
@@ -533,36 +548,50 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   historyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: 14,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    ...(Platform.OS === 'web' && {
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }),
     ...(Platform.OS !== 'web' && {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
+      shadowOpacity: 0.06,
       shadowRadius: 8,
-      elevation: 3,
+      elevation: 2,
     }),
   },
   historyCardHeader: {
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
   },
   historyDate: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#000',
+    color: '#1F2937',
     marginBottom: 4,
   },
   historyTime: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 13,
+    color: '#6B7280',
   },
   historyDetails: {
     gap: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#374151',
+    marginLeft: 8,
   },
 });

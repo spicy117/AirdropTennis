@@ -442,6 +442,19 @@ export const AuthProvider = ({ children }) => {
       // Check if we have a session - if yes, it's definitely a new account
       if (data.session) {
         console.log('Signup success with session - new account created');
+        // Update profile with phone number if provided
+        if (userData?.phone && data.user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ phone: userData.phone })
+              .eq('id', data.user.id);
+            console.log('Phone number saved to profile');
+          } catch (phoneError) {
+            console.warn('Failed to save phone number:', phoneError);
+            // Don't fail signup if phone save fails
+          }
+        }
         return { data, error: null };
       }
       
@@ -454,6 +467,19 @@ export const AuthProvider = ({ children }) => {
         // Email not confirmed - this is expected for new signups with email confirmation enabled
         // Don't try to sign in, just return the signup data
         console.log('Signup success - new account created, email verification required');
+        // Update profile with phone number if provided (profile should exist from trigger)
+        if (userData?.phone && data.user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ phone: userData.phone })
+              .eq('id', data.user.id);
+            console.log('Phone number saved to profile');
+          } catch (phoneError) {
+            console.warn('Failed to save phone number:', phoneError);
+            // Don't fail signup if phone save fails
+          }
+        }
         return { data, error: null };
       }
       
