@@ -19,11 +19,12 @@ import { supabase } from '../lib/supabase';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
 
 // Conditionally import MapView for native platforms
-let MapView, Marker;
+let MapView, Marker, UrlTile;
 if (Platform.OS !== 'web') {
   const Maps = require('react-native-maps');
   MapView = Maps.default;
   Marker = Maps.Marker;
+  UrlTile = Maps.UrlTile;
 }
 
 const { width } = Dimensions.get('window');
@@ -540,6 +541,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
   const heatmapCacheRef = useRef({}); // Cache for heatmap data
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [selectedMapLocation, setSelectedMapLocation] = useState(null);
+  const [showLocationsMap, setShowLocationsMap] = useState(false);
   // Use Sydney local time for today
   const todayStr = getSydneyToday();
 
@@ -1350,6 +1352,140 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
   const summary = calculateSummary();
   const canProceed = hasValidSelection(); // At least 1 hour (2 consecutive 30-min slots)
 
+  // Derived locations list with valid coordinates
+  const locationsWithCoords = locations.filter(
+    (loc) =>
+      loc &&
+      loc.latitude != null &&
+      loc.longitude != null &&
+      !Number.isNaN(parseFloat(loc.latitude)) &&
+      !Number.isNaN(parseFloat(loc.longitude))
+  );
+
+  const getInitialMapRegion = () => {
+    if (!locationsWithCoords.length) {
+      // Default to Sydney CBD
+      return {
+        latitude: -33.8688,
+        longitude: 151.2093,
+        latitudeDelta: 0.2,
+        longitudeDelta: 0.2,
+      };
+    }
+
+    const avgLat =
+      locationsWithCoords.reduce((sum, loc) => sum + parseFloat(loc.latitude), 0) /
+      locationsWithCoords.length;
+    const avgLng =
+      locationsWithCoords.reduce((sum, loc) => sum + parseFloat(loc.longitude), 0) /
+      locationsWithCoords.length;
+
+    return {
+      latitude: avgLat,
+      longitude: avgLng,
+      latitudeDelta: 0.2,
+      longitudeDelta: 0.2,
+    };
+  };
+
+  const renderLocationMarkers = () => {
+    if (!MapView || !Marker) return null;
+
+    return locationsWithCoords.map((loc) => {
+      const latitude = parseFloat(loc.latitude);
+      const longitude = parseFloat(loc.longitude);
+
+      return (
+        <Marker
+          key={loc.id}
+          coordinate={{ latitude, longitude }}
+          title={loc.name || 'Location'}
+          description={loc.address || undefined}
+        />
+      );
+    });
+  };
+
+  const generateMapHTML = () => {
+    if (!locationsWithCoords.length) {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+          <style>
+            body { margin: 0; padding: 0; }
+            .no-coords {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 260px;
+              font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+              color: #6B7280;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-coords">
+            <p>No locations with coordinates are available to show on the map yet.</p>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+
+    const avgLat =
+      locationsWithCoords.reduce((sum, loc) => sum + parseFloat(loc.latitude), 0) /
+      locationsWithCoords.length;
+    const avgLng =
+      locationsWithCoords.reduce((sum, loc) => sum + parseFloat(loc.longitude), 0) /
+      locationsWithCoords.length;
+
+    const markers = locationsWithCoords
+      .map((loc) => {
+        const lat = parseFloat(loc.latitude);
+        const lng = parseFloat(loc.longitude);
+        const name = (loc.name || 'Location').replace(/'/g, "\\'");
+        const address = (loc.address || '').replace(/'/g, "\\'");
+        return `
+          L.marker([${lat}, ${lng}]).addTo(map)
+            .bindPopup('<b>${name}</b>${address ? '<br>' + address : ''}');
+        `;
+      })
+      .join('\n');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <style>
+          html, body { margin: 0; padding: 0; height: 100%; }
+          #map { width: 100%; height: 100%; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+          var map = L.map('map').setView([${avgLat}, ${avgLng}], 11);
+
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+          }).addTo(map);
+
+          ${markers}
+        </script>
+      </body>
+      </html>
+    `;
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -1366,7 +1502,62 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
           <Text style={styles.title}>Book a Lesson</Text>
           <Text style={styles.subtitle}>Select your preferred date and time</Text>
         </View>
+        <TouchableOpacity
+          style={[
+            styles.mapToggleButton,
+            showLocationsMap && styles.mapToggleButtonActive,
+          ]}
+          onPress={() => setShowLocationsMap((prev) => !prev)}
+        >
+          <Ionicons
+            name="map"
+            size={18}
+            color={showLocationsMap ? '#fff' : '#000'}
+          />
+          <Text
+            style={[
+              styles.mapToggleButtonText,
+              showLocationsMap && styles.mapToggleButtonTextActive,
+            ]}
+          >
+            {showLocationsMap ? 'Hide Map' : 'Map'}
+          </Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Inline Locations Map */}
+      {showLocationsMap && (
+        <View style={styles.inlineMapContainer}>
+          {Platform.OS !== 'web' && MapView ? (
+            <MapView
+              style={styles.inlineMap}
+              initialRegion={getInitialMapRegion()}
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              showsCompass={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              {UrlTile && (
+                <UrlTile
+                  urlTemplate="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                  maximumZ={19}
+                  zIndex={-1}
+                />
+              )}
+              {renderLocationMarkers()}
+            </MapView>
+          ) : (
+            <View style={styles.inlineMapWebWrapper}>
+              <iframe
+                srcDoc={generateMapHTML()}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="Locations Map"
+              />
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Actions Row - Filters and View Toggle */}
       <View style={[styles.actionsRow, Platform.OS !== 'web' && styles.actionsRowMobile]}>
@@ -1883,6 +2074,29 @@ const styles = StyleSheet.create({
   headerContent: {
     flex: 1,
   },
+  mapToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    gap: 6,
+  },
+  mapToggleButtonActive: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  mapToggleButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000',
+  },
+  mapToggleButtonTextActive: {
+    color: '#fff',
+  },
   viewSwitcher: {
     flexDirection: 'row',
     backgroundColor: '#F5F5F5',
@@ -2102,6 +2316,23 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#8E8E93',
+  },
+  inlineMapContainer: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#E5E5EA',
+    // Slightly wider than tall for better balance in the flow
+    aspectRatio: 1.6,
+  },
+  inlineMap: {
+    width: '100%',
+    height: '100%',
+  },
+  inlineMapWebWrapper: {
+    width: '100%',
+    height: '100%',
   },
   dateNavHeader: {
     flexDirection: 'row',
