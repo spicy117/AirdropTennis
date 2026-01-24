@@ -33,8 +33,24 @@ function AuthStack() {
 }
 
 function AppNavigator() {
-  const { session, loading, isPasswordRecovery, userRole } = useAuth();
+  const { session, loading, isPasswordRecovery, userRole, user } = useAuth();
   const navigationRef = useRef(null);
+
+  // CRITICAL: Check for payment redirect on mount. Store session_id and clear URL
+  // so HomeScreen can process it and we avoid re-detecting on every [user] change.
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('session_id');
+      if (sessionId) {
+        sessionStorage.setItem('stripe_session_id', sessionId);
+        sessionStorage.setItem('stripe_redirect_time', Date.now().toString());
+        // Clear session_id from URL so we don't re-detect; HomeScreen reads from sessionStorage
+        const path = window.location.pathname || '/home';
+        window.history.replaceState(null, '', path);
+      }
+    }
+  }, []);
 
   // Navigate to Home when user signs in
   // HomeScreen will handle role-based routing internally
@@ -238,7 +254,18 @@ function AppNavigator() {
     }
   }, [session, loading]);
 
-  if (loading) {
+  // When returning from Stripe with session_id, don't block on auth loading so HomeScreen
+  // can mount and process the payment. HomeScreen will retry until user is ready.
+  const hasPendingStripeRedirect = Platform.OS === 'web' && typeof window !== 'undefined' && (() => {
+    try {
+      return new URLSearchParams(window.location.search || '').get('session_id') ||
+        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('stripe_session_id'));
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  if (loading && !hasPendingStripeRedirect) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -323,7 +350,7 @@ function AppNavigator() {
     >
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
-        initialRouteName={session && !isPasswordRecovery ? "Home" : "Auth"}
+        initialRouteName={(session && !isPasswordRecovery) || hasPendingStripeRedirect ? "Home" : "Auth"}
       >
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Auth" component={AuthStack} />

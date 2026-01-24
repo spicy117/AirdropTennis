@@ -1,63 +1,51 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 
+/** Maps roles to allowed nav labels. When loading/undefined, only 'Profile' is allowed. */
+const PERMISSIONS = {
+  coach: ['Dashboard', 'Profile'],
+  admin: ['Admin', 'Students', 'Availability', 'History', 'Profile'],
+  student: ['Home', 'Bookings', 'History', 'Profile'],
+};
+
+const ALL_BOTTOM_NAV_LINKS = [
+  { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
+  { id: 'bookings', label: 'Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
+  { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
+  { id: 'coach-dashboard', label: 'Dashboard', icon: 'shield-outline', activeIcon: 'shield' },
+  { id: 'admin-dashboard', label: 'Admin', icon: 'grid-outline', activeIcon: 'grid' },
+  { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
+  { id: 'admin-availability', label: 'Availability', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'admin-history', label: 'History', icon: 'archive-outline', activeIcon: 'archive' },
+];
+
 export default function BottomNav({ activeScreen, onNavigate }) {
   const insets = useSafeAreaInsets();
-  const { isAdmin, userRole } = useAuth();
+  const { userRole, roleLoading } = useAuth();
 
-  const userMenuItems = [
-    { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
-    { id: 'bookings', label: 'Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
-    { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
-    { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-  ];
+  const allowedLabels = useMemo(() => {
+    if (roleLoading || userRole == null || userRole === undefined) return ['Profile'];
+    return PERMISSIONS[userRole] ?? ['Profile'];
+  }, [roleLoading, userRole]);
 
-  const coachMenuItems = [
-    { id: 'coach-dashboard', label: 'Dashboard', icon: 'shield-outline', activeIcon: 'shield' },
-    { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-  ];
-
-  const adminMenuItems = [
-    { id: 'admin-dashboard', label: 'Admin', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
-    { id: 'admin-availability', label: 'Availability', icon: 'time-outline', activeIcon: 'time' },
-    { id: 'admin-locations-courts', label: 'Locations', icon: 'location-outline', activeIcon: 'location' },
-    { id: 'admin-history', label: 'History', icon: 'archive-outline', activeIcon: 'archive' },
-  ];
-
-  // For mobile, show user items + admin items if admin (but limit to 5 items max for bottom nav)
-  // If admin, replace some user items with admin items
-  // If coach, show coach menu items
-  const isUserAdmin = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false;
-  const isUserCoach = userRole === 'coach';
-  
-  // For mobile, limit to 5 items max for bottom nav
-  const menuItems = isUserAdmin
-    ? [
-        { id: 'admin-dashboard', label: 'Admin', icon: 'grid-outline', activeIcon: 'grid' },
-        { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
-        { id: 'admin-availability', label: 'Availability', icon: 'time-outline', activeIcon: 'time' },
-        { id: 'admin-history', label: 'History', icon: 'archive-outline', activeIcon: 'archive' },
-        { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-      ]
-    : isUserCoach
-    ? coachMenuItems
-    : userMenuItems;
+  const menuItems = useMemo(
+    () => ALL_BOTTOM_NAV_LINKS.filter((link) => allowedLabels.includes(link.label)),
+    [allowedLabels]
+  );
 
   if (Platform.OS === 'web') {
-    return null; // Hide on desktop (use sidebar instead)
+    return null;
   }
 
   return (
     <View
       style={[
         styles.container,
-        {
-          paddingBottom: Math.max(insets.bottom, 8),
-        },
+        { paddingBottom: Math.max(insets.bottom, 8) },
       ]}
     >
       {menuItems.map((item) => {
@@ -77,12 +65,7 @@ export default function BottomNav({ activeScreen, onNavigate }) {
               size={24}
               color={isActive ? '#000' : '#8E8E93'}
             />
-            <View
-              style={[
-                styles.label,
-                isActive && styles.labelActive,
-              ]}
-            >
+            <View style={[styles.label, isActive && styles.labelActive]}>
               <View style={[styles.indicator, isActive && styles.indicatorActive]} />
             </View>
           </TouchableOpacity>
@@ -100,10 +83,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E5EA',
     paddingTop: 8,
     ...(Platform.OS !== 'web' && {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
       elevation: 8,
     }),
   },
@@ -118,9 +97,7 @@ const styles = StyleSheet.create({
     height: 2,
     width: 24,
   },
-  labelActive: {
-    // Active state handled by indicator
-  },
+  labelActive: {},
   indicator: {
     height: 2,
     width: 24,

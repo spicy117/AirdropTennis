@@ -33,3 +33,8 @@ node_modules/
 # Ignore build artifacts
 .next/
 dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local

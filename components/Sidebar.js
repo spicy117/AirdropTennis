@@ -1,52 +1,107 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
-export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
-  const { user, isAdmin, userRole } = useAuth();
+// SOURCE OF TRUTH: Navigation uses ONLY the role from the profiles table. Do NOT use auth.user or user_metadata for nav.
+
+// Non-admin items (students + coaches). Admin section is separate and wrapped in userRole === 'admin'.
+const NON_ADMIN_NAV_ITEMS = [
+  { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
+  { id: 'bookings', label: 'My Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
+  { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
+  { id: 'coach-dashboard', label: 'Coach Dashboard', icon: 'shield-outline', activeIcon: 'shield' },
+];
+
+// Admin-only items. The entire ADMIN header + these links are wrapped in {userRole === 'admin' && (...)} so it cannot render for coaches.
+const ADMIN_NAV_ITEMS = [
+  { id: 'admin-dashboard', label: 'Admin Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+  { id: 'admin-locations-courts', label: 'Locations', icon: 'location-outline', activeIcon: 'location' },
+  { id: 'admin-availability', label: 'Availability', icon: 'time-outline', activeIcon: 'time', badgeKey: 'unassigned' },
+  { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
+  { id: 'admin-coaches', label: 'Coaches', icon: 'shield-outline', activeIcon: 'shield' },
+  { id: 'admin-history', label: 'Booking History', icon: 'archive-outline', activeIcon: 'archive' },
+  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
+];
+
+export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile = false }) {
+  const { user } = useAuth();
+  const [profileRole, setProfileRole] = useState(undefined); // undefined = not yet loaded; from profiles table only
   const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
 
+  // Diagnostic: confirm Sidebar mounts (you should see this if the component is in the tree).
   useEffect(() => {
-    const isUserAdmin = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false;
-    if (isUserAdmin) {
-      loadUnassignedBookingsCount();
-      // Refresh count periodically
-      const interval = setInterval(() => {
-        loadUnassignedBookingsCount();
-      }, 30000); // Every 30 seconds
+    console.log("[Sidebar] MOUNTED");
+    return () => console.log("[Sidebar] UNMOUNTED");
+  }, []);
 
-      return () => clearInterval(interval);
-    }
-  }, [isAdmin]);
-
-  // Refresh count when navigating away from admin-availability (coach may have been assigned)
+  // Fetch role ONLY from profiles table. Logging + strict default: on error, force 'student'.
   useEffect(() => {
-    const isUserAdmin = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false;
-    if (isUserAdmin && activeScreen !== 'admin-availability') {
-      // Small delay to allow for any pending updates
-      const timer = setTimeout(() => {
-        loadUnassignedBookingsCount();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [activeScreen, isAdmin]);
+    console.log("[Sidebar] getRole effect ran. user?.id =", user?.id);
+    if (!user?.id) return;
 
-  const loadUnassignedBookingsCount = async () => {
-    try {
-      // Count bookings that have NULL coach_id
+    async function getRole() {
+      console.log("[Sidebar] Fetching role for UID:", user.id);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error("[Sidebar] Supabase Error:", error.message);
+        setProfileRole('student'); // Force student on error
+      } else {
+        console.log("[Sidebar] DATABASE ROLE RECEIVED:", data.role);
+        setProfileRole(data.role);
+      }
+    }
+
+    getRole();
+  }, [user?.id]);
+
+  // userRole for nav: from profiles only. Default to 'student' if missing.
+  const userRole = profileRole || 'student';
+
+  // Hard filter before .map(): coach sees only Coach Dashboard + Profile; admin sees all in non-admin (we give them none—they use admin block); student sees Home, Profile, History.
+  const filteredNav = useMemo(
+    () =>
+      NON_ADMIN_NAV_ITEMS.filter((item) => {
+        if (userRole === 'coach') return ['Coach Dashboard', 'Profile'].includes(item.label);
+        if (userRole === 'admin') return false; // admins see only the admin block below
+        return ['Home', 'Profile', 'History'].includes(item.label); // students
+      }),
+    [userRole]
+  );
+
+  // Only admins: unassigned bookings count
+  useEffect(() => {
+    if (userRole !== 'admin') return;
+    const load = async () => {
       const { count, error } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .is('coach_id', null);
+      if (!error) setUnassignedBookingsCount(count || 0);
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [userRole]);
 
-      if (error) throw error;
-      setUnassignedBookingsCount(count || 0);
-    } catch (error) {
-      console.error('Error loading unassigned bookings count:', error);
-    }
-  };
+  useEffect(() => {
+    if (userRole !== 'admin' || activeScreen === 'admin-availability') return;
+    const t = setTimeout(async () => {
+      const { count, error } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .is('coach_id', null);
+      if (!error) setUnassignedBookingsCount(count || 0);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [activeScreen, userRole]);
 
   const displayName =
     [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
@@ -56,39 +111,19 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
     user?.email?.split('@')[0] ||
     'User';
 
-  const isUserAdmin = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false;
-  const isUserCoach = userRole === 'coach';
+  const roleLabel = userRole === 'coach' ? 'Coach' : userRole === 'admin' ? 'Admin' : 'Student';
 
-  const userMenuItems = [
-    { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
-    { id: 'bookings', label: 'My Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
-    { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
-    { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-  ];
-
-  const coachMenuItems = [
-    { id: 'coach-dashboard', label: 'Coach Dashboard', icon: 'shield-outline', activeIcon: 'shield' },
-    { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-  ];
-
-  const adminMenuItems = [
-    { id: 'admin-dashboard', label: 'Admin Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'admin-locations-courts', label: 'Locations & Courts', icon: 'location-outline', activeIcon: 'location' },
-    { id: 'admin-availability', label: 'Availability & Bookings', icon: 'time-outline', activeIcon: 'time' },
-    { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
-    { id: 'admin-coaches', label: 'Coaches', icon: 'shield-outline', activeIcon: 'shield' },
-    { id: 'admin-history', label: 'Booking History', icon: 'archive-outline', activeIcon: 'archive' },
-  ];
+  // Flicker fix: if role is not yet loaded from DB, do not render a single link. Return null for the entire Sidebar.
+  if (profileRole === undefined) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobile && styles.mobileContainer]}>
       <View style={styles.header}>
         <Text style={styles.logo}>🎾 Airdrop Tennis</Text>
       </View>
 
-      <View style={styles.menu}>
-        {/* Student Links - only show if not coach */}
-        {!isUserCoach && userMenuItems.map((item) => {
+      <ScrollView style={styles.menu} showsVerticalScrollIndicator={false}>
+        {filteredNav.map((item) => {
           const isActive = activeScreen === item.id;
           return (
             <TouchableOpacity
@@ -105,49 +140,22 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
                 size={24}
                 color={isActive ? '#000' : '#8E8E93'}
               />
-              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
-                {item.label}
-              </Text>
+              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
 
-        {/* Coach Links */}
-        {isUserCoach && coachMenuItems.map((item) => {
-          const isActive = activeScreen === item.id;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.menuItem, isActive && styles.menuItemActive]}
-              onPress={() => onNavigate(item.id)}
-              accessible={true}
-              accessibilityLabel={item.label}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-            >
-              <Ionicons
-                name={isActive ? item.activeIcon : item.icon}
-                size={24}
-                color={isActive ? '#000' : '#8E8E93'}
-              />
-              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-
-        {/* Admin Links Separator */}
-        {isUserAdmin && adminMenuItems.length > 0 && (
+        {/* Hard-wrap: entire ADMIN block only when userRole === 'admin'. Physically impossible to render for coaches. */}
+        {userRole === 'admin' && (
           <>
             <View style={styles.separator}>
               <View style={styles.separatorLine} />
-              <Text style={styles.separatorText}>Admin</Text>
+              <Text style={styles.separatorText}>ADMIN</Text>
               <View style={styles.separatorLine} />
             </View>
-            {adminMenuItems.map((item) => {
+            {ADMIN_NAV_ITEMS.map((item) => {
               const isActive = activeScreen === item.id;
-              const showBadge = item.id === 'admin-availability' && unassignedBookingsCount > 0;
+              const showBadge = item.badgeKey === 'unassigned' && unassignedBookingsCount > 0;
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -163,9 +171,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
                     size={24}
                     color={isActive ? '#000' : '#8E8E93'}
                   />
-                  <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
-                    {item.label}
-                  </Text>
+                  <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{item.label}</Text>
                   {showBadge && (
                     <View style={styles.sidebarBadge}>
                       <Text style={styles.sidebarBadgeText}>
@@ -178,7 +184,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
             })}
           </>
         )}
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity
@@ -192,12 +198,8 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut }) {
             <Ionicons name="person" size={20} color="#8E8E93" />
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.userName}>
-              {displayName}
-            </Text>
-            <Text style={styles.userRole}>
-              {isUserAdmin ? 'Admin' : isUserCoach ? 'Coach' : 'Student'}
-            </Text>
+            <Text style={styles.userName}>{displayName}</Text>
+            <Text style={styles.userRole}>{roleLabel}</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -226,6 +228,14 @@ const styles = StyleSheet.create({
     ...(Platform.OS !== 'web' && {
       width: 0,
       display: 'none',
+    }),
+  },
+  mobileContainer: {
+    width: '100%',
+    height: '100%',
+    borderRightWidth: 0,
+    ...(Platform.OS === 'web' && {
+      height: '100vh',
     }),
   },
   header: {
@@ -330,13 +340,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    ...(Platform.OS !== 'web' && {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 5,
-    }),
   },
   sidebarBadgeText: {
     color: '#fff',

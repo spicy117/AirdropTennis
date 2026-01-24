@@ -51,6 +51,7 @@ export default function CoachRainCheckModal({
             location_id,
             user_id,
             coach_id,
+            credit_cost,
             locations:location_id (id, name)
           )
         `)
@@ -99,7 +100,7 @@ export default function CoachRainCheckModal({
   const handleApprove = async (request) => {
     Alert.alert(
       'Approve Rain Check',
-      'Are you sure you want to approve this rain check request? The student will be notified and the booking will need to be rescheduled.',
+      'Are you sure you want to approve this rain check request? The booking will be cancelled and the student will receive a credit refund.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -108,6 +109,15 @@ export default function CoachRainCheckModal({
             try {
               setProcessingId(request.id);
               
+              const booking = request.booking;
+              if (!booking) {
+                throw new Error('Booking not found');
+              }
+
+              const creditCost = parseFloat(booking.credit_cost) || 0;
+              const userId = booking.user_id;
+
+              // Step 1: Update the booking request status
               const { error: updateError } = await supabase
                 .from('booking_requests')
                 .update({
@@ -120,18 +130,63 @@ export default function CoachRainCheckModal({
 
               if (updateError) throw updateError;
 
-              Alert.alert(
-                'Rain Check Approved',
-                'The rain check has been approved. Please coordinate with the student to reschedule.',
-                [{ text: 'OK' }]
-              );
+              // Step 2: Cancel the booking (delete it)
+              const { error: deleteError } = await supabase
+                .from('bookings')
+                .delete()
+                .eq('id', booking.id);
+
+              if (deleteError) {
+                console.error('Error deleting booking:', deleteError);
+                Alert.alert('Warning', 'Request approved but failed to cancel booking. Please cancel manually.');
+              }
+
+              // Step 3: Refund credits to student's wallet if booking had a cost
+              if (creditCost > 0 && userId) {
+                try {
+                  // Call the database function to add wallet balance
+                  const { data: refundData, error: refundError } = await supabase.rpc('add_wallet_balance', {
+                    user_id: userId,
+                    amount: creditCost,
+                  });
+
+                  if (refundError) {
+                    console.error('Error refunding credits:', refundError);
+                    Alert.alert(
+                      'Partial Success',
+                      'Rain check approved and booking cancelled, but failed to refund credits. Please refund manually.',
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    console.log('Credits refunded successfully:', refundData);
+                    Alert.alert(
+                      'Rain Check Approved',
+                      `The rain check has been approved. The booking has been cancelled and $${creditCost.toFixed(2)} has been refunded to the student's wallet.`,
+                      [{ text: 'OK' }]
+                    );
+                  }
+                } catch (refundError) {
+                  console.error('Error refunding credits:', refundError);
+                  Alert.alert(
+                    'Partial Success',
+                    'Rain check approved and booking cancelled, but failed to refund credits. Please refund manually.',
+                    [{ text: 'OK' }]
+                  );
+                }
+              } else {
+                Alert.alert(
+                  'Rain Check Approved',
+                  'The rain check has been approved and the booking has been cancelled.',
+                  [{ text: 'OK' }]
+                );
+              }
               
               setCoachNotes({ ...coachNotes, [request.id]: '' });
               loadRequests();
               if (onRequestProcessed) onRequestProcessed();
             } catch (error) {
               console.error('Error approving rain check:', error);
-              Alert.alert('Error', 'Failed to approve rain check.');
+              Alert.alert('Error', 'Failed to approve rain check: ' + (error.message || 'Unknown error'));
             } finally {
               setProcessingId(null);
             }

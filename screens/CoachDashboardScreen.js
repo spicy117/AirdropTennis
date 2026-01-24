@@ -327,6 +327,22 @@ export default function CoachDashboardScreen({ onNavigate }) {
         </Text>
       </View>
 
+      {/* Rain check notification banner */}
+      {pendingRainChecks > 0 && (
+        <TouchableOpacity
+          style={styles.rainCheckBanner}
+          onPress={() => setRainCheckModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="rainy" size={20} color="#007AFF" />
+          <Text style={styles.rainCheckBannerText}>
+            You have {pendingRainChecks} pending rain check request{pendingRainChecks !== 1 ? 's' : ''}
+          </Text>
+          <Text style={styles.rainCheckBannerAction}>View</Text>
+          <Ionicons name="chevron-forward" size={18} color="#007AFF" />
+        </TouchableOpacity>
+      )}
+
       {/* Current/Future Sessions Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
@@ -488,6 +504,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fff',
+  },
+  rainCheckBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.25)',
+    gap: 10,
+  },
+  rainCheckBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  rainCheckBannerAction: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   subtitle: {
     fontSize: 15,

@@ -29,7 +29,7 @@ const getServiceColor = (serviceName) => {
   return SERVICE_COLORS[serviceName] || SERVICE_COLORS.default;
 };
 
-export default function BookingsScreen({ onBookLesson }) {
+export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
@@ -44,6 +44,12 @@ export default function BookingsScreen({ onBookLesson }) {
       loadBookings();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user && refreshTrigger != null) {
+      loadBookings();
+    }
+  }, [refreshTrigger]);
 
   const loadBookings = async () => {
     if (!user) return;
@@ -64,6 +70,22 @@ export default function BookingsScreen({ onBookLesson }) {
 
       const bookingsWithCoaches = await Promise.all(
         (data || []).map(async (booking) => {
+          // Check for pending rain check request
+          let hasPendingRainCheck = false;
+          try {
+            const { data: rainCheckRequest } = await supabase
+              .from('booking_requests')
+              .select('id')
+              .eq('booking_id', booking.id)
+              .eq('request_type', 'raincheck')
+              .eq('status', 'pending')
+              .limit(1);
+            
+            hasPendingRainCheck = rainCheckRequest && rainCheckRequest.length > 0;
+          } catch (err) {
+            console.error('Error checking rain check status:', err);
+          }
+
           if (booking.coach_id) {
             try {
               const { data: coachProfile, error: coachError } = await supabase
@@ -84,13 +106,13 @@ export default function BookingsScreen({ onBookLesson }) {
                   coachName = coachProfile.email || 'Unknown Coach';
                   coachInitials = coachName[0]?.toUpperCase() || '?';
                 }
-                return { ...booking, coachName, coachInitials: coachInitials.toUpperCase() };
+                return { ...booking, coachName, coachInitials: coachInitials.toUpperCase(), hasPendingRainCheck };
               }
             } catch (err) {
               console.error('Error fetching coach profile:', err);
             }
           }
-          return booking;
+          return { ...booking, hasPendingRainCheck };
         })
       );
 
@@ -169,6 +191,14 @@ export default function BookingsScreen({ onBookLesson }) {
         <View style={[styles.statusPill, { backgroundColor: statusInfo.bgColor }]}>
           <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.text}</Text>
         </View>
+
+        {/* Rain Check Pending Tag */}
+        {booking.hasPendingRainCheck && (
+          <View style={styles.rainCheckTag}>
+            <Ionicons name="rainy" size={12} color="#007AFF" />
+            <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
+          </View>
+        )}
 
         <View style={styles.cardLayout}>
           {/* Left: Date Block */}
@@ -445,11 +475,16 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 0.5,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.04,
+      shadowRadius: 12,
+      elevation: 3,
+    }),
   },
   cardTouchable: {
     padding: 18,
@@ -568,5 +603,27 @@ const styles = StyleSheet.create({
   // Chevron
   chevronContainer: {
     paddingLeft: 8,
+  },
+  // Rain Check Tag
+  rainCheckTag: {
+    position: 'absolute',
+    top: 40,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+    zIndex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  rainCheckTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#007AFF',
+    letterSpacing: 0.2,
   },
 });

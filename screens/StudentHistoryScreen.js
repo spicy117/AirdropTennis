@@ -64,6 +64,8 @@ export default function StudentHistoryScreen({ onBookLesson }) {
       setLoading(true);
 
       const now = new Date().toISOString();
+      
+      // Load completed bookings (past bookings that still exist)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
@@ -76,6 +78,33 @@ export default function StudentHistoryScreen({ onBookLesson }) {
 
       if (bookingsError) throw bookingsError;
 
+      // Load cancelled bookings from approved cancellation requests
+      const { data: cancelledRequests, error: cancelledError } = await supabase
+        .from('booking_requests')
+        .select(`
+          *,
+          booking:booking_id (
+            id,
+            start_time,
+            end_time,
+            location_id,
+            user_id,
+            credit_cost,
+            service_name,
+            coach_id,
+            locations:location_id (id, name)
+          )
+        `)
+        .eq('requested_by', user.id)
+        .eq('request_type', 'cancel')
+        .eq('status', 'approved')
+        .order('reviewed_at', { ascending: false });
+
+      if (cancelledError) {
+        console.error('Error loading cancelled bookings:', cancelledError);
+      }
+
+      // Process completed bookings
       const bookingsWithCoaches = await Promise.all(
         (bookingsData || []).map(async (booking) => {
           let coachName = null;
@@ -110,12 +139,64 @@ export default function StudentHistoryScreen({ onBookLesson }) {
             coachName,
             coachInitials: coachInitials.toUpperCase(),
             locationName: booking.locations?.name || 'Unknown Location',
+            status: 'completed',
           };
         })
       );
 
-      setBookings(bookingsWithCoaches);
-      setFilteredBookings(bookingsWithCoaches);
+      // Process cancelled bookings
+      const cancelledBookings = await Promise.all(
+        (cancelledRequests || [])
+          .filter(request => request.booking) // Only include if booking data exists
+          .map(async (request) => {
+            const booking = request.booking;
+            let coachName = null;
+            let coachInitials = '?';
+
+            if (booking.coach_id) {
+              try {
+                const { data: coachProfile, error: coachError } = await supabase
+                  .from('profiles')
+                  .select('first_name, last_name, email')
+                  .eq('id', booking.coach_id)
+                  .single();
+
+                if (!coachError && coachProfile) {
+                  const coachFirstName = coachProfile.first_name || null;
+                  const coachLastName = coachProfile.last_name || null;
+                  if (coachFirstName || coachLastName) {
+                    coachName = [coachFirstName, coachLastName].filter(Boolean).join(' ');
+                    coachInitials = (coachFirstName?.[0] || '') + (coachLastName?.[0] || '');
+                  } else {
+                    coachName = coachProfile.email || 'Unknown Coach';
+                    coachInitials = coachName[0]?.toUpperCase() || '?';
+                  }
+                }
+              } catch (err) {
+                console.error('Error fetching coach profile:', err);
+              }
+            }
+
+            return {
+              ...booking,
+              coachName,
+              coachInitials: coachInitials.toUpperCase(),
+              locationName: booking.locations?.name || 'Unknown Location',
+              status: 'cancelled',
+              cancelled_at: request.reviewed_at || request.created_at,
+            };
+          })
+      );
+
+      // Combine and sort by end_time or cancelled_at (most recent first)
+      const allBookings = [...bookingsWithCoaches, ...cancelledBookings].sort((a, b) => {
+        const dateA = a.status === 'cancelled' ? new Date(a.cancelled_at) : new Date(a.end_time);
+        const dateB = b.status === 'cancelled' ? new Date(b.cancelled_at) : new Date(b.end_time);
+        return dateB - dateA;
+      });
+
+      setBookings(allBookings);
+      setFilteredBookings(allBookings);
     } catch (error) {
       console.error('Error loading booking history:', error);
     } finally {
@@ -168,8 +249,9 @@ export default function StudentHistoryScreen({ onBookLesson }) {
 
   // History Card Component
   const HistoryCard = ({ booking }) => {
-    const dateInfo = formatDateCompact(booking.end_time);
+    const dateInfo = formatDateCompact(booking.end_time || booking.cancelled_at);
     const serviceColor = getServiceColor(booking.service_name);
+    const isCancelled = booking.status === 'cancelled';
 
     const CardContent = () => (
       <View style={styles.cardContent}>
@@ -203,12 +285,19 @@ export default function StudentHistoryScreen({ onBookLesson }) {
           )}
         </View>
 
-        {/* Right: Completed Badge */}
+        {/* Right: Status Badge */}
         <View style={styles.statusContainer}>
-          <View style={styles.completedBadge}>
-            <Ionicons name="checkmark-circle" size={14} color="#059669" />
-            <Text style={styles.completedText}>Completed</Text>
-          </View>
+          {isCancelled ? (
+            <View style={styles.cancelledBadge}>
+              <Ionicons name="close-circle" size={14} color="#DC2626" />
+              <Text style={styles.cancelledText}>Cancelled</Text>
+            </View>
+          ) : (
+            <View style={styles.completedBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#059669" />
+              <Text style={styles.completedText}>Completed</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -259,7 +348,7 @@ export default function StudentHistoryScreen({ onBookLesson }) {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Session History</Text>
-        <Text style={styles.subtitle}>Your completed tennis sessions</Text>
+        <Text style={styles.subtitle}>Your completed and cancelled tennis sessions</Text>
       </View>
 
       {/* Search Bar */}
@@ -527,6 +616,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#059669',
+  },
+  cancelledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    gap: 4,
+  },
+  cancelledText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#DC2626',
   },
   // Empty State
   emptyState: {

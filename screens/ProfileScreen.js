@@ -1,14 +1,56 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
+import { supabase } from '../lib/supabase';
 
 export default function ProfileScreen({ onSignOut }) {
-  const { user } = useAuth();
+  const { user, userRole, refreshUserRole } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
+  const [currentRole, setCurrentRole] = useState(null); // Direct role from database
+
+  // CRITICAL: Fetch role DIRECTLY from database to bypass any caching
+  useEffect(() => {
+    const fetchRoleDirectly = async () => {
+      if (user?.id) {
+        try {
+          console.log('🔍 [PROFILE] Fetching role directly from database...');
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          
+          if (!error && profile?.role) {
+            console.log('✅ [PROFILE] Direct role from DB:', profile.role);
+            setCurrentRole(profile.role);
+          } else {
+            console.error('❌ [PROFILE] Error fetching role:', error);
+            setCurrentRole(userRole); // Fallback to context role
+          }
+        } catch (error) {
+          console.error('❌ [PROFILE] Error:', error);
+          setCurrentRole(userRole); // Fallback
+        }
+      }
+    };
+    
+    fetchRoleDirectly();
+    // Refresh periodically
+    const interval = setInterval(fetchRoleDirectly, 5000);
+    return () => clearInterval(interval);
+  }, [user?.id, userRole]);
+
+  // Force refresh role from database when profile screen loads
+  useEffect(() => {
+    if (user) {
+      console.log('🔄 [PROFILE] Refreshing role...');
+      refreshUserRole();
+    }
+  }, [user?.id]);
 
   const displayName =
     [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
@@ -17,6 +59,23 @@ export default function ProfileScreen({ onSignOut }) {
     user?.user_metadata?.full_name ||
     user?.email?.split('@')[0] ||
     t('student');
+
+  // Get role display text - CRITICAL: Use currentRole from database (source of truth)
+  const getRoleDisplay = () => {
+    const effectiveRole = currentRole || userRole;
+    
+    // DEBUG: Log role information
+    console.log('🔍 [PROFILE] Role check:', {
+      userRole, // From context
+      currentRole, // From database
+      effectiveRole, // What we're using
+      userMetadataRole: user?.user_metadata?.role,
+    });
+    
+    if (effectiveRole === 'coach') return 'Coach';
+    if (effectiveRole === 'admin') return 'Admin';
+    return 'Student';
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -27,7 +86,7 @@ export default function ProfileScreen({ onSignOut }) {
         <Text style={styles.name}>{displayName}</Text>
         <Text style={styles.email}>{user?.email}</Text>
         <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{t('student')}</Text>
+          <Text style={styles.roleText}>{getRoleDisplay()}</Text>
         </View>
       </View>
 

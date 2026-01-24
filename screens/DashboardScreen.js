@@ -17,6 +17,9 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getTranslation } from '../utils/translations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getWalletBalance } from '../lib/stripe';
+import WalletTopUpModal from '../components/WalletTopUpModal';
+import BookingEditModal from '../components/BookingEditModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && SCREEN_WIDTH > 768;
@@ -963,15 +966,19 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
 const cardStyles = StyleSheet.create({
   wrapper: {
     width: isMobile ? '48%' : isDesktop ? '24%' : '48%',
-    marginBottom: 12,
+    marginBottom: isMobile ? 10 : 12,
+    ...(isMobile && {
+      maxWidth: '48%',
+      flexBasis: '48%',
+    }),
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.4)', // Increased transparency
-    borderRadius: 14,
+    borderRadius: isMobile ? 12 : 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)', // Low-opacity white border
-    padding: 14,
-    minHeight: isMobile ? 140 : 150,
+    padding: isMobile ? 12 : 14,
+    minHeight: isMobile ? 160 : 150,
     ...(Platform.OS === 'web' && {
       backdropFilter: 'blur(50px)', // Increased blur
       WebkitBackdropFilter: 'blur(50px)',
@@ -1010,17 +1017,18 @@ const cardStyles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 15,
+    fontSize: isMobile ? 14 : 15,
     fontWeight: '600',
     color: '#0F172A',
     marginBottom: 3,
     letterSpacing: -0.2,
+    lineHeight: isMobile ? 18 : 20,
   },
   desc: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     color: '#64748B',
-    lineHeight: 16,
-    marginBottom: 12,
+    lineHeight: isMobile ? 15 : 16,
+    marginBottom: isMobile ? 10 : 12,
   },
   footer: {
     flexDirection: 'row',
@@ -1032,23 +1040,24 @@ const cardStyles = StyleSheet.create({
     flexDirection: 'column',
   },
   price: {
-    fontSize: 16,
+    fontSize: isMobile ? 15 : 16,
     fontWeight: '700',
   },
   duration: {
-    fontSize: 11,
+    fontSize: isMobile ? 10 : 11,
     fontWeight: '500',
     color: '#6B7280',
     marginTop: 2,
   },
   infoBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingVertical: isMobile ? 6 : 4,
+    paddingHorizontal: isMobile ? 12 : 10,
     borderRadius: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    minHeight: isMobile ? 28 : undefined, // Better touch target
   },
   infoBtnText: {
-    fontSize: 11,
+    fontSize: isMobile ? 10 : 11,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -1300,48 +1309,52 @@ const statStyles = StyleSheet.create({
   card: {
     flex: isMobile ? undefined : 1,
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: isMobile ? 14 : 16,
+    padding: isMobile ? 14 : 16,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.04)',
+    minHeight: isMobile ? 120 : undefined,
     ...(Platform.OS === 'web' && {
       backdropFilter: 'blur(12px)',
     }),
   },
   iconContainer: {
-    width: 36,
-    height: 36,
+    width: isMobile ? 32 : 36,
+    height: isMobile ? 32 : 36,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: isMobile ? 10 : 12,
   },
   label: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     fontWeight: '500',
     color: '#64748B',
     marginBottom: 4,
   },
   value: {
-    fontSize: 24,
+    fontSize: isMobile ? 20 : 24,
     fontWeight: '700',
     color: '#0F172A',
+    lineHeight: isMobile ? 24 : 28,
   },
   subValue: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     color: '#64748B',
     marginTop: 2,
+    lineHeight: isMobile ? 14 : 16,
   },
   actionBtn: {
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    marginTop: isMobile ? 10 : 12,
+    paddingVertical: isMobile ? 8 : 6,
+    paddingHorizontal: isMobile ? 14 : 12,
     borderRadius: 8,
     borderWidth: 1.5,
     alignSelf: 'flex-start',
+    minHeight: isMobile ? 36 : undefined, // Better touch target on mobile
   },
   actionText: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     fontWeight: '600',
   },
 });
@@ -1349,7 +1362,7 @@ const statStyles = StyleSheet.create({
 // ============================================
 // Main Dashboard Screen
 // ============================================
-export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger }) {
+export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar }) {
   const insets = useSafeAreaInsets();
   const { user, userRole } = useAuth();
   const { language, updateLanguage } = useLanguage();
@@ -1357,13 +1370,17 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
 
   const isStudent = userRole === 'student' || (!userRole || (userRole !== 'admin' && userRole !== 'coach'));
 
-  const [creditBalance] = useState(125.50);
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [nextBooking, setNextBooking] = useState(null);
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [loadingBooking, setLoadingBooking] = useState(true);
   const [showSeasonPassModal, setShowSeasonPassModal] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
 
   const userName =
     [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
@@ -1374,12 +1391,36 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     t('student');
 
   useEffect(() => {
-    if (user) loadBookings();
+    if (user) {
+      loadBookings();
+      loadWalletBalance();
+    }
   }, [user]);
 
   useEffect(() => {
-    if (user && refreshTrigger !== undefined) loadBookings();
+    if (user && refreshTrigger !== undefined) {
+      loadBookings();
+      loadWalletBalance();
+    }
   }, [refreshTrigger]);
+
+  const loadWalletBalance = async () => {
+    if (!user) return;
+    try {
+      setLoadingBalance(true);
+      const balance = await getWalletBalance(user.id);
+      setCreditBalance(balance);
+    } catch (error) {
+      console.error('Error loading wallet balance:', error);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
+  const handleTopUpSuccess = () => {
+    loadWalletBalance();
+    setShowTopUpModal(false);
+  };
 
   const loadBookings = async () => {
     if (!user) return;
@@ -1393,8 +1434,30 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      setNextBooking(data?.length > 0 ? data[0] : null);
-      setUpcomingBookings(data || []);
+
+      // Check for pending rain check requests for each booking
+      const bookingsWithRainCheckStatus = await Promise.all(
+        (data || []).map(async (booking) => {
+          let hasPendingRainCheck = false;
+          try {
+            const { data: rainCheckRequest } = await supabase
+              .from('booking_requests')
+              .select('id')
+              .eq('booking_id', booking.id)
+              .eq('request_type', 'raincheck')
+              .eq('status', 'pending')
+              .limit(1);
+            
+            hasPendingRainCheck = rainCheckRequest && rainCheckRequest.length > 0;
+          } catch (err) {
+            console.error('Error checking rain check status:', err);
+          }
+          return { ...booking, hasPendingRainCheck };
+        })
+      );
+
+      setNextBooking(bookingsWithRainCheckStatus?.length > 0 ? bookingsWithRainCheckStatus[0] : null);
+      setUpcomingBookings(bookingsWithRainCheckStatus || []);
     } catch (error) {
       console.error('Error loading bookings:', error);
     } finally {
@@ -1437,9 +1500,22 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{t('welcome')}</Text>
-            <Text style={styles.userName}>{userName}</Text>
+          <View style={styles.headerLeft}>
+            {!isDesktop && onOpenSidebar && (
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={onOpenSidebar}
+                accessible={true}
+                accessibilityLabel="Open menu"
+                accessibilityRole="button"
+              >
+                <Ionicons name="menu" size={24} color="#0F172A" />
+              </TouchableOpacity>
+            )}
+            <View>
+              <Text style={styles.greeting}>{t('welcome')}</Text>
+              <Text style={styles.userName}>{userName}</Text>
+            </View>
           </View>
           {isStudent && (
             <TouchableOpacity
@@ -1462,10 +1538,10 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
             iconColor="#10B981"
             iconBg="rgba(16, 185, 129, 0.12)"
             label="Credit Balance"
-            value={`$${creditBalance.toFixed(2)}`}
+            value={loadingBalance ? '...' : `$${creditBalance.toFixed(2)}`}
             action="Top Up"
             actionColor="#10B981"
-            onAction={() => {}}
+            onAction={() => setShowTopUpModal(true)}
           />
           <StatCard
             icon="calendar"
@@ -1523,7 +1599,24 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           ) : (
             <View style={styles.bookingsList}>
               {upcomingBookings.slice(0, 4).map((booking, i) => (
-                <View key={booking.id} style={[styles.bookingItem, i > 0 && { marginTop: 10 }]}>
+                <TouchableOpacity
+                  key={booking.id}
+                  style={[styles.bookingItem, i > 0 && { marginTop: isMobile ? 8 : 10 }]}
+                  onPress={() => {
+                    setSelectedBooking(booking);
+                    setEditModalVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel={`Edit booking: ${booking.service_name || 'Tennis Lesson'} on ${formatTime(booking.start_time)}`}
+                  accessibilityRole="button"
+                >
+                  {booking.hasPendingRainCheck && (
+                    <View style={styles.rainCheckTag}>
+                      <Ionicons name="rainy" size={12} color="#007AFF" />
+                      <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
+                    </View>
+                  )}
                   <View style={styles.bookingDate}>
                     <Text style={styles.bookingDay}>{new Date(booking.start_time).getDate()}</Text>
                     <Text style={styles.bookingMonth}>
@@ -1536,8 +1629,8 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                       {formatTime(booking.start_time)} • {booking.locations?.name || 'TBD'}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-                </View>
+                  <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color="#CBD5E1" />
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -1558,6 +1651,21 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           setSelectedService(null);
           handleServicePress(serviceName);
         }}
+      />
+      <WalletTopUpModal
+        visible={showTopUpModal}
+        onClose={() => setShowTopUpModal(false)}
+        userId={user?.id}
+        onTopUpSuccess={handleTopUpSuccess}
+      />
+      <BookingEditModal
+        visible={editModalVisible}
+        onClose={() => {
+          setEditModalVisible(false);
+          setSelectedBooking(null);
+        }}
+        booking={selectedBooking}
+        onBookingCancelled={loadBookings}
       />
     </View>
   );
@@ -1604,7 +1712,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
+    padding: isMobile ? 14 : 16,
     maxWidth: 1000,
     ...(Platform.OS === 'web' && isDesktop && {
       marginHorizontal: 'auto',
@@ -1618,10 +1726,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: isMobile ? 16 : 20,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: isMobile ? 12 : 0,
+    flex: 1,
+  },
+  menuButton: {
+    padding: isMobile ? 8 : 0,
+    marginRight: isMobile ? 4 : 0,
+    minWidth: isMobile ? 40 : undefined,
+    minHeight: isMobile ? 40 : undefined,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   greeting: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     fontWeight: '500',
     color: '#94A3B8',
     letterSpacing: 1,
@@ -1629,7 +1751,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   userName: {
-    fontSize: 24,
+    fontSize: isMobile ? 20 : 24,
     fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.5,
@@ -1637,16 +1759,17 @@ const styles = StyleSheet.create({
   langToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: isMobile ? 8 : 6,
+    paddingHorizontal: isMobile ? 12 : 10,
+    borderRadius: isMobile ? 10 : 8,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.04)',
-    gap: 4,
+    gap: isMobile ? 6 : 4,
+    minHeight: isMobile ? 36 : undefined, // Better touch target
   },
   langText: {
-    fontSize: 11,
+    fontSize: isMobile ? 12 : 11,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -1654,8 +1777,8 @@ const styles = StyleSheet.create({
   // Stats Row
   statsRow: {
     flexDirection: isMobile ? 'column' : 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: isMobile ? 10 : 12,
+    marginBottom: isMobile ? 20 : 24,
   },
 
   // Services Section
@@ -1663,16 +1786,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionHeader: {
-    fontSize: 11,
+    fontSize: isMobile ? 10 : 11,
     fontWeight: '600',
     color: '#94A3B8',
     letterSpacing: 1.5,
-    marginBottom: 14,
+    marginBottom: isMobile ? 12 : 14,
   },
   servicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: isMobile ? 'flex-start' : 'space-between',
     gap: isMobile ? 8 : 12,
   },
 
@@ -1681,17 +1804,17 @@ const styles = StyleSheet.create({
   upcomingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: isMobile ? 6 : 8,
+    marginBottom: isMobile ? 12 : 14,
   },
   countBadge: {
     backgroundColor: '#0F172A',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    borderRadius: isMobile ? 5 : 6,
+    paddingHorizontal: isMobile ? 7 : 8,
+    paddingVertical: isMobile ? 2 : 2,
   },
   countText: {
-    fontSize: 11,
+    fontSize: isMobile ? 10 : 11,
     fontWeight: '700',
     color: '#fff',
   },
@@ -1699,41 +1822,43 @@ const styles = StyleSheet.create({
   // Empty State
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+    paddingVertical: isMobile ? 32 : 40,
+    paddingHorizontal: isMobile ? 20 : 24,
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 16,
+    borderRadius: isMobile ? 14 : 16,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: isMobile ? 56 : 64,
+    height: isMobile ? 56 : 64,
+    borderRadius: isMobile ? 28 : 32,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: isMobile ? 12 : 16,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: isMobile ? 14 : 16,
     fontWeight: '600',
     color: '#0F172A',
     marginBottom: 4,
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: isMobile ? 12 : 13,
     color: '#64748B',
-    marginBottom: 16,
+    marginBottom: isMobile ? 12 : 16,
+    textAlign: 'center',
   },
   emptyBtn: {
     backgroundColor: '#0F172A',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingVertical: isMobile ? 12 : 10,
+    paddingHorizontal: isMobile ? 24 : 20,
+    borderRadius: isMobile ? 10 : 10,
+    minHeight: isMobile ? 44 : undefined, // Better touch target
   },
   emptyBtnText: {
-    fontSize: 13,
+    fontSize: isMobile ? 13 : 13,
     fontWeight: '600',
     color: '#fff',
   },
@@ -1744,28 +1869,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: isMobile ? 12 : 14,
+    padding: isMobile ? 12 : 14,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   bookingDate: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: isMobile ? 40 : 44,
+    height: isMobile ? 40 : 44,
+    borderRadius: isMobile ? 10 : 12,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: isMobile ? 10 : 12,
   },
   bookingDay: {
-    fontSize: 18,
+    fontSize: isMobile ? 16 : 18,
     fontWeight: '700',
     color: '#0F172A',
-    lineHeight: 20,
+    lineHeight: isMobile ? 18 : 20,
   },
   bookingMonth: {
-    fontSize: 10,
+    fontSize: isMobile ? 9 : 10,
     fontWeight: '600',
     color: '#64748B',
     textTransform: 'uppercase',
@@ -1774,13 +1899,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bookingTitle: {
-    fontSize: 14,
+    fontSize: isMobile ? 13 : 14,
     fontWeight: '600',
     color: '#0F172A',
     marginBottom: 2,
+    lineHeight: isMobile ? 16 : 18,
   },
   bookingMeta: {
-    fontSize: 12,
+    fontSize: isMobile ? 11 : 12,
     color: '#64748B',
+    lineHeight: isMobile ? 14 : 16,
+  },
+  rainCheckTag: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+    zIndex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  rainCheckTagText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#007AFF',
+    letterSpacing: 0.2,
   },
 });

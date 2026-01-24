@@ -29,6 +29,27 @@ export default function AdminCoachesScreen() {
     email: '',
   });
 
+  // Generate a random secure password
+  const generatePassword = () => {
+    const length = 12;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    
+    // Ensure at least one of each required character type
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // uppercase
+    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // lowercase
+    password += '0123456789'[Math.floor(Math.random() * 10)]; // number
+    password += '!@#$%^&*'[Math.floor(Math.random() * 8)]; // special char
+    
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   useEffect(() => {
     loadCoaches();
   }, []);
@@ -66,7 +87,12 @@ export default function AdminCoachesScreen() {
   };
 
   const handleSubmit = async () => {
+    // VERY VISIBLE LOG TO CONFIRM FUNCTION IS CALLED
+    console.log('🚀🚀🚀🚀🚀 BUTTON CLICKED - CREATE COACH 🚀🚀🚀🚀🚀');
+    console.log('Form Data:', JSON.stringify(formData, null, 2));
+    
     if (!formData.fullName.trim() || !formData.email.trim()) {
+      console.log('❌ Validation failed: Empty fields');
       Alert.alert('Validation Error', 'Please fill in all fields');
       return;
     }
@@ -74,68 +100,201 @@ export default function AdminCoachesScreen() {
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email.trim())) {
+      console.log('❌ Validation failed: Invalid email');
       Alert.alert('Validation Error', 'Please enter a valid email address');
       return;
     }
 
     try {
       setSubmitting(true);
+      console.log('✅ Validation passed, starting process...');
+      const emailLower = formData.email.trim().toLowerCase();
+      const nameParts = formData.fullName.trim().split(/\s+/);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
 
-      // Call the database function instead of Edge Function
-      const { data, error } = await supabase.rpc('create_coach_profile', {
-        coach_email: formData.email.trim(),
-        coach_full_name: formData.fullName.trim(),
+      console.log('🔍 [CREATE-COACH] Step 1: Looking for existing profile...', { email: emailLower });
+
+      // Step 1: Check if profile exists
+      const { data: existingProfile, error: lookupError } = await supabase
+        .from('profiles')
+        .select('id, email, role')
+        .eq('email', emailLower)
+        .maybeSingle();
+
+      console.log('📋 [CREATE-COACH] Profile lookup result:', { 
+        found: !!existingProfile, 
+        id: existingProfile?.id,
+        currentRole: existingProfile?.role,
+        error: lookupError 
       });
 
-      if (error) {
-        throw new Error(error.message || 'Failed to create coach profile');
-      }
+      let userId = null;
 
-      if (!data || !data.success) {
-        // User doesn't exist - show detailed instructions
-        if (data?.instructions) {
-          Alert.alert(
-            'User Account Required',
-            data.instructions,
-            [
-              {
-                text: 'Open Supabase Dashboard',
-                onPress: () => {
-                  // Open Supabase dashboard in new tab
-                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    window.open('https://supabase.com/dashboard/project/qdlzumzkhbnxpkprbuju/auth/users', '_blank');
-                  }
-                },
-              },
-              {
-                text: 'I\'ll Do It Later',
-                style: 'cancel',
-              },
-            ]
-          );
-        } else {
-          throw new Error(data?.error || 'Failed to create coach');
+      if (existingProfile) {
+        // Profile exists - update it
+        userId = existingProfile.id;
+        console.log('✅ [CREATE-COACH] Found existing profile, updating to coach role...');
+        
+        // CRITICAL: Update BOTH profile table AND user_metadata to ensure role is correct
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            first_name: firstName,
+            last_name: lastName,
+            role: 'coach', // CRITICAL: Set role to 'coach', NOT 'admin'
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('❌ [CREATE-COACH] Update error:', updateError);
+          Alert.alert('Error', `Failed to update profile: ${updateError.message}\n\nCode: ${updateError.code}\nDetails: ${updateError.details || 'None'}`);
+          return;
         }
+
+        // Also update user_metadata to ensure consistency
+        // Note: This requires admin access, so it might fail - that's OK, profile table is source of truth
+        try {
+          const { error: metadataError } = await supabase.auth.updateUser({
+            data: {
+              role: 'coach', // CRITICAL: Ensure user_metadata also says 'coach'
+            },
+          });
+          if (metadataError) {
+            console.warn('⚠️ [CREATE-COACH] Could not update user_metadata (this is OK):', metadataError);
+          }
+        } catch (e) {
+          console.warn('⚠️ [CREATE-COACH] Could not update user_metadata:', e);
+        }
+
+        console.log('✅✅✅ [CREATE-COACH] SUCCESS - Profile updated to coach role!');
+        Alert.alert(
+          'Success',
+          `Coach profile updated successfully!\n\nEmail: ${emailLower}\nName: ${formData.fullName.trim()}\n\nRole has been set to "coach" (NOT admin).`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setFormData({ fullName: '', email: '' });
+                loadCoaches();
+              },
+            },
+          ]
+        );
         return;
       }
 
-      // Success - profile created/updated
+      // Profile doesn't exist - need to create user first
+      console.log('⚠️ [CREATE-COACH] Profile not found, user needs to be created first');
+      
+      const coachPassword = generatePassword();
+      
       Alert.alert(
-        'Coach Profile Created',
-        data.note || `Coach profile created successfully for ${data.email}.`,
+        'User Account Required',
+        `No user account found for ${emailLower}.\n\nTo create a coach:\n\n1. Click "Create User Account" below\n2. This will create the user account\n3. Then update their profile to coach role\n\nOR manually:\n1. Go to Supabase Dashboard → Auth → Users\n2. Click "Add User"\n3. Enter email and password\n4. Then come back and try again`,
         [
           {
-            text: 'OK',
-            onPress: () => {
-              setFormData({ fullName: '', email: '' });
-              loadCoaches();
+            text: 'Create User Account',
+            onPress: async () => {
+              try {
+                console.log('📝 [CREATE-COACH] Attempting to create user account...');
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                  email: emailLower,
+                  password: coachPassword,
+                  options: {
+                    data: {
+                      full_name: formData.fullName.trim(),
+                      first_name: firstName,
+                      last_name: lastName,
+                      role: 'coach',
+                    },
+                  },
+                });
+
+                if (signUpError) {
+                  console.error('❌ [CREATE-COACH] SignUp error:', signUpError);
+                  Alert.alert('Error', `Failed to create user: ${signUpError.message}\n\nPlease create the user manually in Supabase Dashboard.`);
+                  return;
+                }
+
+                if (!signUpData?.user?.id) {
+                  Alert.alert('Error', 'User creation failed. Please try creating manually in Supabase Dashboard.');
+                  return;
+                }
+
+                userId = signUpData.user.id;
+                console.log('✅ [CREATE-COACH] User created:', userId);
+
+                // Wait a moment for profile trigger to create profile
+                console.log('⏳ Waiting for profile to be created by trigger...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Now update profile - CRITICAL: Set role to 'coach', NOT 'admin'
+                console.log('📝 Updating profile to coach role...');
+                const { error: profileError } = await supabase
+                  .from('profiles')
+                  .update({
+                    first_name: firstName,
+                    last_name: lastName,
+                    role: 'coach', // CRITICAL: Set role to 'coach', NOT 'admin'
+                  })
+                  .eq('id', userId);
+
+                if (profileError) {
+                  console.error('❌ [CREATE-COACH] Profile update error:', profileError);
+                  Alert.alert('Partial Success', `User created but profile update failed: ${profileError.message}\n\nUser ID: ${userId}\nPassword: ${coachPassword}`);
+                  return;
+                }
+
+                // Also try to update user_metadata for consistency
+                try {
+                  const { error: metadataError } = await supabase.auth.updateUser({
+                    data: {
+                      role: 'coach', // CRITICAL: Ensure user_metadata also says 'coach'
+                    },
+                  });
+                  if (metadataError) {
+                    console.warn('⚠️ [CREATE-COACH] Could not update user_metadata (this is OK):', metadataError);
+                  }
+                } catch (e) {
+                  console.warn('⚠️ [CREATE-COACH] Could not update user_metadata:', e);
+                }
+
+                console.log('✅✅✅ [CREATE-COACH] SUCCESS - User and profile created with coach role!');
+
+                Alert.alert(
+                  'Success!',
+                  `Coach account created!\n\nEmail: ${emailLower}\nPassword: ${coachPassword}\n\n⚠️ IMPORTANT: Share this password with the coach. They may need to check their email for confirmation.`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        setFormData({ fullName: '', email: '' });
+                        loadCoaches();
+                      },
+                    },
+                  ]
+                );
+              } catch (error) {
+                console.error('❌ [CREATE-COACH] Error:', error);
+                Alert.alert('Error', error?.message || 'Failed to create user account.');
+              }
             },
           },
+          {
+            text: 'Open Supabase Dashboard',
+            onPress: () => {
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.open('https://supabase.com/dashboard/project/qdlzumzkhbnxpkprbuju/auth/users', '_blank');
+              }
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
         ]
       );
     } catch (error) {
-      console.error('Error creating coach:', error);
-      Alert.alert('Error', error.message || 'Failed to create coach. Please try again.');
+      console.error('❌ [CREATE-COACH] Error:', error);
+      Alert.alert('Error', error?.message || 'Failed to create coach. Check console for details.');
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +348,11 @@ export default function AdminCoachesScreen() {
         </View>
         <TouchableOpacity
           style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
+          onPress={() => {
+            console.error('🔴🔴🔴 BUTTON CLICKED DIRECTLY 🔴🔴🔴');
+            window.alert('Button clicked! Check console.');
+            handleSubmit();
+          }}
           disabled={submitting}
         >
           {submitting ? (

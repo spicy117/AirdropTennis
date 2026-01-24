@@ -43,6 +43,7 @@ export default function BookingRequestsModal({
             end_time,
             location_id,
             user_id,
+            credit_cost,
             locations:location_id (id, name)
           )
         `)
@@ -105,6 +106,10 @@ export default function BookingRequestsModal({
       if (updateError) throw updateError;
 
       // If approved, handle the actual booking modification
+      const booking = request.booking;
+      const creditCost = booking ? parseFloat(booking.credit_cost) || 0 : 0;
+      const userId = booking?.user_id;
+
       if (request.request_type === 'cancel') {
         // Delete the booking
         const { error: deleteError } = await supabase
@@ -115,19 +120,123 @@ export default function BookingRequestsModal({
         if (deleteError) {
           console.error('Error deleting booking:', deleteError);
           Alert.alert('Warning', 'Request approved but failed to cancel booking. Please cancel manually.');
+        } else {
+          // Refund credits to student's wallet if booking had a cost
+          let refundSuccess = true;
+          if (creditCost > 0 && userId) {
+            try {
+              const { data: refundData, error: refundError } = await supabase.rpc('add_wallet_balance', {
+                user_id: userId,
+                amount: creditCost,
+              });
+
+              if (refundError) {
+                console.error('Error refunding credits:', refundError);
+                refundSuccess = false;
+                Alert.alert(
+                  'Partial Success',
+                  `Cancellation approved and booking cancelled, but failed to refund $${creditCost.toFixed(2)}. Please refund manually.`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                console.log('Credits refunded successfully:', refundData);
+              }
+            } catch (refundError) {
+              console.error('Error refunding credits:', refundError);
+              refundSuccess = false;
+              Alert.alert(
+                'Partial Success',
+                `Cancellation approved and booking cancelled, but failed to refund $${creditCost.toFixed(2)}. Please refund manually.`,
+                [{ text: 'OK' }]
+              );
+            }
+          }
+          
+          if (refundSuccess) {
+            if (creditCost > 0) {
+              Alert.alert(
+                'Success',
+                `Cancellation approved. Booking cancelled and $${creditCost.toFixed(2)} refunded to student's wallet.`,
+                [{ text: 'OK' }]
+              );
+            } else {
+              Alert.alert('Success', 'Cancellation approved. Booking cancelled successfully.');
+            }
+          }
         }
       } else if (request.request_type === 'raincheck') {
-        // For rain check, we could update the booking or mark it for rescheduling
-        // For now, we'll just mark the request as approved
-        // The admin can manually reschedule if needed
-        Alert.alert(
-          'Rain Check Approved',
-          'Please manually reschedule this booking to a new time slot.',
-          [{ text: 'OK' }]
-        );
+        // Cancel the booking (delete it) and refund credits
+        if (!booking) {
+          Alert.alert('Error', 'Booking not found for this rain check request.');
+          setProcessingId(null);
+          return;
+        }
+
+        const { error: deleteError } = await supabase
+          .from('bookings')
+          .delete()
+          .eq('id', request.booking_id);
+
+        if (deleteError) {
+          console.error('Error deleting booking:', deleteError);
+          Alert.alert('Warning', 'Request approved but failed to cancel booking. Please cancel manually.');
+          // Still reload requests and call callback even if delete failed
+          setAdminNotes({ ...adminNotes, [request.id]: '' });
+          loadRequests();
+          if (onRequestProcessed) onRequestProcessed();
+          setProcessingId(null);
+          return;
+        }
+
+        // Booking deleted successfully, now refund credits
+        let refundSuccess = true;
+        if (creditCost > 0 && userId) {
+          try {
+            const { data: refundData, error: refundError } = await supabase.rpc('add_wallet_balance', {
+              user_id: userId,
+              amount: creditCost,
+            });
+
+            if (refundError) {
+              console.error('Error refunding credits:', refundError);
+              refundSuccess = false;
+              Alert.alert(
+                'Partial Success',
+                `Rain check approved and booking cancelled, but failed to refund $${creditCost.toFixed(2)}. Please refund manually.`,
+                [{ text: 'OK' }]
+              );
+            } else {
+              console.log('Credits refunded successfully:', refundData);
+            }
+          } catch (refundError) {
+            console.error('Error refunding credits:', refundError);
+            refundSuccess = false;
+            Alert.alert(
+              'Partial Success',
+              `Rain check approved and booking cancelled, but failed to refund $${creditCost.toFixed(2)}. Please refund manually.`,
+              [{ text: 'OK' }]
+            );
+          }
+        }
+
+        // Show success message
+        if (refundSuccess) {
+          if (creditCost > 0) {
+            Alert.alert(
+              'Rain Check Approved',
+              `The rain check has been approved. The booking has been cancelled and $${creditCost.toFixed(2)} has been refunded to the student's wallet.`,
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert(
+              'Rain Check Approved',
+              'The rain check has been approved and the booking has been cancelled.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
       }
 
-      Alert.alert('Success', 'Request approved successfully.');
       setAdminNotes({ ...adminNotes, [request.id]: '' });
       loadRequests();
       if (onRequestProcessed) onRequestProcessed();

@@ -44,11 +44,13 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
   const [requestsModalVisible, setRequestsModalVisible] = useState(false);
   const [activeBookingsModalVisible, setActiveBookingsModalVisible] = useState(false);
   const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   useEffect(() => {
     loadData();
     checkMyRole(); // Check role on mount
     loadUnassignedBookingsCount();
+    loadPendingRequestsCount();
     verifyAdminAccess(); // Verify admin access on mount
   }, []);
 
@@ -99,10 +101,18 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
     }
   }, [activeBookingsModalVisible]);
 
+  // Reload pending requests count when requests modal closes
+  useEffect(() => {
+    if (!requestsModalVisible) {
+      loadPendingRequestsCount();
+    }
+  }, [requestsModalVisible]);
+
   // Periodically refresh the count (every 30 seconds) to catch changes from other sources
   useEffect(() => {
     const interval = setInterval(() => {
       loadUnassignedBookingsCount();
+      loadPendingRequestsCount();
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
@@ -141,6 +151,34 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
     } catch (error) {
       console.error('Error loading unassigned bookings count:', error);
       setUnassignedBookingsCount(0);
+    }
+  };
+
+  const loadPendingRequestsCount = async () => {
+    if (userRole !== 'admin') {
+      setPendingRequestsCount(0);
+      return;
+    }
+    try {
+      if (!user?.id) return;
+      const { data: profile, error: roleError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (roleError || !profile || profile.role !== 'admin') {
+        setPendingRequestsCount(0);
+        return;
+      }
+      const { count, error } = await supabase
+        .from('booking_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      if (error) throw error;
+      setPendingRequestsCount(count || 0);
+    } catch (error) {
+      console.error('Error loading pending requests count:', error);
+      setPendingRequestsCount(0);
     }
   };
 
@@ -1459,6 +1497,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
           loadAvailabilities();
           loadData();
           loadUnassignedBookingsCount();
+          loadPendingRequestsCount();
         }} />
       }
     >
@@ -1469,8 +1508,17 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
             style={styles.requestsButton}
             onPress={() => setRequestsModalVisible(true)}
           >
-            <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-            <Text style={styles.requestsButtonText}>Requests</Text>
+            <View style={styles.requestsButtonContent}>
+              <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+              <Text style={styles.requestsButtonText}>Requests</Text>
+            </View>
+            {pendingRequestsCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
           {userRole === 'admin' && (
             <>
@@ -1510,6 +1558,38 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Pending requests notification banner (admin) */}
+      {userRole === 'admin' && pendingRequestsCount > 0 && (
+        <TouchableOpacity
+          style={styles.requestsBanner}
+          onPress={() => setRequestsModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="document-text" size={20} color="#007AFF" />
+          <Text style={styles.requestsBannerText}>
+            {pendingRequestsCount} pending request{pendingRequestsCount !== 1 ? 's' : ''} (cancellations & rain checks)
+          </Text>
+          <Text style={styles.requestsBannerAction}>View</Text>
+          <Ionicons name="chevron-forward" size={18} color="#007AFF" />
+        </TouchableOpacity>
+      )}
+
+      {/* Unassigned bookings notification banner (admin) */}
+      {userRole === 'admin' && unassignedBookingsCount > 0 && (
+        <TouchableOpacity
+          style={styles.unassignedBookingsBanner}
+          onPress={() => setActiveBookingsModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={20} color="#34C759" />
+          <Text style={styles.unassignedBookingsBannerText}>
+            {unassignedBookingsCount} outstanding booking{unassignedBookingsCount !== 1 ? 's' : ''} need{unassignedBookingsCount === 1 ? 's' : ''} a coach assigned
+          </Text>
+          <Text style={styles.unassignedBookingsBannerAction}>View</Text>
+          <Ionicons name="chevron-forward" size={18} color="#34C759" />
+        </TouchableOpacity>
+      )}
 
       {/* Location Filter */}
       <View style={styles.filters}>
@@ -1762,8 +1842,8 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         visible={requestsModalVisible}
         onClose={() => setRequestsModalVisible(false)}
         onRequestProcessed={() => {
-          // Refresh availabilities when a request is processed
           loadAvailabilities();
+          loadPendingRequestsCount();
         }}
       />
 
@@ -1816,11 +1896,63 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: '#007AFF',
+    position: 'relative',
+  },
+  requestsButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   requestsButtonText: {
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  requestsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    marginTop: -8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.25)',
+    gap: 10,
+  },
+  requestsBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  requestsBannerAction: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  unassignedBookingsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    marginTop: -8,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 199, 89, 0.25)',
+    gap: 10,
+  },
+  unassignedBookingsBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  unassignedBookingsBannerAction: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34C759',
   },
   activeBookingsButton: {
     flexDirection: 'row',

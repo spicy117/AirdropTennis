@@ -81,6 +81,10 @@ export default function BookingEditModal({
       setLoading(true);
 
       if (freeCancellationAvailable) {
+        // Get credit cost and user_id before deleting the booking
+        const creditCost = parseFloat(booking.credit_cost) || 0;
+        const userId = booking.user_id;
+
         // Free cancellation - directly delete the booking
         const { error: deleteError } = await supabase
           .from('bookings')
@@ -89,25 +93,66 @@ export default function BookingEditModal({
 
         if (deleteError) throw deleteError;
 
-        // Note: We don't log to booking_requests since the booking is deleted
-        // and would cause a foreign key violation
+        // Refund credits to user's wallet if booking had a cost
+        if (creditCost > 0 && userId) {
+          try {
+            const { data: refundData, error: refundError } = await supabase.rpc('add_wallet_balance', {
+              user_id: userId,
+              amount: creditCost,
+            });
 
-        setResultModal({
-          visible: true,
-          success: true,
-          title: 'Booking Cancelled',
-          message: 'Your booking has been successfully cancelled and your credits have been refunded.',
-        });
+            if (refundError) {
+              console.error('Error refunding credits:', refundError);
+              setResultModal({
+                visible: true,
+                success: false,
+                title: 'Partial Success',
+                message: `Your booking has been cancelled, but we failed to refund $${creditCost.toFixed(2)}. Please contact support.`,
+              });
+              return;
+            }
+
+            console.log('Credits refunded successfully:', refundData);
+            setResultModal({
+              visible: true,
+              success: true,
+              title: 'Booking Cancelled',
+              message: `Your booking has been successfully cancelled and $${creditCost.toFixed(2)} has been refunded to your wallet.`,
+            });
+          } catch (refundError) {
+            console.error('Error refunding credits:', refundError);
+            setResultModal({
+              visible: true,
+              success: false,
+              title: 'Partial Success',
+              message: `Your booking has been cancelled, but we failed to refund $${creditCost.toFixed(2)}. Please contact support.`,
+            });
+          }
+        } else {
+          // No cost to refund
+          setResultModal({
+            visible: true,
+            success: true,
+            title: 'Booking Cancelled',
+            message: 'Your booking has been successfully cancelled.',
+          });
+        }
       } else {
         // Late cancellation - requires admin approval
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('You must be signed in to submit a cancellation request.');
+        }
+
         const { error } = await supabase
           .from('booking_requests')
           .insert({
             booking_id: booking.id,
+            requested_by: user.id, // Required field - user who made the request
             request_type: 'cancel',
             reason: reason.trim(),
             status: 'pending',
-            user_id: booking.user_id,
           });
 
         if (error) throw error;
@@ -137,17 +182,60 @@ export default function BookingEditModal({
       Alert.alert('Reason Required', 'Please provide a reason for the rain check.');
       return;
     }
+    if (!booking?.id) {
+      Alert.alert('Error', 'Booking not found. Please try again.');
+      return;
+    }
 
     try {
       setLoading(true);
+
+      // Verify the booking belongs to the current user (for RLS policy)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('You must be signed in to submit a rain check request.');
+      }
+
+      // Verify booking ownership by fetching it - this ensures RLS allows access
+      // This helps the RLS policy recognize the relationship
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, user_id')
+        .eq('id', booking.id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (bookingError || !bookingData) {
+        throw new Error('Booking not found or you do not have permission to modify this booking.');
+      }
+
+      // Check for existing pending rain check to avoid duplicates and give a clear message
+      const { data: existing } = await supabase
+        .from('booking_requests')
+        .select('id')
+        .eq('booking_id', booking.id)
+        .eq('request_type', 'raincheck')
+        .eq('status', 'pending')
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        setResultModal({
+          visible: true,
+          success: false,
+          title: 'Already Submitted',
+          message: 'You already have a pending rain check request for this booking. Please wait for it to be reviewed.',
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('booking_requests')
         .insert({
           booking_id: booking.id,
+          requested_by: user.id, // Required field - user who made the request
           request_type: 'raincheck',
           reason: reason.trim(),
           status: 'pending',
-          user_id: booking.user_id,
         });
 
       if (error) throw error;
@@ -156,15 +244,15 @@ export default function BookingEditModal({
         visible: true,
         success: true,
         title: 'Request Submitted',
-        message: 'Your rain check request has been submitted and is pending admin approval.',
+        message: 'Your rain check request has been submitted and is pending admin or coach approval.',
       });
     } catch (error) {
-      console.error('Error submitting rain check request:', error);
+      console.error('Error submitting rain check request:', error?.message, error?.code, error?.details);
       setResultModal({
         visible: true,
         success: false,
         title: 'Error',
-        message: 'Failed to submit rain check request. Please try again.',
+        message: 'Failed to submit rain check request. ' + (error?.message || 'Please try again.'),
       });
     } finally {
       setLoading(false);

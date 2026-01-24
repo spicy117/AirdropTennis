@@ -100,9 +100,7 @@ const styles = StyleSheet.create({
     color: '#34C759',
   },
   shake: Platform.OS === 'web' ? {
-    animationName: 'shake',
-    animationDuration: '0.5s',
-    animationTimingFunction: 'ease-in-out',
+    animation: 'shake 0.5s ease-in-out',
   } : {},
 });
 

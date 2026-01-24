@@ -130,6 +130,7 @@ export default function ActiveBookingsModal({
       setLoading(true);
 
       // Fetch all bookings that haven't ended yet (end_time >= current time)
+      // Also filter out bookings where start_time is in the past (bugged bookings)
       const now = new Date().toISOString();
       const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
@@ -138,6 +139,7 @@ export default function ActiveBookingsModal({
           locations:location_id (id, name)
         `)
         .gte('end_time', now) // Only bookings that haven't ended
+        .gte('start_time', now) // Also filter out bookings that started in the past (bugged bookings)
         .order('start_time', { ascending: true });
 
       if (bookingsError) throw bookingsError;

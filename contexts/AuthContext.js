@@ -38,6 +38,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  // True while we have a user but haven't yet resolved role from profiles (prevents nav flicker)
+  const roleLoading = user !== null && userRole === null;
   // Track if we just processed an email confirmation to prevent false SIGNED_OUT events
   const recentEmailConfirmationRef = useRef(false);
 
@@ -66,38 +68,52 @@ export const AuthProvider = ({ children }) => {
 
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      // Check if this is a recovery session or email confirmation
-      const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
-        ? window.location.hash 
-        : '';
-      const isRecovery = hash && hash.includes('type=recovery');
-      const isSignupConfirmation = hash && hash.includes('type=signup');
-      const isRecoveryMode = (isRecovery || isRecoveryFromHash || persistedRecoveryMode) && !isSignupConfirmation;
-      
-      if (isRecoveryMode) {
-        updateRecoveryMode(true);
-        // Don't set session for recovery - user needs to reset password first
-        // Also sign out to clear any session Supabase might have stored
-        if (session) {
-          supabase.auth.signOut().catch(() => {
-            // Ignore errors - we're already clearing the session
-          });
+      try {
+        // Check if this is a recovery session or email confirmation
+        const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
+          ? window.location.hash 
+          : '';
+        const isRecovery = hash && hash.includes('type=recovery');
+        const isSignupConfirmation = hash && hash.includes('type=signup');
+        const isRecoveryMode = (isRecovery || isRecoveryFromHash || persistedRecoveryMode) && !isSignupConfirmation;
+        
+        if (isRecoveryMode) {
+          updateRecoveryMode(true);
+          // Don't set session for recovery - user needs to reset password first
+          // Also sign out to clear any session Supabase might have stored
+          if (session) {
+            supabase.auth.signOut().catch(() => {
+              // Ignore errors - we're already clearing the session
+            });
+          }
+          setSession(null);
+          setUser(null);
+          setUserRole(null);
+        } else {
+          // Normal session or email confirmation - set the session
+          // Clear any stale recovery mode for email confirmations
+          if (isSignupConfirmation) {
+            updateRecoveryMode(false);
+          }
+          setSession(session);
+          setUser(session?.user ?? null);
+          // Check role from profiles if needed
+          if (session?.user) {
+            await checkUserRole(session.user);
+          }
         }
-        setSession(null);
-        setUser(null);
-      } else {
-        // Normal session or email confirmation - set the session
-        // Clear any stale recovery mode for email confirmations
-        if (isSignupConfirmation) {
-          updateRecoveryMode(false);
-        }
-        setSession(session);
-        setUser(session?.user ?? null);
-        // Check role from profiles if needed
-        if (session?.user) {
-          await checkUserRole(session.user);
-        }
+      } catch (error) {
+        console.error('Error processing session:', error);
+        // Still set loading to false so app can render
+      } finally {
+        setLoading(false);
       }
+    }).catch((error) => {
+      // Handle errors getting session - don't block the app from loading
+      console.error('Error getting initial session:', error);
+      setSession(null);
+      setUser(null);
+      setUserRole(null);
       setLoading(false);
     });
 
@@ -113,6 +129,7 @@ export const AuthProvider = ({ children }) => {
         // Don't set session - user needs to reset password first
         setSession(null);
         setUser(null);
+        setUserRole(null);
         setLoading(false);
         return;
       }
@@ -166,6 +183,7 @@ export const AuthProvider = ({ children }) => {
           updateRecoveryMode(true);
           setSession(null);
           setUser(null);
+          setUserRole(null);
           setLoading(false);
         } else if (persistedRecovery && !isRecoverySession) {
           // Persisted recovery exists but no recovery token in URL - clear it and sign in
@@ -182,6 +200,7 @@ export const AuthProvider = ({ children }) => {
           updateRecoveryMode(true);
           setSession(null);
           setUser(null);
+          setUserRole(null);
           setLoading(false);
         }
       } else if (event === 'TOKEN_REFRESHED' && session) {
@@ -200,6 +219,7 @@ export const AuthProvider = ({ children }) => {
           updateRecoveryMode(true);
           setSession(null);
           setUser(null);
+          setUserRole(null);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('SIGNED_OUT event received, checking if session actually exists...');
@@ -235,6 +255,7 @@ export const AuthProvider = ({ children }) => {
           recentEmailConfirmationRef.current = false;
           setSession(null);
           setUser(null);
+          setUserRole(null);
           setLoading(false);
           console.log('✅ Session and user cleared, loading set to false - state updates dispatched');
           return;
@@ -337,6 +358,7 @@ export const AuthProvider = ({ children }) => {
           updateRecoveryMode(true);
           setSession(null);
           setUser(null);
+          setUserRole(null);
         }
         setLoading(false);
       }
@@ -346,38 +368,38 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkUserRole = async (user) => {
-    // Check user_metadata first
-    let role = user?.user_metadata?.role;
-    
-    // If not in user_metadata, check profiles table
-    if (!role || (role !== 'admin' && role !== 'coach' && role !== 'student')) {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile?.role) {
-          role = profile.role;
-        }
-      } catch (error) {
-        console.error('Error checking profile role:', error);
+    // Profiles table is the source of truth; fallback to user_metadata only if profile has no role
+    let role = null;
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profile?.role && ['admin', 'coach', 'student'].includes(profile.role)) {
+        role = profile.role;
       }
+    } catch (e) {
+      // ignore
     }
-    
-    setUserRole(role);
+    if (!role && user?.user_metadata?.role && ['admin', 'coach', 'student'].includes(user.user_metadata.role)) {
+      role = user.user_metadata.role;
+    }
+    setUserRole(role || 'student');
   };
 
   const signUp = async (email, password, userData) => {
     try {
       console.log('Attempting signup with:', { email, hasPassword: !!password });
+      const options = { data: userData };
+      // Ensure verification link redirects to this app (web). Supabase uses Site URL if not set.
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+        options.emailRedirectTo = window.location.origin;
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: userData, // Additional user metadata
-        },
+        options,
       });
 
       if (error) {
@@ -647,22 +669,34 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAdmin = () => {
-    // Check both user_metadata and state
+    // CRITICAL: Only return true for admins, NOT coaches
+    // Check profiles table role first (source of truth), then user_metadata
+    // Coaches should NEVER be treated as admins
+    if (userRole === 'coach') {
+      return false; // Coaches are NOT admins
+    }
+    
+    // Check if user is admin (from profiles table or user_metadata)
     const metadataRole = user?.user_metadata?.role;
     const profileRole = userRole;
     
     return (
-      metadataRole === 'admin' || 
-      metadataRole === 'coach' ||
       profileRole === 'admin' || 
-      profileRole === 'coach'
+      metadataRole === 'admin'
     );
+  };
+
+  const refreshUserRole = async () => {
+    if (user) {
+      await checkUserRole(user);
+    }
   };
 
   const value = {
     session,
     user,
     userRole,
+    roleLoading,
     loading,
     isPasswordRecovery,
     setIsPasswordRecovery,
@@ -673,6 +707,7 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     updatePassword,
     isAdmin,
+    refreshUserRole,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
