@@ -1,16 +1,20 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { getStrengthColor } from '../utils/passwordValidation';
+import { useLanguage } from '../contexts/LanguageContext';
+import { t as tParam } from '../utils/translations';
 
 export default function PasswordStrengthMeter({ strength, accessible = true }) {
+  const { language } = useLanguage();
   const strengthPercentage = (strength / 4) * 100;
   const color = getStrengthColor(strength);
+  const a11yLabel = tParam(language, 'passwordStrengthOutOf4', { n: strength });
 
   return (
     <View
       style={styles.container}
       accessible={accessible}
-      accessibilityLabel={`Password strength: ${strength} out of 4`}
+      accessibilityLabel={a11yLabel}
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 4, now: strength }}
     >

@@ -2,32 +2,36 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 
 // SOURCE OF TRUTH: Navigation uses ONLY the role from the profiles table. Do NOT use auth.user or user_metadata for nav.
 
 // Non-admin items (students + coaches). Admin section is separate and wrapped in userRole === 'admin'.
 const NON_ADMIN_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
-  { id: 'bookings', label: 'My Bookings', icon: 'calendar-outline', activeIcon: 'calendar' },
-  { id: 'history', label: 'History', icon: 'time-outline', activeIcon: 'time' },
-  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
-  { id: 'coach-dashboard', label: 'Coach Dashboard', icon: 'shield-outline', activeIcon: 'shield' },
+  { id: 'dashboard', labelKey: 'navHome', icon: 'home-outline', activeIcon: 'home' },
+  { id: 'bookings', labelKey: 'navMyBookings', icon: 'calendar-outline', activeIcon: 'calendar' },
+  { id: 'history', labelKey: 'navHistory', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
+  { id: 'coach-dashboard', labelKey: 'navCoachDashboard', icon: 'shield-outline', activeIcon: 'shield' },
 ];
 
 // Admin-only items. The entire ADMIN header + these links are wrapped in {userRole === 'admin' && (...)} so it cannot render for coaches.
 const ADMIN_NAV_ITEMS = [
-  { id: 'admin-dashboard', label: 'Admin Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
-  { id: 'admin-locations-courts', label: 'Locations', icon: 'location-outline', activeIcon: 'location' },
-  { id: 'admin-availability', label: 'Availability', icon: 'time-outline', activeIcon: 'time', badgeKey: 'unassigned' },
-  { id: 'admin-students', label: 'Students', icon: 'people-outline', activeIcon: 'people' },
-  { id: 'admin-coaches', label: 'Coaches', icon: 'shield-outline', activeIcon: 'shield' },
-  { id: 'admin-history', label: 'Booking History', icon: 'archive-outline', activeIcon: 'archive' },
-  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
+  { id: 'admin-dashboard', labelKey: 'navAdminDashboard', icon: 'grid-outline', activeIcon: 'grid' },
+  { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline', activeIcon: 'location' },
+  { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline', activeIcon: 'time', badgeKey: 'unassigned' },
+  { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline', activeIcon: 'people' },
+  { id: 'admin-coaches', labelKey: 'navCoaches', icon: 'shield-outline', activeIcon: 'shield' },
+  { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline', activeIcon: 'archive' },
+  { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
 export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile = false }) {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [profileRole, setProfileRole] = useState(undefined); // undefined = not yet loaded; from profiles table only
   const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
 
@@ -69,9 +73,9 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
   const filteredNav = useMemo(
     () =>
       NON_ADMIN_NAV_ITEMS.filter((item) => {
-        if (userRole === 'coach') return ['Coach Dashboard', 'Profile'].includes(item.label);
+        if (userRole === 'coach') return ['coach-dashboard', 'profile'].includes(item.id);
         if (userRole === 'admin') return false; // admins see only the admin block below
-        return ['Home', 'Profile', 'History'].includes(item.label); // students
+        return ['dashboard', 'profile', 'history'].includes(item.id); // students
       }),
     [userRole]
   );
@@ -87,8 +91,8 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
       if (!error) setUnassignedBookingsCount(count || 0);
     };
     load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
+    const intervalId = setInterval(load, 30000);
+    return () => clearInterval(intervalId);
   }, [userRole]);
 
   useEffect(() => {
@@ -109,9 +113,9 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
       .join(' ') ||
     user?.user_metadata?.full_name ||
     user?.email?.split('@')[0] ||
-    'User';
+    t('user');
 
-  const roleLabel = userRole === 'coach' ? 'Coach' : userRole === 'admin' ? 'Admin' : 'Student';
+  const roleLabel = t(userRole === 'coach' ? 'coach' : userRole === 'admin' ? 'admin' : 'student');
 
   // Flicker fix: if role is not yet loaded from DB, do not render a single link. Return null for the entire Sidebar.
   if (profileRole === undefined) return null;
@@ -131,7 +135,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
               style={[styles.menuItem, isActive && styles.menuItemActive]}
               onPress={() => onNavigate(item.id)}
               accessible={true}
-              accessibilityLabel={item.label}
+              accessibilityLabel={t(item.labelKey)}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
@@ -140,7 +144,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
                 size={24}
                 color={isActive ? '#000' : '#8E8E93'}
               />
-              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{item.label}</Text>
+              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{t(item.labelKey)}</Text>
             </TouchableOpacity>
           );
         })}
@@ -150,7 +154,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
           <>
             <View style={styles.separator}>
               <View style={styles.separatorLine} />
-              <Text style={styles.separatorText}>ADMIN</Text>
+              <Text style={styles.separatorText}>{t('navAdmin')}</Text>
               <View style={styles.separatorLine} />
             </View>
             {ADMIN_NAV_ITEMS.map((item) => {
@@ -162,7 +166,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
                   style={[styles.menuItem, isActive && styles.menuItemActive]}
                   onPress={() => onNavigate(item.id)}
                   accessible={true}
-                  accessibilityLabel={item.label}
+                  accessibilityLabel={t(item.labelKey)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                 >
@@ -171,7 +175,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
                     size={24}
                     color={isActive ? '#000' : '#8E8E93'}
                   />
-                  <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{item.label}</Text>
+                  <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{t(item.labelKey)}</Text>
                   {showBadge && (
                     <View style={styles.sidebarBadge}>
                       <Text style={styles.sidebarBadgeText}>

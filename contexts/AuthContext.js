@@ -66,8 +66,14 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Get initial session with timeout to prevent hanging
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Session load timeout')), 2000)
+      )
+    ]).then(async (result) => {
+      const { data: { session } } = result;
       try {
         // Check if this is a recovery session or email confirmation
         const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
@@ -97,9 +103,11 @@ export const AuthProvider = ({ children }) => {
           }
           setSession(session);
           setUser(session?.user ?? null);
-          // Check role from profiles if needed
+          // Check role from profiles if needed (don't await - let it run in background)
           if (session?.user) {
-            await checkUserRole(session.user);
+            checkUserRole(session.user).catch(err => {
+              console.error('Error checking user role:', err);
+            });
           }
         }
       } catch (error) {
@@ -110,7 +118,7 @@ export const AuthProvider = ({ children }) => {
       }
     }).catch((error) => {
       // Handle errors getting session - don't block the app from loading
-      console.error('Error getting initial session:', error);
+      console.error('Error getting initial session (or timeout):', error);
       setSession(null);
       setUser(null);
       setUserRole(null);
@@ -266,14 +274,14 @@ export const AuthProvider = ({ children }) => {
         console.log('Calling supabase.auth.getSession()...');
         let currentSession = null;
         try {
+          // Reduced timeout from 1000ms to 300ms for faster response
           const sessionResult = await Promise.race([
             supabase.auth.getSession(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 1000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 300))
           ]);
           currentSession = sessionResult?.data?.session;
           console.log('Supabase getSession result:', !!currentSession, 'Error:', sessionResult?.error);
         } catch (error) {
-          console.error('Error getting session (or timeout):', error);
           // If getSession fails or times out, assume we're signed out
           currentSession = null;
         }
@@ -371,16 +379,25 @@ export const AuthProvider = ({ children }) => {
     // Profiles table is the source of truth; fallback to user_metadata only if profile has no role
     let role = null;
     try {
-      const { data: profile } = await supabase
+      // Add timeout to prevent hanging
+      const profileQuery = supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
+      
+      const { data: profile } = await Promise.race([
+        profileQuery,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Role query timeout')), 3000)
+        )
+      ]);
+      
       if (profile?.role && ['admin', 'coach', 'student'].includes(profile.role)) {
         role = profile.role;
       }
     } catch (e) {
-      // ignore
+      // ignore - will fallback to user_metadata
     }
     if (!role && user?.user_metadata?.role && ['admin', 'coach', 'student'].includes(user.user_metadata.role)) {
       role = user.user_metadata.role;

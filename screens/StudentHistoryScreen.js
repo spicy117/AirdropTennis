@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 import { utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
 
@@ -28,8 +30,11 @@ const getServiceColor = (serviceName) => {
   return SERVICE_COLORS[serviceName] || SERVICE_COLORS.default;
 };
 
-export default function StudentHistoryScreen({ onBookLesson }) {
+export default function StudentHistoryScreen(props) {
+  const { onBookLesson, onGoHome } = props ?? {};
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -264,7 +269,7 @@ export default function StudentHistoryScreen({ onBookLesson }) {
         {/* Center: Info Section */}
         <View style={styles.infoSection}>
           <Text style={styles.serviceName} numberOfLines={1}>
-            {booking.service_name || 'Tennis Session'}
+            {booking.service_name || t('tennisSession')}
           </Text>
           
           <View style={styles.timeRow}>
@@ -290,12 +295,12 @@ export default function StudentHistoryScreen({ onBookLesson }) {
           {isCancelled ? (
             <View style={styles.cancelledBadge}>
               <Ionicons name="close-circle" size={14} color="#DC2626" />
-              <Text style={styles.cancelledText}>Cancelled</Text>
+              <Text style={styles.cancelledText}>{t('cancelled')}</Text>
             </View>
           ) : (
             <View style={styles.completedBadge}>
               <Ionicons name="checkmark-circle" size={14} color="#059669" />
-              <Text style={styles.completedText}>Completed</Text>
+              <Text style={styles.completedText}>{t('completed')}</Text>
             </View>
           )}
         </View>
@@ -333,7 +338,7 @@ export default function StudentHistoryScreen({ onBookLesson }) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0D9488" />
-        <Text style={styles.loadingText}>Loading your history...</Text>
+        <Text style={styles.loadingText}>{t('loadingHistory')}</Text>
       </View>
     );
   }
@@ -346,9 +351,21 @@ export default function StudentHistoryScreen({ onBookLesson }) {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
+      {typeof onGoHome === 'function' && (
+        <TouchableOpacity
+          style={styles.backHomeButton}
+          onPress={onGoHome}
+          accessible={true}
+          accessibilityLabel={t('returnHome')}
+          accessibilityRole="button"
+        >
+          <Ionicons name="arrow-back" size={20} color="#0D9488" />
+          <Text style={styles.backHomeButtonText}>{t('returnHome')}</Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.header}>
-        <Text style={styles.title}>Session History</Text>
-        <Text style={styles.subtitle}>Your completed and cancelled tennis sessions</Text>
+        <Text style={styles.title}>{t('sessionHistory')}</Text>
+        <Text style={styles.subtitle}>{t('sessionHistorySubtitle')}</Text>
       </View>
 
       {/* Search Bar */}
@@ -367,7 +384,7 @@ export default function StudentHistoryScreen({ onBookLesson }) {
                 <Ionicons name="search-outline" size={18} color="#9CA3AF" />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by coach, service, or location..."
+                  placeholder={t('searchHistoryPlaceholder')}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholderTextColor="#9CA3AF"
@@ -384,7 +401,7 @@ export default function StudentHistoryScreen({ onBookLesson }) {
               <Ionicons name="search-outline" size={18} color="#9CA3AF" />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search by coach, service, or location..."
+                placeholder={t('searchHistoryPlaceholder')}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholderTextColor="#9CA3AF"
@@ -403,8 +420,8 @@ export default function StudentHistoryScreen({ onBookLesson }) {
       {bookings.length > 0 && (
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsText}>
-            {filteredBookings.length} {filteredBookings.length === 1 ? 'session' : 'sessions'}
-            {searchQuery && ` matching "${searchQuery}"`}
+            {filteredBookings.length} {filteredBookings.length === 1 ? t('session') : t('sessions')}
+            {searchQuery && ` ${t('matching')} "${searchQuery}"`}
           </Text>
         </View>
       )}
@@ -417,13 +434,13 @@ export default function StudentHistoryScreen({ onBookLesson }) {
           </Text>
           <Text style={styles.emptySubtext}>
             {searchQuery
-              ? 'Try adjusting your search query'
-              : 'Your completed lessons and performance data will appear here.'}
+              ? t('tryAdjustingSearch')
+              : t('completedLessonsHere')}
           </Text>
           {!searchQuery && onBookLesson && (
             <TouchableOpacity style={styles.bookButton} onPress={onBookLesson}>
               <Ionicons name="add-circle" size={20} color="#fff" />
-              <Text style={styles.bookButtonText}>Book a Lesson</Text>
+              <Text style={styles.bookButtonText}>{t('bookALesson')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -446,6 +463,24 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+  backHomeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginBottom: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.2)',
+  },
+  backHomeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0D9488',
   },
   loadingContainer: {
     flex: 1,

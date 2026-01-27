@@ -265,7 +265,20 @@ function AppNavigator() {
     }
   })();
 
-  if (loading && !hasPendingStripeRedirect) {
+  // Add fallback timeout - if loading takes more than 5 seconds, show app anyway
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [loading]);
+
+  if (loading && !hasPendingStripeRedirect && !loadingTimeout) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />

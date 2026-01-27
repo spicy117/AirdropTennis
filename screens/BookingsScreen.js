@@ -32,7 +32,7 @@ const getServiceColor = (serviceName) => {
 export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
   const { user } = useAuth();
   const { language } = useLanguage();
-  const t = (key) => getTranslation(language, key);
+  const t = (key, params) => (params && Object.keys(params).length ? tWithParams(language, key, params) : getTranslation(language, key));
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -148,10 +148,10 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
   const formatDuration = (startTime, endTime) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const hours = (end - start) / (1000 * 60 * 60);
-    if (hours === 1) return '1 hr';
-    if (hours < 1) return `${Math.round(hours * 60)} min`;
-    return `${hours} hrs`;
+    const hrs = (end - start) / (1000 * 60 * 60);
+    if (hrs === 1) return t('oneHr');
+    if (hrs < 1) return t('minutes', { n: Math.round(hrs * 60) });
+    return t('hours', { n: hrs });
   };
 
   const getStatusInfo = (startTime) => {
@@ -196,7 +196,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
         {booking.hasPendingRainCheck && (
           <View style={styles.rainCheckTag}>
             <Ionicons name="rainy" size={12} color="#007AFF" />
-            <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
+            <Text style={styles.rainCheckTagText}>{t('rainCheckPending')}</Text>
           </View>
         )}
 
@@ -229,7 +229,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
             <View style={styles.locationRow}>
               <Ionicons name="location-outline" size={14} color="#9CA3AF" />
               <Text style={styles.locationText} numberOfLines={1}>
-                {booking.locations?.name || 'Location TBD'}
+                {booking.locations?.name || t('locationTbd')}
               </Text>
             </View>
 
@@ -293,7 +293,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
         <View>
           <Text style={styles.title}>{t('upcomingBookings')}</Text>
           <Text style={styles.subtitle}>
-            {bookings.length} {bookings.length === 1 ? 'session' : 'sessions'} scheduled
+            {bookings.length === 1 ? t('sessionsScheduled', { count: bookings.length }) : t('sessionsScheduledPlural', { count: bookings.length })}
           </Text>
         </View>
         <TouchableOpacity
@@ -311,7 +311,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0D9488" />
-          <Text style={styles.loadingText}>Loading your sessions...</Text>
+          <Text style={styles.loadingText}>{t('loadingSessions')}</Text>
         </View>
       ) : bookings.length === 0 ? (
         <View style={styles.emptyState}>
@@ -319,9 +319,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
             <Ionicons name="calendar-outline" size={48} color="#0D9488" />
           </View>
           <Text style={styles.emptyTitle}>{t('noUpcomingBookings')}</Text>
-          <Text style={styles.emptyText}>
-            Ready to hit the court? Book your next session now.
-          </Text>
+          <Text style={styles.emptyText}>{t('readyToHitCourt')}</Text>
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={onBookLesson}

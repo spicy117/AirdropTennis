@@ -51,39 +51,7 @@ const getIsDesktop = () => {
 };
 
 export default function HomeScreen() {
-  // LOG IMMEDIATELY - this runs on every render - USE ERROR TO MAKE VISIBLE
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    console.error('🏠🏠🏠 [HOMESCREEN] Component rendered/mounted');
-    console.error('🏠 [HOMESCREEN] Current URL:', window.location.href);
-    console.error('🏠 [HOMESCREEN] Has session_id?', window.location.href.includes('session_id'));
-    if (window.location.href.includes('session_id')) {
-      console.error('🚨🚨🚨 [HOMESCREEN] SESSION_ID DETECTED IN URL ON RENDER!');
-    }
-  }
-  
   const { signOut, user, isAdmin, userRole } = useAuth();
-  
-  // CRITICAL: Log role immediately and aggressively
-  useEffect(() => {
-    console.error('🚨🚨🚨 [HOMESCREEN] ====== ROLE CHECK ======');
-    console.error('🚨 [HOMESCREEN] userRole:', userRole);
-    console.error('🚨 [HOMESCREEN] user?.id:', user?.id);
-    console.error('🚨 [HOMESCREEN] user?.user_metadata?.role:', user?.user_metadata?.role);
-    console.error('🚨 [HOMESCREEN] isAdmin:', isAdmin);
-    
-    // Also query database directly
-    if (user?.id) {
-      supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          console.error('🚨 [HOMESCREEN] DIRECT DB QUERY - role:', data?.role);
-          console.error('🚨 [HOMESCREEN] DIRECT DB QUERY - error:', error);
-        });
-    }
-  }, [userRole, user?.id]);
   
   // Initialize with a safe default, will be updated when userRole is available
   const [activeScreen, setActiveScreen] = useState(() => {
@@ -147,104 +115,56 @@ export default function HomeScreen() {
   // Handle Stripe redirects after payment - comprehensive detection
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // IMMEDIATE check - log everything right away with ALERT-like visibility
-      const currentUrl = window.location.href;
-      const currentSearch = window.location.search;
-      const currentHash = window.location.hash;
-      const currentPath = window.location.pathname;
-      
-      // Use console.error to make it more visible (red in console)
-      console.error('🔍🔍🔍 [PAYMENT] ====== REDIRECT HANDLER INITIALIZED ======');
-      console.error('🔍 [PAYMENT] Current URL:', currentUrl);
-      console.error('🔍 [PAYMENT] Current path:', currentPath);
-      console.error('🔍 [PAYMENT] Current search:', currentSearch);
-      console.error('🔍 [PAYMENT] Current hash:', currentHash);
-      console.error('🔍 [PAYMENT] Has user:', !!user);
-      console.error('🔍 [PAYMENT] User ID:', user?.id);
-      
       // Check for session_id immediately - check both URL and sessionStorage
-      const urlParams = new URLSearchParams(currentSearch);
+      const urlParams = new URLSearchParams(window.location.search);
       let immediateSessionId = urlParams.get('session_id');
       
       // ALSO check sessionStorage (in case App.js captured it before URL was cleaned)
       if (!immediateSessionId && typeof sessionStorage !== 'undefined') {
         const storedSessionId = sessionStorage.getItem('stripe_session_id');
         if (storedSessionId) {
-          console.error('✅✅✅ [PAYMENT] FOUND session_id in sessionStorage:', storedSessionId);
           immediateSessionId = storedSessionId;
         }
       }
       
       if (immediateSessionId) {
-        console.error('✅✅✅ [PAYMENT] FOUND session_id:', immediateSessionId);
         // Process immediately if we have user
         if (user && !processedSessions.has(immediateSessionId)) {
-          console.error('🚀🚀🚀 [PAYMENT] PROCESSING IMMEDIATELY!');
           setProcessedSessions(prev => new Set([...prev, immediateSessionId]));
           // Clear from sessionStorage
           if (typeof sessionStorage !== 'undefined') {
             sessionStorage.removeItem('stripe_session_id');
           }
           handleStripeSuccess(immediateSessionId);
-        } else if (!user) {
-          console.error('⚠️ [PAYMENT] User not loaded yet, will retry...');
         }
-      } else {
-        console.error('❌ [PAYMENT] No session_id found in URL or sessionStorage');
       }
 
       const checkRedirect = () => {
         const urlParams = new URLSearchParams(window.location.search);
         const hash = window.location.hash;
         const path = window.location.pathname;
-        const fullUrl = window.location.href;
         
         // Try multiple ways to extract session_id
         let sessionId = urlParams.get('session_id');
         if (!sessionId && hash) {
-          // Check hash for session_id
           const hashMatch = hash.match(/[?&]session_id=([^&]+)/);
           if (hashMatch) {
             sessionId = hashMatch[1];
           }
         }
-        if (!sessionId && fullUrl.includes('session_id=')) {
-          // Extract from full URL
-          const urlMatch = fullUrl.match(/[?&]session_id=([^&]+)/);
-          if (urlMatch) {
-            sessionId = urlMatch[1];
-          }
-        }
-
-        console.error('🔍 [PAYMENT] Checking URL for payment redirect...', {
-          path,
-          search: window.location.search,
-          hash,
-          sessionId,
-          fullUrl,
-          hasUser: !!user
-        });
 
         // Handle successful payment - if we have a session_id, process it
         if (sessionId) {
           if (!user) {
-            console.warn('⚠️ [PAYMENT] Session ID found but user not loaded yet, will retry...', { sessionId });
             // Retry in a moment when user might be loaded
-            setTimeout(() => checkRedirect(), 1000);
+            setTimeout(() => checkRedirect(), 500);
             return;
           }
 
           if (processedSessions.has(sessionId)) {
-            console.log('⏭️ [PAYMENT] Session already processed, skipping', { sessionId });
             return;
           }
 
-          console.error('✅✅✅ [PAYMENT] Payment redirect detected! Processing...', { 
-            sessionId, 
-            userId: user.id,
-            path,
-            fullUrl 
-          });
           setProcessedSessions(prev => new Set([...prev, sessionId]));
           handleStripeSuccess(sessionId);
           return;
@@ -252,10 +172,8 @@ export default function HomeScreen() {
 
         // Handle cancelled payment
         const isCanceled = urlParams.get('canceled') === 'true' || 
-                          path.includes('booking-cancel') || 
-                          fullUrl.includes('booking-cancel');
+                          path.includes('booking-cancel');
         if (isCanceled && !processedSessions.has('canceled')) {
-          console.log('❌ [PAYMENT] Payment cancelled');
           setProcessedSessions(prev => new Set([...prev, 'canceled']));
           handleStripeCancel();
         }
@@ -266,23 +184,20 @@ export default function HomeScreen() {
 
       // Also check on popstate (back/forward navigation)
       const handlePopState = () => {
-        console.log('🔄 [PAYMENT] Popstate event detected');
         setTimeout(checkRedirect, 100);
       };
       window.addEventListener('popstate', handlePopState);
 
-      // Check periodically for redirects (in case redirect happens after mount)
+      // Check periodically for redirects (reduced frequency)
       const intervalId = setInterval(() => {
         checkRedirect();
-      }, 1000); // Check every second
+      }, 2000); // Check every 2 seconds instead of 1
       const timeoutId = setTimeout(() => {
-        console.log('⏰ [PAYMENT] Stopping periodic redirect checks');
         clearInterval(intervalId);
-      }, 30000); // Check for 30 seconds
+      }, 10000); // Check for 10 seconds instead of 30
 
       // Also listen for hash changes
       const handleHashChange = () => {
-        console.log('🔄 [PAYMENT] Hash change detected');
         setTimeout(checkRedirect, 100);
       };
       window.addEventListener('hashchange', handleHashChange);
@@ -307,27 +222,22 @@ export default function HomeScreen() {
     }
 
     if (!sessionId) {
-      console.error('❌ [PAYMENT] No session ID provided');
       Alert.alert('Error', 'Payment session ID is missing.');
       return;
     }
 
     try {
-      console.error('📞📞📞 [PAYMENT] Calling verifyPaymentAndAddFunds...', { sessionId, userId: user.id });
-      
       // Verify payment and add funds to wallet (if it was a top-up)
       // The Edge Function will check the session and add funds if payment was successful
-      const result = await verifyPaymentAndAddFunds(sessionId, user.id);
-      
-      console.error('✅✅✅ [PAYMENT] ====== PAYMENT VERIFICATION RESPONSE ======');
-      console.error('✅ [PAYMENT] Full result object:', JSON.stringify(result, null, 2));
-      console.error('✅ [PAYMENT] result.success:', result?.success);
-      console.error('✅ [PAYMENT] result.type:', result?.type);
-      console.error('✅ [PAYMENT] result.newBalance:', result?.newBalance);
-      console.error('✅ [PAYMENT] result.amount:', result?.amount);
+      // Add timeout to prevent hanging
+      const result = await Promise.race([
+        verifyPaymentAndAddFunds(sessionId, user.id),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Payment verification timeout')), 10000)
+        )
+      ]);
 
       if (!result || !result.success) {
-        console.error('❌ [PAYMENT] Payment verification failed!', result);
         throw new Error(result?.error || 'Payment verification failed');
       }
 
@@ -882,6 +792,7 @@ export default function HomeScreen() {
               setActiveScreen('booking-discovery');
             }}
             refreshTrigger={dashboardRefreshKey}
+            onGoToHistory={() => setActiveScreen('history')}
           />
         );
       case 'bookings':
@@ -893,7 +804,12 @@ export default function HomeScreen() {
         if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
-        return <StudentHistoryScreen onBookLesson={handleBookLesson} />;
+        return (
+          <StudentHistoryScreen
+            onBookLesson={handleBookLesson}
+            onGoHome={() => setActiveScreen('dashboard')}
+          />
+        );
       case 'profile':
         // Profile is accessible to all roles
         return <ProfileScreen onSignOut={handleSignOut} />;
@@ -931,6 +847,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -952,6 +869,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -975,6 +893,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -996,6 +915,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -1017,6 +937,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -1038,6 +959,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -1057,6 +979,7 @@ export default function HomeScreen() {
               }}
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
+              onGoToHistory={() => setActiveScreen('history')}
             />
           );
         }
@@ -1069,6 +992,7 @@ export default function HomeScreen() {
               setActiveScreen('booking-discovery');
             }}
             refreshTrigger={dashboardRefreshKey}
+            onGoToHistory={() => setActiveScreen('history')}
           />
         );
     }

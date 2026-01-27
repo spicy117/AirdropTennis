@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { validatePassword } from '../utils/passwordValidation';
 import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 import PasswordRequirements from '../components/PasswordRequirements';
@@ -38,6 +40,8 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 
 export default function SignUpScreen({ navigation, embedded = false }) {
   const { signUp } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -132,17 +136,17 @@ export default function SignUpScreen({ navigation, embedded = false }) {
       errorCode === 'email_address_not_authorized' ||
       errorStatus === 422 // Unprocessable Entity often used for duplicate emails
     ) {
-      return 'This email is already in use';
+      return t('thisEmailAlreadyInUse');
     }
     if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
-      return 'Connection timeout. Please check your internet connection and try again.';
+      return t('connectionTimeout');
     }
     if (errorMessage.includes('invalid')) {
-      return 'Invalid email or password format';
+      return t('invalidEmailOrPasswordFormat');
     }
     
     // Return original message or generic error
-    return error.message || 'An error occurred. Please try again.';
+    return error.message || t('error');
   };
 
   const handleSignUp = async () => {
@@ -162,47 +166,47 @@ export default function SignUpScreen({ navigation, embedded = false }) {
     
     // First name validation
     if (!trimmedFirstName) {
-      newFieldErrors.firstName = 'First name is required';
+      newFieldErrors.firstName = t('firstNameRequired');
     } else if (trimmedFirstName.length < 1) {
-      newFieldErrors.firstName = 'First name is required';
+      newFieldErrors.firstName = t('firstNameRequired');
     } else if (trimmedFirstName.length > 50) {
-      newFieldErrors.firstName = 'First name must be 50 characters or less';
+      newFieldErrors.firstName = t('firstNameMax50');
     }
     
     // Last name validation
     if (!trimmedLastName) {
-      newFieldErrors.lastName = 'Last name is required';
+      newFieldErrors.lastName = t('lastNameRequired');
     } else if (trimmedLastName.length < 1) {
-      newFieldErrors.lastName = 'Last name is required';
+      newFieldErrors.lastName = t('lastNameRequired');
     } else if (trimmedLastName.length > 50) {
-      newFieldErrors.lastName = 'Last name must be 50 characters or less';
+      newFieldErrors.lastName = t('lastNameMax50');
     }
     
     // Email validation
     if (!trimmedEmail) {
-      newFieldErrors.email = 'Email is required';
+      newFieldErrors.email = t('emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      newFieldErrors.email = 'Please enter a valid email address';
+      newFieldErrors.email = t('validEmail');
     } else if (trimmedEmail.length > 254) {
-      newFieldErrors.email = 'Email address is too long';
+      newFieldErrors.email = t('emailTooLong');
     }
     
     // Phone validation
     if (!trimmedPhone) {
-      newFieldErrors.phone = 'Mobile phone is required';
+      newFieldErrors.phone = t('mobilePhoneRequired');
     } else if (trimmedPhone.length < 8) {
-      newFieldErrors.phone = 'Please enter a valid phone number';
+      newFieldErrors.phone = t('validPhoneNumber');
     }
     
     // Password validation
     if (!formData.password) {
-      newFieldErrors.password = 'Password is required';
+      newFieldErrors.password = t('passwordRequired');
     } else if (formData.password.length > 128) {
-      newFieldErrors.password = 'Password must be 128 characters or less';
+      newFieldErrors.password = t('passwordMax128');
     }
     
     if (!formData.confirmPassword) {
-      newFieldErrors.confirmPassword = 'Please confirm your password';
+      newFieldErrors.confirmPassword = t('confirmPasswordRequired');
     }
 
     if (Object.keys(newFieldErrors).length > 0) {
@@ -211,14 +215,14 @@ export default function SignUpScreen({ navigation, embedded = false }) {
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setFieldErrors({ confirmPassword: 'Passwords do not match' });
+      setFieldErrors({ confirmPassword: t('passwordsDoNotMatch') });
       return;
     }
 
     // Check password strength
     if (!passwordValidation.isValid) {
       setPasswordError(true);
-      setFieldErrors({ password: 'Password does not meet requirements' });
+      setFieldErrors({ password: t('passwordDoesNotMeetRequirements') });
       triggerShake();
       return;
     }
@@ -261,9 +265,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
     } else if (data && !data.user) {
       // Supabase may return success even when email exists (security feature)
       // If no user was created, treat it as an error
-      const errorMsg = 'This email is already in use';
-      // Only show field validation, not banner
-      setFieldErrors({ email: errorMsg });
+      setFieldErrors({ email: t('thisEmailAlreadyInUse') });
     } else {
       // Additional check: if user exists but email is not confirmed and no session was created,
       // it might indicate the email already exists (Supabase anti-enumeration behavior)
@@ -301,8 +303,8 @@ export default function SignUpScreen({ navigation, embedded = false }) {
       >
         {!embedded && (
           <>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to get started</Text>
+            <Text style={styles.title}>{t('createAccount')}</Text>
+            <Text style={styles.subtitle}>{t('signUpToGetStarted')}</Text>
           </>
         )}
 
@@ -318,7 +320,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
                 styles.input,
                 fieldErrors.firstName && styles.inputError,
               ]}
-              placeholder="First name"
+              placeholder={t('firstNamePlaceholder')}
               value={formData.firstName}
               onChangeText={(text) => {
                 setFormData({ ...formData, firstName: text });
@@ -341,7 +343,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
                 styles.input,
                 fieldErrors.lastName && styles.inputError,
               ]}
-              placeholder="Last name"
+              placeholder={t('lastNamePlaceholder')}
               value={formData.lastName}
               onChangeText={(text) => {
                 setFormData({ ...formData, lastName: text });
@@ -365,7 +367,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
               styles.input,
               fieldErrors.email && styles.inputError,
             ]}
-            placeholder="Email"
+            placeholder={t('emailPlaceholder')}
             value={formData.email}
             onChangeText={(text) => {
               setFormData({ ...formData, email: text });
@@ -377,8 +379,8 @@ export default function SignUpScreen({ navigation, embedded = false }) {
             autoCorrect={false}
             fontSize={16}
             accessible={true}
-            accessibilityLabel="Email address"
-            accessibilityHint="Enter your email address"
+            accessibilityLabel={t('emailPlaceholder')}
+            accessibilityHint={t('validEmail')}
           />
           {fieldErrors.email && (
             <Text style={styles.fieldError}>{fieldErrors.email}</Text>
@@ -392,7 +394,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
               styles.phoneInput,
               fieldErrors.phone && styles.inputError,
             ]}
-            placeholder="Mobile Phone"
+            placeholder={t('mobilePhonePlaceholder')}
             value={formData.phone}
             onChangeText={(text) => {
               setFormData({ ...formData, phone: text });
@@ -420,7 +422,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
                 fieldErrors.password && styles.inputError,
                 styles.passwordInput,
               ]}
-              placeholder="Password"
+              placeholder={t('passwordPlaceholder')}
               value={formData.password}
               onChangeText={(text) => {
                 setFormData({ ...formData, password: text });
@@ -430,8 +432,8 @@ export default function SignUpScreen({ navigation, embedded = false }) {
               secureTextEntry={!showPassword}
               fontSize={16}
               accessible={true}
-              accessibilityLabel="Password"
-              accessibilityHint="Enter a password with at least 8 characters, including a number, uppercase letter, and special character"
+              accessibilityLabel={t('passwordPlaceholder')}
+              accessibilityHint={t('passwordDoesNotMeetRequirements')}
               {...(Platform.OS === 'web' && {
                 'aria-describedby': 'password-requirements',
               })}
@@ -459,7 +461,7 @@ export default function SignUpScreen({ navigation, embedded = false }) {
             style={shakeStyle}
             accessible={true}
             accessibilityLiveRegion="polite"
-            accessibilityLabel="Password requirements"
+            accessibilityLabel={t('passwordRequirements')}
             {...(Platform.OS === 'web' && {
               'aria-live': 'polite',
               'aria-describedby': 'password-requirements',
@@ -490,8 +492,8 @@ export default function SignUpScreen({ navigation, embedded = false }) {
               secureTextEntry={!showConfirmPassword}
               fontSize={16}
               accessible={true}
-              accessibilityLabel="Confirm password"
-              accessibilityHint="Re-enter your password to confirm"
+              accessibilityLabel={t('confirmPasswordPlaceholder')}
+              accessibilityHint={t('confirmPasswordPlaceholder')}
             />
             <ShowPasswordToggle
               show={showConfirmPassword}
@@ -505,9 +507,9 @@ export default function SignUpScreen({ navigation, embedded = false }) {
             formData.password &&
             !fieldErrors.confirmPassword &&
             (formData.confirmPassword === formData.password ? (
-              <Text style={styles.fieldSuccess}>Passwords match</Text>
+              <Text style={styles.fieldSuccess}>{t('passwordsMatch')}</Text>
             ) : (
-              <Text style={styles.fieldError}>Passwords do not match</Text>
+              <Text style={styles.fieldError}>{t('passwordsDoNotMatch')}</Text>
             ))}
         </View>
 
@@ -519,13 +521,13 @@ export default function SignUpScreen({ navigation, embedded = false }) {
               onPress={handleSignUp}
               disabled={loading}
               accessible={true}
-              accessibilityLabel="Sign up"
+              accessibilityLabel={t('signUp')}
               accessibilityRole="button"
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Sign Up</Text>
+                <Text style={styles.buttonText}>{t('signUp')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -543,13 +545,13 @@ export default function SignUpScreen({ navigation, embedded = false }) {
             onPress={handleSignUp}
             disabled={loading}
             accessible={true}
-            accessibilityLabel="Sign up"
+            accessibilityLabel={t('signUp')}
             accessibilityRole="button"
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
+              <Text style={styles.buttonText}>{t('signUp')}</Text>
             )}
           </TouchableOpacity>
         </View>

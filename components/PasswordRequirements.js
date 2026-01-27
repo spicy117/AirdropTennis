@@ -1,19 +1,21 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 
-const RequirementItem = ({ met, label, accessible = true }) => {
+const RequirementItem = ({ met, label, metLabel, notMetLabel, accessible = true }) => {
   return (
     <View
       style={styles.requirementItem}
       accessible={accessible}
-      accessibilityLabel={`${label}: ${met ? 'met' : 'not met'}`}
+      accessibilityLabel={`${label}: ${met ? metLabel : notMetLabel}`}
       accessibilityRole="text"
     >
       <View style={styles.iconContainer}>
         {met ? (
-          <Text style={styles.checkmark} accessibilityLabel="Requirement met">✓</Text>
+          <Text style={styles.checkmark} accessibilityLabel={metLabel}>✓</Text>
         ) : (
-          <View style={styles.dot} accessibilityLabel="Requirement not met" />
+          <View style={styles.dot} accessibilityLabel={notMetLabel} />
         )}
       </View>
       <Text style={[styles.label, met && styles.labelMet]}>{label}</Text>
@@ -22,12 +24,13 @@ const RequirementItem = ({ met, label, accessible = true }) => {
 };
 
 export default function PasswordRequirements({ requirements, shake = false, accessible = true, style }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const requirementList = [
-    { key: 'minLength', label: 'At least 8 characters' },
-    // maxLength is validated on submit but not shown in real-time
-    { key: 'hasNumber', label: 'Contains 1 number' },
-    { key: 'hasUppercase', label: 'Contains 1 uppercase letter' },
-    { key: 'hasSpecialChar', label: 'Contains 1 special character' },
+    { key: 'minLength', labelKey: 'atLeast8Chars' },
+    { key: 'hasNumber', labelKey: 'contains1Number' },
+    { key: 'hasUppercase', labelKey: 'contains1Uppercase' },
+    { key: 'hasSpecialChar', labelKey: 'contains1SpecialChar' },
   ];
 
   return (
@@ -35,13 +38,15 @@ export default function PasswordRequirements({ requirements, shake = false, acce
       style={[styles.container, shake && styles.shake, style]}
       accessible={accessible}
       accessibilityRole="list"
-      accessibilityLabel="Password requirements"
+      accessibilityLabel={t('passwordRequirements')}
     >
       {requirementList.map((req) => (
         <RequirementItem
           key={req.key}
           met={requirements[req.key]}
-          label={req.label}
+          label={t(req.labelKey)}
+          metLabel={t('requirementMet')}
+          notMetLabel={t('requirementNotMet')}
           accessible={accessible}
         />
       ))}

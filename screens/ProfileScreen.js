@@ -72,9 +72,9 @@ export default function ProfileScreen({ onSignOut }) {
       userMetadataRole: user?.user_metadata?.role,
     });
     
-    if (effectiveRole === 'coach') return 'Coach';
-    if (effectiveRole === 'admin') return 'Admin';
-    return 'Student';
+    if (effectiveRole === 'coach') return t('coach');
+    if (effectiveRole === 'admin') return t('admin');
+    return t('student');
   };
 
   return (

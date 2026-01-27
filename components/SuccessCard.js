@@ -1,7 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 
 export default function SuccessCard({ email, embedded = false }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
+
   return (
     <View
       style={[styles.container, embedded && styles.embedded]}
@@ -12,13 +17,11 @@ export default function SuccessCard({ email, embedded = false }) {
       <View style={styles.iconContainer}>
         <Text style={styles.icon}>🎾</Text>
       </View>
-      <Text style={styles.heading}>Welcome to the Court!</Text>
-      <Text style={styles.message}>
-        We've sent a verification link to your email. Check your inbox to activate your account and start your tennis journey.
-      </Text>
+      <Text style={styles.heading}>{t('welcomeToCourt')}</Text>
+      <Text style={styles.message}>{t('verificationEmailSent')}</Text>
       {email && (
         <View style={styles.emailContainer}>
-          <Text style={styles.emailLabel}>Email sent to:</Text>
+          <Text style={styles.emailLabel}>{t('emailSentTo')}</Text>
           <Text style={styles.email}>{email}</Text>
         </View>
       )}

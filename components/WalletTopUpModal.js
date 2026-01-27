@@ -12,33 +12,36 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
+import { createTopUpCheckoutSession, redirectToCheckout } from '../lib/stripe';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isMobile = Platform.OS !== 'web' || SCREEN_WIDTH <= 480;
-import { createTopUpCheckoutSession, redirectToCheckout } from '../lib/stripe';
-
 const TOP_UP_AMOUNTS = [25, 50, 100, 200, 500];
 
 export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSuccess }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleTopUp = async () => {
     if (!userId) {
-      Alert.alert('Error', 'User not authenticated');
+      Alert.alert(t('error'), t('userNotAuthenticated'));
       return;
     }
 
     const amount = selectedAmount || parseFloat(customAmount);
     
     if (!amount || amount <= 0) {
-      Alert.alert('Error', 'Please select or enter a valid amount');
+      Alert.alert(t('error'), t('selectOrEnterValidAmount'));
       return;
     }
 
     if (amount < 5) {
-      Alert.alert('Error', 'Minimum top-up amount is $5');
+      Alert.alert(t('error'), t('minTopUp5'));
       return;
     }
 
@@ -110,7 +113,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Top Up Wallet</Text>
+            <Text style={styles.title}>{t('topUpWallet')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#64748B" />
             </TouchableOpacity>
@@ -118,7 +121,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
 
           {/* Quick Amount Selection */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Top-Up</Text>
+            <Text style={styles.sectionTitle}>{t('quickTopUp')}</Text>
             <View style={styles.amountGrid}>
               {TOP_UP_AMOUNTS.map((amount) => (
                 <TouchableOpacity
@@ -144,12 +147,12 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
 
           {/* Custom Amount */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Custom Amount</Text>
+            <Text style={styles.sectionTitle}>{t('customAmountLabel')}</Text>
             <View style={styles.customAmountContainer}>
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={styles.customAmountInput}
-                placeholder="Enter amount"
+                placeholder={t('enterAmount')}
                 placeholderTextColor="#9CA3AF"
                 value={customAmount}
                 onChangeText={handleCustomAmountChange}
@@ -157,14 +160,14 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
                 editable={!loading}
               />
             </View>
-            <Text style={styles.minAmountText}>Minimum: $5</Text>
+            <Text style={styles.minAmountText}>{t('minimum5')}</Text>
           </View>
 
           {/* Selected Amount Display */}
           {displayAmount && (
             <View style={styles.summaryContainer}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Top-Up Amount:</Text>
+                <Text style={styles.summaryLabel}>{t('topUpAmountLabel')}</Text>
                 <Text style={styles.summaryValue}>${displayAmount.toFixed(2)}</Text>
               </View>
             </View>
@@ -177,7 +180,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
               onPress={onClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -192,7 +195,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
               ) : (
                 <>
                   <Ionicons name="wallet" size={20} color="#FFFFFF" />
-                  <Text style={styles.topUpButtonText}>Proceed to Payment</Text>
+                  <Text style={styles.topUpButtonText}>{t('proceedToPayment')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -201,9 +204,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
           {/* Security Note */}
           <View style={styles.securityNote}>
             <Ionicons name="lock-closed" size={14} color="#64748B" />
-            <Text style={styles.securityNoteText}>
-              Secure payment powered by Stripe
-            </Text>
+            <Text style={styles.securityNoteText}>{t('securePayment')}</Text>
           </View>
         </View>
       </View>

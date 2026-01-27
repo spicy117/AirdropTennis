@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -38,6 +40,8 @@ export default function BookingEditModal({
   booking,
   onBookingCancelled, // Optional callback when booking is cancelled
 }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [requestType, setRequestType] = useState(null); // 'cancel' or 'raincheck'
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,6 +50,7 @@ export default function BookingEditModal({
     success: false,
     title: '',
     message: '',
+    isCancellation: false,
   });
 
   // Check if free cancellation is available for this booking
@@ -53,7 +58,7 @@ export default function BookingEditModal({
 
   const handleResultModalClose = () => {
     const wasSuccess = resultModal.success;
-    const wasCancellation = resultModal.title.includes('Cancelled');
+    const wasCancellation = resultModal.title === t('cancelled') || resultModal.title.includes('Cancelled');
     
     // First just hide the modal, keep other state to prevent icon flash
     setResultModal(prev => ({ ...prev, visible: false }));
@@ -106,8 +111,8 @@ export default function BookingEditModal({
               setResultModal({
                 visible: true,
                 success: false,
-                title: 'Partial Success',
-                message: `Your booking has been cancelled, but we failed to refund $${creditCost.toFixed(2)}. Please contact support.`,
+                title: t('partialSuccess'),
+                message: t('bookingCancelledRefundFailed'),
               });
               return;
             }
@@ -116,16 +121,17 @@ export default function BookingEditModal({
             setResultModal({
               visible: true,
               success: true,
-              title: 'Booking Cancelled',
-              message: `Your booking has been successfully cancelled and $${creditCost.toFixed(2)} has been refunded to your wallet.`,
+              title: t('cancelled'),
+              message: t('bookingCancelledRefundSuccess'),
+              isCancellation: true,
             });
           } catch (refundError) {
             console.error('Error refunding credits:', refundError);
             setResultModal({
               visible: true,
               success: false,
-              title: 'Partial Success',
-              message: `Your booking has been cancelled, but we failed to refund $${creditCost.toFixed(2)}. Please contact support.`,
+              title: t('partialSuccess'),
+              message: t('bookingCancelledRefundFailed'),
             });
           }
         } else {
@@ -133,8 +139,9 @@ export default function BookingEditModal({
           setResultModal({
             visible: true,
             success: true,
-            title: 'Booking Cancelled',
-            message: 'Your booking has been successfully cancelled.',
+            title: t('cancelled'),
+            message: t('bookingCancelledSuccess'),
+            isCancellation: true,
           });
         }
       } else {
@@ -160,8 +167,8 @@ export default function BookingEditModal({
         setResultModal({
           visible: true,
           success: true,
-          title: 'Request Submitted',
-          message: 'Your cancellation request has been submitted and is pending admin approval.\n\nNote: Free cancellation is available until 12pm the day before your booking.',
+          title: t('requestSubmitted'),
+          message: t('cancelRequestSubmittedMessage'),
         });
       }
     } catch (error) {
@@ -169,8 +176,8 @@ export default function BookingEditModal({
       setResultModal({
         visible: true,
         success: false,
-        title: 'Error',
-        message: 'Failed to process cancellation. Please try again.',
+        title: t('error'),
+        message: t('failedToProcessCancellation'),
       });
     } finally {
       setLoading(false);
@@ -222,8 +229,8 @@ export default function BookingEditModal({
         setResultModal({
           visible: true,
           success: false,
-          title: 'Already Submitted',
-          message: 'You already have a pending rain check request for this booking. Please wait for it to be reviewed.',
+          title: t('requestSubmitted'),
+          message: t('alreadySubmittedRainCheck'),
         });
         return;
       }
@@ -277,7 +284,7 @@ export default function BookingEditModal({
       <View style={styles.overlay}>
         <View style={styles.modal}>
           <View style={styles.header}>
-            <Text style={styles.title}>Edit Booking</Text>
+            <Text style={styles.title}>{t('editBooking')}</Text>
             <TouchableOpacity
               onPress={() => {
                 resetModal();
@@ -432,7 +439,7 @@ export default function BookingEditModal({
               ]}
               onPress={handleResultModalClose}
             >
-              <Text style={styles.resultButtonText}>OK</Text>
+              <Text style={styles.resultButtonText}>{t('ok')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import SignInScreen from './SignInScreen';
 import SignUpScreen from './SignUpScreen';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 
 const getWindowWidth = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -17,7 +20,7 @@ const isDesktop = () => {
   return false;
 };
 
-export default function AuthSelectionScreen({ navigation, route }) {
+function AuthSelectionScreenInner({ navigation, route, language, updateLanguage, t }) {
   // Get initial tab from URL or route params, default to 'login'
   const getInitialTab = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -59,12 +62,13 @@ export default function AuthSelectionScreen({ navigation, route }) {
     }
   }, []);
 
-  // Update document title based on active tab (web only)
+  // Update document title based on active tab (web only).
+  // Use [activeTab] only to avoid any unbound 'language' reference at this call site.
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const title = activeTab === 'login' 
-        ? 'Log In - Airdrop Tennis' 
-        : 'Sign Up - Airdrop Tennis';
+      const title = activeTab === 'login'
+        ? `${t('logIn')} - Airdrop Tennis`
+        : `${t('signUp')} - Airdrop Tennis`;
       document.title = title;
     }
   }, [activeTab]);
@@ -87,24 +91,30 @@ export default function AuthSelectionScreen({ navigation, route }) {
           <View style={styles.sidePanel}>
             <View style={styles.illustrationContainer}>
               <Text style={styles.illustrationEmoji}>🎾</Text>
-              <Text style={styles.illustrationTitle}>Welcome to Airdrop Tennis</Text>
-              <Text style={styles.illustrationText}>
-                Book high‑quality tennis coaching in just a few taps. Track your sessions,
-                manage your schedule, and improve your game faster.
-              </Text>
+              <Text style={styles.illustrationTitle}>{t('welcomeToAirdrop')}</Text>
+              <Text style={styles.illustrationText}>{t('welcomeSubtitle')}</Text>
               <View style={styles.testimonial}>
                 <Text style={styles.starRating}>★★★★★</Text>
-                <Text style={styles.testimonialText}>
-                  "Airdrop Tennis makes it so easy to find great coaches and stay consistent
-                  with training."
-                </Text>
-                <Text style={styles.testimonialAuthor}>— Airdrop Tennis Student</Text>
+                <Text style={styles.testimonialText}>{t('testimonialQuote')}</Text>
+                <Text style={styles.testimonialAuthor}>{t('testimonialAuthor')}</Text>
               </View>
             </View>
           </View>
         )}
 
         <View style={styles.authCard}>
+          <View style={styles.langRow}>
+            <TouchableOpacity
+              style={styles.langToggle}
+              onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
+              accessible={true}
+              accessibilityLabel={language === 'en' ? 'Switch to Chinese' : 'Switch to English'}
+              accessibilityRole="button"
+            >
+              <Ionicons name="language-outline" size={14} color="#64748B" />
+              <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'login' && styles.tabActive]}
@@ -120,7 +130,7 @@ export default function AuthSelectionScreen({ navigation, route }) {
                   activeTab === 'login' && styles.tabTextActive,
                 ]}
               >
-                Log In
+                {t('logIn')}
               </Text>
               {activeTab === 'login' && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
@@ -129,7 +139,7 @@ export default function AuthSelectionScreen({ navigation, route }) {
               style={[styles.tab, activeTab === 'signup' && styles.tabActive]}
               onPress={() => handleTabChange('signup')}
               accessible={true}
-              accessibilityLabel="Sign up tab"
+              accessibilityLabel={t('signUpTab')}
               accessibilityRole="tab"
               accessibilityState={{ selected: activeTab === 'signup' }}
             >
@@ -139,7 +149,7 @@ export default function AuthSelectionScreen({ navigation, route }) {
                   activeTab === 'signup' && styles.tabTextActive,
                 ]}
               >
-                Sign Up
+                {t('signUp')}
               </Text>
               {activeTab === 'signup' && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
@@ -155,6 +165,20 @@ export default function AuthSelectionScreen({ navigation, route }) {
         </View>
       </View>
     </View>
+  );
+}
+
+export default function AuthSelectionScreen(props) {
+  const langCtx = useLanguage() || {};
+  const { language = 'en', updateLanguage = () => {} } = langCtx;
+  const t = (key) => getTranslation(language, key);
+  return (
+    <AuthSelectionScreenInner
+      {...props}
+      language={language}
+      updateLanguage={updateLanguage}
+      t={t}
+    />
   );
 }
 
@@ -234,6 +258,27 @@ const styles = StyleSheet.create({
   testimonialAuthor: {
     fontSize: 14,
     color: '#999',
+  },
+  langRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  langToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    gap: 4,
+  },
+  langText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
   },
   authCard: {
     flex: 1,

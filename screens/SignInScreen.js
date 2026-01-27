@@ -11,12 +11,16 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import ErrorBanner from '../components/ErrorBanner';
 import SuccessBanner from '../components/SuccessBanner';
 import ShowPasswordToggle from '../components/ShowPasswordToggle';
 
 export default function SignInScreen({ navigation, embedded = false }) {
   const { signIn, resetPassword, resendVerificationEmail } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [loading, setLoading] = useState(false);
   const [loadingReset, setLoadingReset] = useState(false);
   const [loadingResend, setLoadingResend] = useState(false);
@@ -45,17 +49,17 @@ export default function SignInScreen({ navigation, embedded = false }) {
       errorCode.toLowerCase().includes('email_not_confirmed') ||
       errorCode.toLowerCase().includes('email_not_verified')
     ) {
-      return 'Please verify your email address before signing in.';
+      return t('verifyEmailBeforeSignIn');
     }
     
     if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('invalid')) {
-      return 'Invalid email or password';
+      return t('invalidEmailOrPassword');
     }
     if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
-      return 'Connection timeout. Please check your internet connection and try again.';
+      return t('connectionTimeout');
     }
     
-    return errorMessage || 'An error occurred. Please try again.';
+    return errorMessage || t('error');
   };
 
   const handleSignIn = async () => {
@@ -65,12 +69,12 @@ export default function SignInScreen({ navigation, embedded = false }) {
     const newFieldErrors = {};
     
     if (!formData.email) {
-      newFieldErrors.email = 'Email is required';
+      newFieldErrors.email = t('emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newFieldErrors.email = 'Please enter a valid email address';
+      newFieldErrors.email = t('validEmail');
     }
     if (!formData.password) {
-      newFieldErrors.password = 'Password is required';
+      newFieldErrors.password = t('passwordRequired');
     }
 
     if (Object.keys(newFieldErrors).length > 0) {
@@ -118,13 +122,13 @@ export default function SignInScreen({ navigation, embedded = false }) {
 
     // Validate email is provided
     if (!formData.email) {
-      setFieldErrors({ email: 'Email is required to reset password' });
+      setFieldErrors({ email: t('emailRequiredForReset') });
       return;
     }
 
     // Validate email format
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setFieldErrors({ email: 'Please enter a valid email address' });
+      setFieldErrors({ email: t('validEmail') });
       return;
     }
 
@@ -137,9 +141,9 @@ export default function SignInScreen({ navigation, embedded = false }) {
     setLoadingReset(false);
 
     if (resetError) {
-      setError(resetError.message || 'Failed to send reset email. Please try again.');
+      setError(resetError.message || t('failedToSendReset'));
     } else {
-      setSuccess(`Password reset email sent to ${formData.email}. Please check your inbox for instructions.`);
+      setSuccess(t('resetEmailSent'));
     }
   };
 
@@ -150,13 +154,13 @@ export default function SignInScreen({ navigation, embedded = false }) {
 
     // Validate email is provided
     if (!formData.email) {
-      setFieldErrors({ email: 'Email is required to resend verification email' });
+      setFieldErrors({ email: t('emailRequiredForResend') });
       return;
     }
 
     // Validate email format
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setFieldErrors({ email: 'Please enter a valid email address' });
+      setFieldErrors({ email: t('validEmail') });
       return;
     }
 
@@ -169,9 +173,9 @@ export default function SignInScreen({ navigation, embedded = false }) {
     setLoadingResend(false);
 
     if (resendError) {
-      setError(resendError.message || 'Failed to send verification email. Please try again.');
+      setError(resendError.message || t('failedToSendVerification'));
     } else {
-      setSuccess(`Verification email sent to ${formData.email}. Please check your inbox and click the verification link.`);
+      setSuccess(t('verificationEmailSentTo'));
       setShowResendOption(false);
     }
   };
@@ -185,8 +189,8 @@ export default function SignInScreen({ navigation, embedded = false }) {
       <View style={[styles.container, embedded && styles.embeddedContainer]}>
         {!embedded && (
           <>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Log in to your account</Text>
+            <Text style={styles.title}>{t('welcomeBack')}</Text>
+            <Text style={styles.subtitle}>{t('logInToAccount')}</Text>
           </>
         )}
 
@@ -221,8 +225,8 @@ export default function SignInScreen({ navigation, embedded = false }) {
             returnKeyType="next"
             fontSize={16}
             accessible={true}
-            accessibilityLabel="Email address"
-            accessibilityHint="Enter your email address"
+            accessibilityLabel={t('emailPlaceholder')}
+            accessibilityHint={t('validEmail')}
           />
           {fieldErrors.email && (
             <Text style={styles.fieldError}>{fieldErrors.email}</Text>
@@ -237,7 +241,7 @@ export default function SignInScreen({ navigation, embedded = false }) {
                 fieldErrors.password && styles.inputError,
                 styles.passwordInput,
               ]}
-              placeholder="Password"
+              placeholder={t('passwordPlaceholder')}
               value={formData.password}
               onChangeText={(text) => {
                 setFormData({ ...formData, password: text });
@@ -248,8 +252,8 @@ export default function SignInScreen({ navigation, embedded = false }) {
               onSubmitEditing={handleSignIn}
               fontSize={16}
               accessible={true}
-              accessibilityLabel="Password"
-              accessibilityHint="Enter your password"
+              accessibilityLabel={t('passwordPlaceholder')}
+              accessibilityHint={t('passwordPlaceholder')}
             />
             <ShowPasswordToggle
               show={showPassword}
@@ -263,19 +267,17 @@ export default function SignInScreen({ navigation, embedded = false }) {
 
         {showResendOption && (
           <View style={styles.resendContainer}>
-            <Text style={styles.resendMessage}>
-              Your email address hasn't been verified yet.
-            </Text>
+            <Text style={styles.resendMessage}>{t('resendVerificationMessage')}</Text>
             <TouchableOpacity
               style={styles.resendButton}
               onPress={handleResendVerification}
               disabled={loadingResend}
               accessible={true}
-              accessibilityLabel="Resend verification email"
+              accessibilityLabel={t('resendVerificationEmail')}
               accessibilityRole="button"
             >
               <Text style={styles.resendButtonText}>
-                {loadingResend ? 'Sending...' : 'Resend Verification Email'}
+                {loadingResend ? t('sending') : t('resendVerificationEmail')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -286,11 +288,11 @@ export default function SignInScreen({ navigation, embedded = false }) {
           onPress={handleForgotPassword}
           disabled={loadingReset}
           accessible={true}
-          accessibilityLabel="Forgot password"
+          accessibilityLabel={t('forgotPassword')}
           accessibilityRole="button"
         >
           <Text style={styles.forgotPasswordText}>
-            {loadingReset ? 'Sending...' : 'Forgot Password?'}
+            {loadingReset ? t('sending') : t('forgotPassword')}
           </Text>
         </TouchableOpacity>
 
@@ -299,13 +301,13 @@ export default function SignInScreen({ navigation, embedded = false }) {
           onPress={handleSignIn}
           disabled={loading}
           accessible={true}
-          accessibilityLabel="Log in"
+          accessibilityLabel={t('logIn')}
           accessibilityRole="button"
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Log In</Text>
+            <Text style={styles.buttonText}>{t('logIn')}</Text>
           )}
         </TouchableOpacity>
 
@@ -314,12 +316,10 @@ export default function SignInScreen({ navigation, embedded = false }) {
             style={styles.linkButton}
             onPress={() => navigation.navigate('SignUp')}
             accessible={true}
-            accessibilityLabel="Don't have an account? Sign up"
+            accessibilityLabel={t('dontHaveAccountSignUp')}
             accessibilityRole="button"
           >
-            <Text style={styles.linkText}>
-              Don't have an account? Sign Up
-            </Text>
+            <Text style={styles.linkText}>{t('dontHaveAccountSignUp')}</Text>
           </TouchableOpacity>
         )}
       </View>

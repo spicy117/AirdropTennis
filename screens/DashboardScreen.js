@@ -35,6 +35,11 @@ const SEASON_PASS_BENEFITS = [
   { icon: 'ribbon', title: 'Member Perks', description: 'Exclusive discounts & events' },
 ];
 
+// Service name/desc translation keys
+const SERVICE_NAME_KEYS = { 'stroke-clinic': 'serviceStrokeClinic', 'boot-camp': 'serviceBootCamp', 'private-lessons': 'servicePrivateLessons', 'utr-points-play': 'serviceUtrPoints' };
+const SERVICE_DESC_KEYS = { 'stroke-clinic': 'serviceStrokeClinicDesc', 'boot-camp': 'serviceBootCampDesc', 'private-lessons': 'servicePrivateLessonsDesc', 'utr-points-play': 'serviceUtrPointsDesc' };
+const TAG_KEYS = { Popular: 'tagPopular', Value: 'tagValue', Premium: 'tagPremium' };
+
 // Service configurations
 const SERVICES = [
   {
@@ -893,7 +898,7 @@ const modalStyles = StyleSheet.create({
 // ============================================
 // Service Card - Compact & Modern
 // ============================================
-const ServiceCard = ({ service, onPress, onMoreInfo }) => {
+const ServiceCard = ({ service, onPress, onMoreInfo, useFlexLayout, infoLabel = 'Info' }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -912,13 +917,14 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
     }).start();
   };
 
+  const wrapperStyle = [
+    cardStyles.wrapper,
+    useFlexLayout && cardStyles.wrapperFlex,
+    { transform: [{ scale: scaleAnim }] },
+  ];
+
   return (
-    <Animated.View
-      style={[
-        cardStyles.wrapper,
-        { transform: [{ scale: scaleAnim }] },
-      ]}
-    >
+    <Animated.View style={wrapperStyle}>
       <TouchableOpacity
         style={[cardStyles.card, { borderColor: service.borderColor }]}
         onPress={onPress}
@@ -926,6 +932,7 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
         onPressOut={handlePressOut}
         activeOpacity={1}
       >
+        <View style={cardStyles.cardInner}>
         {/* Header */}
         <View style={cardStyles.header}>
           <View style={[cardStyles.iconContainer, { backgroundColor: service.bgColor }]}>
@@ -938,9 +945,11 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
           )}
         </View>
 
-        {/* Content */}
-        <Text style={cardStyles.title}>{service.name}</Text>
-        <Text style={cardStyles.desc}>{service.shortDesc}</Text>
+        {/* Content - flexible middle so desc doesn't overlap footer */}
+        <View style={cardStyles.contentBlock}>
+          <Text style={cardStyles.title} numberOfLines={1}>{service.name}</Text>
+          <Text style={cardStyles.desc} numberOfLines={2} ellipsizeMode="tail">{service.shortDesc}</Text>
+        </View>
 
         {/* Footer */}
         <View style={cardStyles.footer}>
@@ -955,8 +964,9 @@ const ServiceCard = ({ service, onPress, onMoreInfo }) => {
               onMoreInfo(service);
             }}
           >
-            <Text style={cardStyles.infoBtnText}>Info</Text>
+            <Text style={cardStyles.infoBtnText}>{infoLabel}</Text>
           </TouchableOpacity>
+        </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -972,13 +982,21 @@ const cardStyles = StyleSheet.create({
       flexBasis: '48%',
     }),
   },
+  wrapperFlex: {
+    flex: 1,
+    width: undefined,
+    maxWidth: undefined,
+    flexBasis: 0,
+    marginBottom: 0,
+  },
   card: {
+    flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.4)', // Increased transparency
     borderRadius: isMobile ? 12 : 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)', // Low-opacity white border
-    padding: isMobile ? 12 : 14,
-    minHeight: isMobile ? 160 : 150,
+    padding: isMobile ? 10 : 14,
+    minHeight: isMobile ? 150 : 150,
     ...(Platform.OS === 'web' && {
       backdropFilter: 'blur(50px)', // Increased blur
       WebkitBackdropFilter: 'blur(50px)',
@@ -992,11 +1010,22 @@ const cardStyles = StyleSheet.create({
       },
     }),
   },
+  cardInner: {
+    flex: 1,
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  contentBlock: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'flex-start',
+    marginBottom: isMobile ? 8 : 10,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: isMobile ? 6 : 10,
   },
   iconContainer: {
     width: 36,
@@ -1027,14 +1056,14 @@ const cardStyles = StyleSheet.create({
   desc: {
     fontSize: isMobile ? 11 : 12,
     color: '#64748B',
-    lineHeight: isMobile ? 15 : 16,
-    marginBottom: isMobile ? 10 : 12,
+    lineHeight: isMobile ? 14 : 16,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 'auto',
+    flexShrink: 0,
   },
   priceContainer: {
     flexDirection: 'column',
@@ -1066,8 +1095,9 @@ const cardStyles = StyleSheet.create({
 // ============================================
 // Service Info Modal
 // ============================================
-const ServiceInfoModal = ({ visible, service, onClose, onBook }) => {
+const ServiceInfoModal = ({ visible, service, onClose, onBook, t }) => {
   if (!service) return null;
+  const txt = (key) => (typeof t === 'function' ? t(key) : key);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -1108,12 +1138,12 @@ const ServiceInfoModal = ({ visible, service, onClose, onBook }) => {
             </View>
 
             <View style={serviceModalStyles.section}>
-              <Text style={serviceModalStyles.sectionTitle}>About</Text>
+              <Text style={serviceModalStyles.sectionTitle}>{txt('about')}</Text>
               <Text style={serviceModalStyles.sectionText}>{service.fullDescription}</Text>
             </View>
 
             <View style={serviceModalStyles.section}>
-              <Text style={serviceModalStyles.sectionTitle}>What to Bring</Text>
+              <Text style={serviceModalStyles.sectionTitle}>{txt('whatToBring')}</Text>
               {service.whatToBring.map((item, i) => (
                 <View key={i} style={serviceModalStyles.listItem}>
                   <View style={[serviceModalStyles.listDot, { backgroundColor: service.color }]} />
@@ -1128,7 +1158,7 @@ const ServiceInfoModal = ({ visible, service, onClose, onBook }) => {
               style={[serviceModalStyles.bookBtn, { backgroundColor: service.color }]}
               onPress={() => onBook(service.name)}
             >
-              <Text style={serviceModalStyles.bookBtnText}>Find Availability</Text>
+              <Text style={serviceModalStyles.bookBtnText}>{txt('findAvailability')}</Text>
               <Ionicons name="arrow-forward" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -1362,13 +1392,29 @@ const statStyles = StyleSheet.create({
 // ============================================
 // Main Dashboard Screen
 // ============================================
-export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar }) {
+export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory }) {
   const insets = useSafeAreaInsets();
   const { user, userRole } = useAuth();
   const { language, updateLanguage } = useLanguage();
   const t = (key) => getTranslation(language, key);
 
   const isStudent = userRole === 'student' || (!userRole || (userRole !== 'admin' && userRole !== 'coach'));
+
+  // Reactive width so services 2x2 grid works on mobile and when viewport is narrow (e.g. resize)
+  const [windowWidth, setWindowWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener?.('change', ({ window: w }) => setWindowWidth(w.width));
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const onResize = () => setWindowWidth(window.innerWidth);
+      window.addEventListener('resize', onResize);
+      return () => {
+        sub?.remove?.();
+        window.removeEventListener('resize', onResize);
+      };
+    }
+    return () => sub?.remove?.();
+  }, []);
+  const servicesUse2x2 = windowWidth <= 768;
 
   const [creditBalance, setCreditBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -1408,10 +1454,18 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     if (!user) return;
     try {
       setLoadingBalance(true);
-      const balance = await getWalletBalance(user.id);
+      // Add timeout to prevent hanging
+      const balance = await Promise.race([
+        getWalletBalance(user.id),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Wallet balance timeout')), 5000)
+        )
+      ]);
       setCreditBalance(balance);
     } catch (error) {
       console.error('Error loading wallet balance:', error);
+      // Set to 0 on error to prevent UI issues
+      setCreditBalance(0);
     } finally {
       setLoadingBalance(false);
     }
@@ -1426,12 +1480,20 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     if (!user) return;
     try {
       setLoadingBooking(true);
-      const { data, error } = await supabase
+      // Add timeout to prevent hanging
+      const bookingsQuery = supabase
         .from('bookings')
         .select('*, locations:location_id (id, name)')
         .eq('user_id', user.id)
         .gte('start_time', new Date().toISOString())
         .order('start_time', { ascending: true });
+
+      const { data, error } = await Promise.race([
+        bookingsQuery,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Bookings query timeout')), 5000)
+        )
+      ]);
 
       if (error) throw error;
 
@@ -1518,13 +1580,27 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
             </View>
           </View>
           {isStudent && (
-            <TouchableOpacity
-              style={styles.langToggle}
-              onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
-            >
-              <Ionicons name="language-outline" size={14} color="#64748B" />
-              <Text style={styles.langText}>{language === 'en' ? 'EN' : '中文'}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              {onGoToHistory && (
+                <TouchableOpacity
+                  style={styles.historyButton}
+                  onPress={onGoToHistory}
+                  accessible={true}
+                  accessibilityLabel={t('viewSessionHistory')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="time-outline" size={14} color="#64748B" />
+                  <Text style={styles.historyButtonText}>History</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.langToggle}
+                onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
+              >
+                <Ionicons name="language-outline" size={14} color="#64748B" />
+                <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -1547,39 +1623,73 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
             icon="calendar"
             iconColor="#3B82F6"
             iconBg="rgba(59, 130, 246, 0.12)"
-            label="Next Booking"
-            value={nextBooking ? formatDate(nextBooking.start_time) : 'None'}
-            subValue={nextBooking ? `${formatTime(nextBooking.start_time)} • ${nextBooking.locations?.name || 'TBD'}` : null}
-            action={!nextBooking ? 'Book Now' : null}
+            label={t('nextBooking')}
+            value={nextBooking ? formatDate(nextBooking.start_time) : t('none')}
+            subValue={nextBooking ? `${formatTime(nextBooking.start_time)} • ${nextBooking.locations?.name || t('tbd')}` : null}
+            action={!nextBooking ? t('bookNow') : null}
             actionColor="#3B82F6"
             onAction={onBookLesson}
             loading={loadingBooking}
           />
         </View>
 
-        {/* Services Section */}
+        {/* Services Section - 2x2 grid when viewport <= 768px (mobile/tablet) */}
         <View style={styles.servicesSection}>
-          <Text style={styles.sectionHeader}>SELECT A SERVICE</Text>
-          <View style={styles.servicesGrid}>
-            {SERVICES.map((service) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                onPress={() => handleServicePress(service.name)}
-                onMoreInfo={handleMoreInfo}
-              />
-            ))}
+          <Text style={styles.sectionHeader}>{t('selectAService')}</Text>
+          <View style={[
+            styles.servicesGrid,
+            servicesUse2x2 && { flexDirection: 'column', flexWrap: 'nowrap', justifyContent: 'flex-start', gap: 0 },
+          ]}>
+            {servicesUse2x2 ? (
+              [0, 1].map((row) => (
+                <View key={row} style={styles.servicesRow}>
+                  {SERVICES.slice(row * 2, row * 2 + 2).map((service) => (
+                    <ServiceCard
+                      key={service.id}
+                      service={service}
+                      onPress={() => handleServicePress(service.name)}
+                      onMoreInfo={handleMoreInfo}
+                      useFlexLayout
+                    />
+                  ))}
+                </View>
+              ))
+            ) : (
+              SERVICES.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={{ ...service, name: t(SERVICE_NAME_KEYS[service.id] || service.name), shortDesc: t(SERVICE_DESC_KEYS[service.id] || service.shortDesc), tag: service.tag ? t(TAG_KEYS[service.tag]) : null }}
+                  onPress={() => handleServicePress(service.name)}
+                  onMoreInfo={handleMoreInfo}
+                  infoLabel={t('info')}
+                />
+              ))
+            )}
           </View>
         </View>
 
         {/* Upcoming Lessons */}
         <View style={styles.upcomingSection}>
           <View style={styles.upcomingHeader}>
-            <Text style={styles.sectionHeader}>UPCOMING LESSONS</Text>
-            {upcomingBookings.length > 0 && (
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{upcomingBookings.length}</Text>
-              </View>
+            <View style={styles.upcomingHeaderLeft}>
+              <Text style={styles.sectionHeader}>{t('upcomingLessons')}</Text>
+              {upcomingBookings.length > 0 && (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{upcomingBookings.length}</Text>
+                </View>
+              )}
+            </View>
+            {isStudent && onGoToHistory && (
+              <TouchableOpacity
+                style={styles.historyLink}
+                onPress={onGoToHistory}
+                accessible={true}
+                accessibilityLabel={t('viewSessionHistory')}
+                accessibilityRole="button"
+              >
+                <Ionicons name="time-outline" size={14} color="#3B82F6" />
+                <Text style={styles.historyLinkText}>{t('history')}</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1590,10 +1700,10 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               <View style={styles.emptyIcon}>
                 <Ionicons name="calendar-outline" size={32} color="#CBD5E1" />
               </View>
-              <Text style={styles.emptyTitle}>No lessons yet</Text>
-              <Text style={styles.emptySubtitle}>Book your first lesson to get started</Text>
+              <Text style={styles.emptyTitle}>{t('noLessonsYet')}</Text>
+              <Text style={styles.emptySubtitle}>{t('bookFirstLesson')}</Text>
               <TouchableOpacity style={styles.emptyBtn} onPress={onBookLesson}>
-                <Text style={styles.emptyBtnText}>Book Now</Text>
+                <Text style={styles.emptyBtnText}>{t('bookNow')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1624,7 +1734,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                     </Text>
                   </View>
                   <View style={styles.bookingInfo}>
-                    <Text style={styles.bookingTitle}>{booking.service_name || 'Tennis Lesson'}</Text>
+                    <Text style={styles.bookingTitle}>{booking.service_name || t('tennisLesson')}</Text>
                     <Text style={styles.bookingMeta}>
                       {formatTime(booking.start_time)} • {booking.locations?.name || 'TBD'}
                     </Text>
@@ -1651,6 +1761,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           setSelectedService(null);
           handleServicePress(serviceName);
         }}
+        t={t}
       />
       <WalletTopUpModal
         visible={showTopUpModal}
@@ -1756,6 +1867,28 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.5,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: isMobile ? 8 : 6,
+  },
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: isMobile ? 8 : 6,
+    paddingHorizontal: isMobile ? 10 : 8,
+    borderRadius: isMobile ? 10 : 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+    gap: isMobile ? 4 : 4,
+    minHeight: isMobile ? 36 : undefined,
+  },
+  historyButtonText: {
+    fontSize: isMobile ? 12 : 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
   langToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1793,10 +1926,15 @@ const styles = StyleSheet.create({
     marginBottom: isMobile ? 12 : 14,
   },
   servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: isMobile ? 'column' : 'row',
+    flexWrap: isMobile ? 'nowrap' : 'wrap',
     justifyContent: isMobile ? 'flex-start' : 'space-between',
-    gap: isMobile ? 8 : 12,
+    gap: isMobile ? 0 : 12,
+  },
+  servicesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
   },
 
   // Upcoming Section
@@ -1804,8 +1942,25 @@ const styles = StyleSheet.create({
   upcomingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: isMobile ? 6 : 8,
+    justifyContent: 'space-between',
     marginBottom: isMobile ? 12 : 14,
+  },
+  upcomingHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: isMobile ? 6 : 8,
+  },
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  historyLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   countBadge: {
     backgroundColor: '#0F172A',
