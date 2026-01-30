@@ -35,7 +35,8 @@ import {
   deductFromWallet, 
   createBookingCheckoutSession, 
   redirectToCheckout,
-  verifyPaymentAndAddFunds
+  verifyPaymentAndAddFunds,
+  STRIPE_CHECKOUT_DISABLED,
 } from '../lib/stripe';
 
 // Test mode flag - when true, skips Stripe checkout and immediately creates booking
@@ -555,7 +556,16 @@ export default function HomeScreen() {
             return;
           }
         } else {
-          // Insufficient wallet balance - create Stripe checkout
+          // Insufficient wallet balance - create Stripe checkout (or show "coming soon" if disabled)
+          if (STRIPE_CHECKOUT_DISABLED) {
+            setBookingModal({
+              visible: true,
+              success: false,
+              title: 'Coming soon',
+              message: 'This feature will be available soon.',
+            });
+            return;
+          }
           console.log(`Insufficient wallet balance: $${walletBalance.toFixed(2)}. Required: $${totalCost.toFixed(2)}`);
           
           try {
@@ -1042,7 +1052,7 @@ export default function HomeScreen() {
               onPress={handleBookingModalClose}
             >
               <Text style={styles.modalButtonText}>
-                {bookingModal.success ? 'View My Bookings' : 'Try Again'}
+                {bookingModal.success ? 'View My Bookings' : (bookingModal.title === 'Coming soon' ? 'OK' : 'Try Again')}
               </Text>
             </TouchableOpacity>
           </View>

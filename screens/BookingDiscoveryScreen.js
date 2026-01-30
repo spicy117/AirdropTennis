@@ -1101,44 +1101,51 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
 
   const groupedAvailabilities = groupAvailabilities();
 
-  // Check if a slot is selected
+  // Check if a slot is selected (must match time + location + service)
   const isSlotSelected = (slot) => {
+    const sn = slot.serviceName || 'Private Lessons';
     return selectedSlots.some(
-      (s) => s.time === slot.time && s.locationId === slot.locationId
+      (s) =>
+        s.time === slot.time &&
+        s.locationId === slot.locationId &&
+        (s.serviceName || 'Private Lessons') === sn
     );
   };
 
-  // Get selected slots for a specific location, sorted by time
-  const getSelectedSlotsForLocation = (locationId) => {
+  // Get selected slots for a specific location and service, sorted by time
+  const getSelectedSlotsForLocationAndService = (locationId, serviceName) => {
+    const sn = serviceName || 'Private Lessons';
     return selectedSlots
-      .filter((s) => s.locationId === locationId)
-      .sort((a, b) => a.time24.localeCompare(b.time24));
+      .filter(
+        (s) => s.locationId === locationId && (s.serviceName || 'Private Lessons') === sn
+      )
+      .sort((a, b) => (a.time24 || '').localeCompare(b.time24 || ''));
   };
 
-  // Check if selection has at least 1 hour (2 blocks)
+  // Check if selection has at least 1 hour (2 blocks) for some location+service
   const hasValidSelection = () => {
-    // Group by location and check each location has at least 2 slots
-    const byLocation = {};
+    const byLocationAndService = {};
     selectedSlots.forEach((slot) => {
-      if (!byLocation[slot.locationId]) {
-        byLocation[slot.locationId] = [];
-      }
-      byLocation[slot.locationId].push(slot);
+      const key = `${slot.locationId}::${slot.serviceName || 'Private Lessons'}`;
+      if (!byLocationAndService[key]) byLocationAndService[key] = [];
+      byLocationAndService[key].push(slot);
     });
-
-    return Object.values(byLocation).some((slots) => slots.length >= 2);
+    return Object.values(byLocationAndService).some((slots) => slots.length >= 2);
   };
 
-  // Find the next consecutive 30-minute slot
+  // Find the next consecutive 30-minute slot (same location and service)
   const findNextSlot = (currentSlot) => {
-    const [hours, minutes] = currentSlot.time24.split(':').map(Number);
+    const [hours, minutes] = (currentSlot.time24 || '00:00').split(':').map(Number);
     const currentMinutes = hours * 60 + minutes;
     const nextMinutes = currentMinutes + 30;
     const nextTime24 = formatTime24(nextMinutes);
+    const sn = currentSlot.serviceName || 'Private Lessons';
 
-    // Find the slot in the same location group
     for (const group of groupedAvailabilities) {
-      if (group.locationId === currentSlot.locationId) {
+      if (
+        group.locationId === currentSlot.locationId &&
+        (group.serviceName || 'Private Lessons') === sn
+      ) {
         const nextSlot = group.slots.find((s) => s.time24 === nextTime24);
         if (nextSlot) return nextSlot;
       }
@@ -1146,12 +1153,15 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
     return null;
   };
 
-  // Find consecutive slots starting from a given slot
+  // Find consecutive slots starting from a given slot (same location and service)
   const findConsecutiveSlots = (startSlot, count) => {
-    // Find the slot in groupedAvailabilities to get the full slot object
+    const sn = startSlot.serviceName || 'Private Lessons';
     let actualStartSlot = null;
     for (const group of groupedAvailabilities) {
-      if (group.locationId === startSlot.locationId) {
+      if (
+        group.locationId === startSlot.locationId &&
+        (group.serviceName || 'Private Lessons') === sn
+      ) {
         actualStartSlot = group.slots.find((s) => s.time24 === startSlot.time24);
         if (actualStartSlot) break;
       }
@@ -1174,16 +1184,27 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
     return slots;
   };
 
-  // Handle slot selection with service-based auto-allocation
+  // Handle slot selection with service-based auto-allocation (per service, not per location only)
   const handleSlotClick = (slot) => {
     const isSelected = isSlotSelected(slot);
-    const locationSlots = getSelectedSlotsForLocation(slot.locationId);
     const serviceName = slot.serviceName || 'Private Lessons';
+    const locationSlots = getSelectedSlotsForLocationAndService(
+      slot.locationId,
+      serviceName
+    );
     const requiredDuration = SERVICE_DURATION_RULES[serviceName] || 1; // Default to 1 hour if not found
 
     if (isSelected) {
-      // Deselection: Clear entire selection for this location
-      setSelectedSlots(selectedSlots.filter((s) => s.locationId !== slot.locationId));
+      // Deselection: Clear only selection for this location + service
+      setSelectedSlots(
+        selectedSlots.filter(
+          (s) =>
+            !(
+              s.locationId === slot.locationId &&
+              (s.serviceName || 'Private Lessons') === serviceName
+            )
+        )
+      );
     } else {
       // Selection logic
       const requiredSlotsCount = requiredDuration * 2; // Convert hours to 30-min slots
@@ -1201,7 +1222,6 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
           return;
         }
 
-        // Select all required slots
         const newSlots = consecutiveSlots.map((s) => ({
           time: s.time,
           time24: s.time24,
@@ -1211,9 +1231,11 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
 
         setSelectedSlots([...selectedSlots, ...newSlots]);
       } else {
-        // Already have slots selected for this location - clear and reselect at new position
-        const otherLocationSlots = selectedSlots.filter(
-          (s) => s.locationId !== slot.locationId
+        // Already have slots selected for this location+service - clear and reselect at new position
+        const otherSlots = selectedSlots.filter(
+          (s) =>
+            s.locationId !== slot.locationId ||
+            (s.serviceName || 'Private Lessons') !== serviceName
         );
         const consecutiveSlots = findConsecutiveSlots(slot, requiredSlotsCount);
         
@@ -1232,7 +1254,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
           locationId: s.locationId,
           serviceName: s.serviceName || serviceName,
         }));
-        setSelectedSlots([...otherLocationSlots, ...newSlots]);
+        setSelectedSlots([...otherSlots, ...newSlots]);
       }
     }
   };
@@ -1952,8 +1974,13 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
               <View style={styles.slotsContainer}>
                 {group.slots.map((slot, slotIndex) => {
                   const isSelected = isSlotSelected(slot);
-                  const locationSlots = getSelectedSlotsForLocation(slot.locationId);
-                  const sortedSlots = locationSlots.sort((a, b) => a.time24.localeCompare(b.time24));
+                  const locationSlots = getSelectedSlotsForLocationAndService(
+                    slot.locationId,
+                    slot.serviceName
+                  );
+                  const sortedSlots = [...locationSlots].sort((a, b) =>
+                    (a.time24 || '').localeCompare(b.time24 || '')
+                  );
                   
                   // Determine if this is start, middle, or end of selection
                   let isStartSlot = false;

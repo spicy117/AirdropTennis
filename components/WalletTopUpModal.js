@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { createTopUpCheckoutSession, redirectToCheckout } from '../lib/stripe';
+import { createTopUpCheckoutSession, redirectToCheckout, STRIPE_CHECKOUT_DISABLED } from '../lib/stripe';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isMobile = Platform.OS !== 'web' || SCREEN_WIDTH <= 480;
@@ -42,6 +42,11 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
 
     if (amount < 5) {
       Alert.alert(t('error'), t('minTopUp5'));
+      return;
+    }
+
+    if (STRIPE_CHECKOUT_DISABLED) {
+      Alert.alert('Coming soon', 'This feature will be available soon.');
       return;
     }
 

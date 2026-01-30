@@ -38,3 +38,7 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Bulk import data (keep example only)
+scripts/students-import.csv
+scripts/imported-passwords.csv
