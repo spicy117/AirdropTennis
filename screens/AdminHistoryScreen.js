@@ -47,7 +47,7 @@ const getAvatarColor = (name) => {
   return colors[hash % colors.length];
 };
 
-export default function AdminHistoryScreen() {
+export default function AdminHistoryScreen({ onNavigate }) {
   const { user, userRole } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
@@ -337,8 +337,20 @@ export default function AdminHistoryScreen() {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Booking History</Text>
-        <Text style={styles.subtitle}>Past sessions and completed bookings</Text>
+        <View>
+          <Text style={styles.title}>Booking History</Text>
+          <Text style={styles.subtitle}>Past sessions and completed bookings</Text>
+        </View>
+        {onNavigate && (
+          <TouchableOpacity
+            style={styles.dashboardBtn}
+            onPress={() => onNavigate('admin-dashboard')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="grid-outline" size={18} color="#0D9488" />
+            <Text style={styles.dashboardBtnText}>Dashboard</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Search Bar */}
@@ -446,6 +458,26 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  dashboardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+  },
+  dashboardBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D9488',
   },
   title: {
     fontSize: 28,

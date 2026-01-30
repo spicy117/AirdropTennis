@@ -6,7 +6,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 
-export default function ProfileScreen({ onSignOut }) {
+export default function ProfileScreen({ onSignOut, onNavigate }) {
   const { user, userRole, refreshUserRole } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
@@ -77,6 +77,8 @@ export default function ProfileScreen({ onSignOut }) {
     return t('student');
   };
 
+  const isAdmin = (currentRole === 'admin' || userRole === 'admin');
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -89,6 +91,17 @@ export default function ProfileScreen({ onSignOut }) {
           <Text style={styles.roleText}>{getRoleDisplay()}</Text>
         </View>
       </View>
+
+      {isAdmin && onNavigate && (
+        <TouchableOpacity
+          style={styles.dashboardButton}
+          onPress={() => onNavigate('admin-dashboard')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="grid-outline" size={20} color="#0D9488" />
+          <Text style={styles.dashboardButtonText}>{t('navAdminDashboard')}</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={styles.signOutButton}
@@ -148,6 +161,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
+  },
+  dashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+  },
+  dashboardButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0D9488',
   },
   signOutButton: {
     flexDirection: 'row',

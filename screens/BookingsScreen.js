@@ -8,12 +8,13 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { getTranslation } from '../utils/translations';
+import { getTranslation, t as tWithParams } from '../utils/translations';
 import BookingEditModal from '../components/BookingEditModal';
 
 // Service color configuration
@@ -29,10 +30,15 @@ const getServiceColor = (serviceName) => {
   return SERVICE_COLORS[serviceName] || SERVICE_COLORS.default;
 };
 
-export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
+const MOBILE_BREAKPOINT = 480;
+
+export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome }) {
+  const { width } = useWindowDimensions?.() ?? { width: 400 };
+  const isMobile = width < MOBILE_BREAKPOINT;
+
   const { user } = useAuth();
   const { language } = useLanguage();
-  const t = (key, params) => (params && Object.keys(params).length ? tWithParams(language, key, params) : getTranslation(language, key));
+  const t = (key, params) => tWithParams(language, key, params || {});
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,7 +178,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
   };
 
   // Elite Booking Card Component
-  const BookingCard = ({ booking }) => {
+  const BookingCard = ({ booking, isMobile: cardMobile = false }) => {
     const dateInfo = formatDateCompact(booking.start_time);
     const serviceColor = getServiceColor(booking.service_name);
     const statusInfo = getStatusInfo(booking.start_time);
@@ -185,7 +191,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
           setSelectedBooking(booking);
           setEditModalVisible(true);
         }}
-        style={styles.cardTouchable}
+        style={[styles.cardTouchable, cardMobile && styles.cardTouchableMobile]}
       >
         {/* Status Pill - Top Right */}
         <View style={[styles.statusPill, { backgroundColor: statusInfo.bgColor }]}>
@@ -200,15 +206,15 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
           </View>
         )}
 
-        <View style={styles.cardLayout}>
+        <View style={[styles.cardLayout, cardMobile && styles.cardLayoutMobile]}>
           {/* Left: Date Block */}
-          <View style={[styles.dateBlock, { backgroundColor: serviceColor.light }]}>
-            <Text style={[styles.dateDay, { color: serviceColor.primary }]}>{dateInfo.day}</Text>
+          <View style={[styles.dateBlock, { backgroundColor: serviceColor.light }, cardMobile && styles.dateBlockMobile]}>
+            <Text style={[styles.dateDay, { color: serviceColor.primary }, cardMobile && styles.dateDayMobile]}>{dateInfo.day}</Text>
             <Text style={[styles.dateMonth, { color: serviceColor.primary }]}>{dateInfo.month}</Text>
           </View>
 
           {/* Middle: Info Section */}
-          <View style={styles.infoSection}>
+          <View style={[styles.infoSection, cardMobile && styles.infoSectionMobile]}>
             {/* Service Name */}
             <Text style={styles.serviceName} numberOfLines={1}>
               {booking.service_name || 'Tennis Session'}
@@ -255,7 +261,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
     // Web: Glassmorphism with CSS
     if (Platform.OS === 'web') {
       return (
-        <View style={styles.cardWrapper}>
+        <View style={[styles.cardWrapper, cardMobile && styles.cardWrapperMobile]}>
           <div style={{
             background: 'rgba(255, 255, 255, 0.5)',
             backdropFilter: 'blur(40px)',
@@ -273,7 +279,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
 
     // Native fallback
     return (
-      <View style={styles.cardWrapper}>
+      <View style={[styles.cardWrapper, cardMobile && styles.cardWrapperMobile]}>
         <View style={[styles.nativeCard, { borderColor: serviceColor.border }]}>
           <CardContent />
         </View>
@@ -284,28 +290,55 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t('upcomingBookings')}</Text>
-          <Text style={styles.subtitle}>
+      {/* Top row: Home (left) + Book Lesson (right) on mobile; same row as title on desktop */}
+      {onGoHome && (
+        <View style={[styles.topBar, isMobile && styles.topBarMobile]}>
+          <TouchableOpacity
+            style={[styles.homeButton, isMobile && styles.homeButtonMobile]}
+            onPress={onGoHome}
+            accessible={true}
+            accessibilityLabel={t('returnHome')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={isMobile ? 22 : 20} color="#0D9488" />
+            <Text style={[styles.homeButtonText, isMobile && styles.homeButtonTextMobile]}>{t('returnHome')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bookButton, isMobile && styles.bookButtonMobile]}
+            onPress={onBookLesson}
+            accessible={true}
+            accessibilityLabel={t('bookLesson')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="add" size={isMobile ? 22 : 20} color="#fff" />
+            <Text style={[styles.bookButtonText, isMobile && styles.bookButtonTextMobile]}>{t('bookLesson')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View style={styles.headerText}>
+          <Text style={[styles.title, isMobile && styles.titleMobile]}>{t('upcomingBookings')}</Text>
+          <Text style={[styles.subtitle, isMobile && styles.subtitleMobile]}>
             {bookings.length === 1 ? t('sessionsScheduled', { count: bookings.length }) : t('sessionsScheduledPlural', { count: bookings.length })}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.bookButton}
-          onPress={onBookLesson}
-          accessible={true}
-          accessibilityLabel={t('bookLesson')}
-          accessibilityRole="button"
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.bookButtonText}>{t('bookLesson')}</Text>
-        </TouchableOpacity>
+        {!onGoHome && (
+          <TouchableOpacity
+            style={[styles.bookButton, isMobile && styles.bookButtonMobile]}
+            onPress={onBookLesson}
+            accessible={true}
+            accessibilityLabel={t('bookLesson')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="add" size={isMobile ? 22 : 20} color="#fff" />
+            <Text style={[styles.bookButtonText, isMobile && styles.bookButtonTextMobile]}>{t('bookLesson')}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -332,9 +365,9 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger }) {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.bookingsList}>
+        <View style={[styles.bookingsList, isMobile && styles.bookingsListMobile]}>
           {bookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} />
+            <BookingCard key={booking.id} booking={booking} isMobile={isMobile} />
           ))}
         </View>
       )}
@@ -363,11 +396,56 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  contentMobile: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  topBarMobile: {
+    marginBottom: 16,
+    paddingVertical: 4,
+  },
+  homeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.2)',
+  },
+  homeButtonMobile: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  homeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0D9488',
+  },
+  homeButtonTextMobile: {
+    fontSize: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 28,
+  },
+  headerMobile: {
+    marginBottom: 20,
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
     fontSize: 28,
@@ -378,10 +456,17 @@ const styles = StyleSheet.create({
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     }),
   },
+  titleMobile: {
+    fontSize: 22,
+    marginBottom: 2,
+  },
   subtitle: {
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
+  },
+  subtitleMobile: {
+    fontSize: 13,
   },
   bookButton: {
     flexDirection: 'row',
@@ -406,6 +491,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  bookButtonMobile: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minHeight: 44,
+  },
+  bookButtonTextMobile: {
+    fontSize: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -464,9 +557,15 @@ const styles = StyleSheet.create({
   bookingsList: {
     gap: 0, // We use marginVertical on cards instead
   },
+  bookingsListMobile: {
+    marginTop: 4,
+  },
   // Card Styles
   cardWrapper: {
     marginVertical: 12,
+  },
+  cardWrapperMobile: {
+    marginVertical: 14,
   },
   nativeCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -486,6 +585,12 @@ const styles = StyleSheet.create({
   },
   cardTouchable: {
     padding: 18,
+  },
+  cardTouchableMobile: {
+    padding: 20,
+  },
+  cardLayoutMobile: {
+    marginRight: 0,
   },
   statusPill: {
     position: 'absolute',
@@ -514,10 +619,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
+  dateBlockMobile: {
+    width: 52,
+    height: 60,
+    borderRadius: 12,
+    marginRight: 14,
+  },
   dateDay: {
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 28,
+  },
+  dateDayMobile: {
+    fontSize: 22,
+    lineHeight: 26,
   },
   dateMonth: {
     fontSize: 11,
@@ -529,6 +644,10 @@ const styles = StyleSheet.create({
   infoSection: {
     flex: 1,
     paddingRight: 8,
+    minWidth: 0,
+  },
+  infoSectionMobile: {
+    paddingRight: 4,
   },
   serviceName: {
     fontSize: 17,

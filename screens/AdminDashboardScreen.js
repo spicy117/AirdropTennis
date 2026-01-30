@@ -7,14 +7,31 @@ import {
   Platform,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import StatCard from '../components/StatCard';
 import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
+import AdminAssignLessonModal from '../components/AdminAssignLessonModal';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd } from '../utils/timezone';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 
-export default function AdminDashboardScreen() {
+// Nav items matching Sidebar (excluding admin-dashboard) so mobile users can reach all sections
+const ADMIN_NAV_BUTTONS = [
+  { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline' },
+  { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline' },
+  { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline' },
+  { id: 'admin-coaches', labelKey: 'navCoaches', icon: 'shield-outline' },
+  { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline' },
+  { id: 'profile', labelKey: 'profile', icon: 'person-outline' },
+];
+
+export default function AdminDashboardScreen({ onNavigate }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
+  const [assignLessonVisible, setAssignLessonVisible] = useState(false);
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalBookings: 0,
@@ -176,6 +193,7 @@ export default function AdminDashboardScreen() {
   const totalUpcomingStudents = groupedSessions.reduce((sum, s) => sum + s.students.length, 0);
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -183,34 +201,57 @@ export default function AdminDashboardScreen() {
         <RefreshControl refreshing={loading} onRefresh={onRefresh} />
       }
     >
-      <Text style={styles.title}>Admin Dashboard</Text>
-      <Text style={styles.subtitle}>Overview of your tennis court bookings</Text>
+      <View style={styles.titleRow}>
+        <View>
+          <Text style={styles.title}>Admin Dashboard</Text>
+          <Text style={styles.subtitle}>Overview of your tennis court bookings</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.assignLessonBtn}
+          onPress={() => setAssignLessonVisible(true)}
+        >
+          <Ionicons name="add-circle" size={20} color="#FFF" />
+          <Text style={styles.assignLessonBtnText}>Assign lesson</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Nav buttons (replaces Total Students / Total Revenue on mobile so side tabs are accessible) */}
+      <View style={styles.navButtonsSection}>
+        <Text style={styles.navButtonsLabel}>Menu</Text>
+        <View style={styles.navButtonsGrid}>
+          {ADMIN_NAV_BUTTONS.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.navButton}
+              onPress={() => onNavigate && onNavigate(item.id)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.navButtonIconWrap}>
+                <Ionicons name={item.icon} size={22} color="#0D9488" />
+              </View>
+              <Text style={styles.navButtonText} numberOfLines={1}>{t(item.labelKey)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
       <View style={styles.grid}>
-        <StatCard
-          title="Total Students"
-          value={stats.totalStudents.toString()}
-          icon="people-outline"
-          iconColor="#0D9488"
-        />
-        <StatCard
-          title="Total Bookings"
-          value={stats.totalBookings.toString()}
-          icon="calendar-outline"
-          iconColor="#2563EB"
-        />
-        <StatCard
-          title="Today's Bookings"
-          value={stats.todayBookings.toString()}
-          icon="today-outline"
-          iconColor="#D97706"
-        />
-        <StatCard
-          title="Total Revenue"
-          value={`$${stats.totalRevenue.toFixed(2)}`}
-          icon="cash-outline"
-          iconColor="#059669"
-        />
+        <View style={styles.statWrap}>
+          <StatCard
+            title="Total Bookings"
+            value={stats.totalBookings.toString()}
+            icon="calendar-outline"
+            iconColor="#2563EB"
+          />
+        </View>
+        <View style={styles.statWrap}>
+          <StatCard
+            title="Today's Bookings"
+            value={stats.todayBookings.toString()}
+            icon="today-outline"
+            iconColor="#D97706"
+          />
+        </View>
       </View>
 
       {/* Upcoming Sessions Section */}
@@ -248,6 +289,12 @@ export default function AdminDashboardScreen() {
         )}
       </View>
     </ScrollView>
+    <AdminAssignLessonModal
+      visible={assignLessonVisible}
+      onClose={() => setAssignLessonVisible(false)}
+      onAssigned={() => { loadStats(); loadUpcomingSessions(); }}
+    />
+    </>
   );
 }
 
@@ -259,6 +306,14 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    gap: 12,
+    ...(Platform.OS === 'web' && { flexWrap: 'wrap' }),
   },
   title: {
     fontSize: 32,
@@ -272,15 +327,79 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: '#6B7280',
+    marginBottom: 0,
+  },
+  assignLessonBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0D9488',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 6,
+  },
+  assignLessonBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  navButtonsSection: {
     marginBottom: 24,
   },
-  grid: {
-    marginBottom: 32,
-    ...(Platform.OS === 'web' && {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      marginHorizontal: -8,
+  navButtonsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  navButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+    gap: 10,
+  },
+  navButton: {
+    width: '30%',
+    minWidth: 100,
+    flexGrow: 1,
+    maxWidth: 140,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
     }),
+  },
+  navButtonIconWrap: {
+    marginBottom: 6,
+  },
+  navButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+    marginBottom: 32,
+  },
+  statWrap: {
+    width: '50%',
+    paddingHorizontal: 6,
+    paddingBottom: 12,
   },
   sessionsSection: {
     marginTop: 8,

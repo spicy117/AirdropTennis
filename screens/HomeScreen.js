@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Platform,
-  Dimensions,
   Alert,
   Modal,
   TouchableOpacity,
@@ -36,7 +35,6 @@ import {
   deductFromWallet, 
   createBookingCheckoutSession, 
   redirectToCheckout,
-  addToWallet,
   verifyPaymentAndAddFunds
 } from '../lib/stripe';
 
@@ -53,12 +51,7 @@ const getIsDesktop = () => {
 export default function HomeScreen() {
   const { signOut, user, isAdmin, userRole } = useAuth();
   
-  // Initialize with a safe default, will be updated when userRole is available
-  const [activeScreen, setActiveScreen] = useState(() => {
-    // Try to get initial screen from userRole if available immediately
-    // Otherwise default to dashboard for students
-    return 'dashboard';
-  });
+  const [activeScreen, setActiveScreen] = useState('dashboard');
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
   const [initialScreenSet, setInitialScreenSet] = useState(false);
@@ -212,9 +205,6 @@ export default function HomeScreen() {
   }, [user, processedSessions]);
 
   const handleStripeSuccess = async (sessionId) => {
-    console.error('🔄🔄🔄 [PAYMENT] ====== HANDLE STRIPE SUCCESS CALLED ======');
-    console.error('🔄 [PAYMENT] Processing payment verification...', { sessionId, hasUser: !!user, userId: user?.id });
-    
     if (!user) {
       console.error('❌ [PAYMENT] No user found, cannot verify payment');
       Alert.alert('Error', 'You must be logged in to verify payment.');
@@ -249,12 +239,28 @@ export default function HomeScreen() {
           try {
             const segments = JSON.parse(raw);
             if (Array.isArray(segments) && segments.length > 0) {
+              const oneWeekFromNow = new Date();
+              oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
               for (const seg of segments) {
                 const now = new Date();
                 const startTime = new Date(seg.bookingStartTime);
                 if (startTime < now) {
                   console.warn('[PAYMENT] Skipping booking in the past after Stripe return:', seg.bookingStartTime);
                   continue;
+                }
+                if (startTime < oneWeekFromNow) {
+                  console.warn('[PAYMENT] Skipping booking less than 1 week in advance:', seg.bookingStartTime);
+                  sessionStorage.removeItem('stripe_pending_booking_' + sessionId);
+                  setBookingModal({
+                    visible: true,
+                    success: false,
+                    title: 'Booking Failed',
+                    message: 'Bookings must be at least 1 week in advance.',
+                  });
+                  if (typeof window !== 'undefined') {
+                    window.history.replaceState({}, '', '/home');
+                  }
+                  return;
                 }
                 const { error: bookingError } = await supabase
                   .from('bookings')
@@ -299,8 +305,6 @@ export default function HomeScreen() {
 
       // Check if it was a topup and funds were added
       if (result.type === 'topup' && result.newBalance !== undefined) {
-        console.log('💰 [PAYMENT] ====== TOPUP SUCCESSFUL ======');
-        console.log('💰 [PAYMENT] Top-up successful, new balance:', result.newBalance);
         setBookingModal({
           visible: true,
           success: true,
@@ -308,10 +312,6 @@ export default function HomeScreen() {
           message: `Your wallet has been topped up successfully. New balance: $${result.newBalance.toFixed(2)}`,
         });
       } else {
-        console.warn('⚠️ [PAYMENT] ====== PAYMENT SUCCESS BUT NOT TOPUP ======');
-        console.warn('⚠️ [PAYMENT] Payment verified but type is:', result.type);
-        console.warn('⚠️ [PAYMENT] newBalance is:', result.newBalance);
-        console.warn('⚠️ [PAYMENT] This means the edge function did not detect it as a topup!');
         setBookingModal({
           visible: true,
           success: true,
@@ -361,18 +361,8 @@ export default function HomeScreen() {
     }
   };
 
-  const handleOpenSidebar = () => {
-    setSidebarVisible(true);
-  };
-
-  const handleCloseSidebar = () => {
-    setSidebarVisible(false);
-  };
-
-  const handleSidebarNavigate = (screen) => {
-    handleNavigate(screen);
-    handleCloseSidebar();
-  };
+  const handleOpenSidebar = useCallback(() => setSidebarVisible(true), []);
+  const handleCloseSidebar = useCallback(() => setSidebarVisible(false), []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -523,6 +513,22 @@ export default function HomeScreen() {
           currentBookingCount,
           MAX_CAPACITY,
         });
+      }
+
+      // Enforce minimum 1 week in advance for student bookings
+      const earliestStart = new Date(
+        Math.min(...bookingData.map((b) => new Date(b.bookingStartTime).getTime()))
+      );
+      const oneWeekFromNow = new Date();
+      oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+      if (earliestStart < oneWeekFromNow) {
+        setBookingModal({
+          visible: true,
+          success: false,
+          title: 'Booking Failed',
+          message: 'Bookings must be at least 1 week in advance.',
+        });
+        return;
       }
 
       // Step 2: Calculate total cost
@@ -738,10 +744,6 @@ export default function HomeScreen() {
     }, 300);
   };
 
-  const handleNavigateToDashboard = () => {
-    setActiveScreen('services'); // Navigate to services instead of dashboard
-  };
-
   const handleViewAvailability = (serviceId, serviceName) => {
     // Navigate to booking discovery when a service is selected
     // Store the service filter to pass to BookingDiscoveryScreen
@@ -751,27 +753,41 @@ export default function HomeScreen() {
   };
 
   const handleNavigate = (screen) => {
-    // STRICT: Coaches can ONLY access coach-dashboard and profile
-    // CRITICAL: Coaches should NEVER see admin functions (admin-dashboard, admin-locations-courts, 
-    // admin-availability, admin-students, admin-coaches, admin-history) - block ALL admin screens
     if (userRole === 'coach') {
       const allowedScreens = ['coach-dashboard', 'profile'];
       if (!allowedScreens.includes(screen)) {
-        // Redirect coaches to their dashboard if they try to access anything else (including ALL admin screens)
         console.warn(`Coach attempted to access restricted screen: ${screen}. Redirecting to coach-dashboard.`);
         setActiveScreen('coach-dashboard');
         return;
       }
     }
-    
     setActiveScreen(screen);
-    // If navigating to dashboard, trigger refresh
     if (screen === 'dashboard') {
       setDashboardRefreshKey(prev => prev + 1);
     }
   };
 
+  const handleSidebarNavigate = (screen) => {
+    handleNavigate(screen);
+    handleCloseSidebar();
+  };
+
   const renderScreen = () => {
+    const studentFallbackDashboard = (
+      <DashboardScreen
+        key={dashboardRefreshKey}
+        onBookLesson={handleBookLesson}
+        onSelectService={(serviceName) => {
+          setServiceFilter(serviceName);
+          setActiveScreen('booking-discovery');
+        }}
+        refreshTrigger={dashboardRefreshKey}
+        onOpenSidebar={handleOpenSidebar}
+        onGoToHistory={() => setActiveScreen('history')}
+        onGoToBookings={() => setActiveScreen('bookings')}
+      />
+    );
+
     switch (activeScreen) {
       // User screens - STRICT: Coaches cannot access student screens
       case 'services':
@@ -793,13 +809,20 @@ export default function HomeScreen() {
             }}
             refreshTrigger={dashboardRefreshKey}
             onGoToHistory={() => setActiveScreen('history')}
+            onGoToBookings={() => setActiveScreen('bookings')}
           />
         );
       case 'bookings':
         if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
-        return <BookingsScreen onBookLesson={handleBookLesson} refreshTrigger={dashboardRefreshKey} />;
+        return (
+          <BookingsScreen
+            onBookLesson={handleBookLesson}
+            refreshTrigger={dashboardRefreshKey}
+            onGoHome={() => setActiveScreen('dashboard')}
+          />
+        );
       case 'history':
         if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
@@ -811,8 +834,8 @@ export default function HomeScreen() {
           />
         );
       case 'profile':
-        // Profile is accessible to all roles
-        return <ProfileScreen onSignOut={handleSignOut} />;
+        // Profile is accessible to all roles; admins get Dashboard button to return to admin home
+        return <ProfileScreen onSignOut={handleSignOut} onNavigate={handleNavigate} />;
       case 'booking-discovery':
         if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
@@ -831,138 +854,46 @@ export default function HomeScreen() {
       // CRITICAL: Coaches should NEVER see these admin screens - redirect immediately
       case 'admin-dashboard':
         if (userRole === 'admin') {
-          return <AdminDashboardScreen />;
+          return <AdminDashboardScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin dashboard - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       case 'admin-students':
         if (userRole === 'admin') {
-          return <AdminStudentsScreen />;
+          return <AdminStudentsScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin students - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       case 'admin-availability':
-        // Only allow admins to access this screen
-        // CRITICAL: Coaches should NEVER see admin availability & bookings - redirect immediately
         if (userRole === 'admin') {
           return <AdminManageAvailabilityScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin availability & bookings - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       case 'admin-locations-courts':
         if (userRole === 'admin') {
-          return <AdminLocationsCourtsScreen />;
+          return <AdminLocationsCourtsScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin locations & courts - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       case 'admin-coaches':
         if (userRole === 'admin') {
-          return <AdminCoachesScreen />;
+          return <AdminCoachesScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin coaches - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       case 'admin-history':
         if (userRole === 'admin') {
-          return <AdminHistoryScreen />;
+          return <AdminHistoryScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
-          // CRITICAL: Coaches should NEVER see admin booking history - redirect immediately
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
-        } else {
-          // Redirect students to their dashboard
-          return (
-            <DashboardScreen
-              key={dashboardRefreshKey}
-              onBookLesson={handleBookLesson}
-              onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
-                setActiveScreen('booking-discovery');
-              }}
-              refreshTrigger={dashboardRefreshKey}
-              onOpenSidebar={handleOpenSidebar}
-              onGoToHistory={() => setActiveScreen('history')}
-            />
-          );
         }
+        return studentFallbackDashboard;
       // Coach screens
       case 'coach-dashboard':
         return <CoachDashboardScreen onNavigate={handleNavigate} />;
@@ -980,6 +911,7 @@ export default function HomeScreen() {
               refreshTrigger={dashboardRefreshKey}
               onOpenSidebar={handleOpenSidebar}
               onGoToHistory={() => setActiveScreen('history')}
+              onGoToBookings={() => setActiveScreen('bookings')}
             />
           );
         }
@@ -993,6 +925,7 @@ export default function HomeScreen() {
             }}
             refreshTrigger={dashboardRefreshKey}
             onGoToHistory={() => setActiveScreen('history')}
+            onGoToBookings={() => setActiveScreen('bookings')}
           />
         );
     }

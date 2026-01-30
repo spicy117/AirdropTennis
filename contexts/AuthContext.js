@@ -129,8 +129,6 @@ export const AuthProvider = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email, 'Current session in state:', !!session);
-      
       // Handle password recovery - don't auto-login
       if (event === 'PASSWORD_RECOVERY') {
         updateRecoveryMode(true);
@@ -161,16 +159,13 @@ export const AuthProvider = ({ children }) => {
           // Mark that we just processed an email confirmation
           // Keep this flag for longer to prevent false SIGNED_OUT events
           recentEmailConfirmationRef.current = true;
-          // Clear the flag after a longer delay (to handle delayed SIGNED_OUT events)
           setTimeout(() => {
             recentEmailConfirmationRef.current = false;
-          }, 5000); // Increased from 2000ms to 5000ms
-          // Check role from profiles if needed
+          }, 5000);
           if (session?.user) {
             await checkUserRole(session.user);
           }
           setLoading(false);
-          console.log('Email confirmation processed - session set, flag set for 5 seconds');
           return;
         }
         
@@ -230,78 +225,38 @@ export const AuthProvider = ({ children }) => {
           setUserRole(null);
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log('SIGNED_OUT event received, checking if session actually exists...');
-        console.log('Current session state:', !!session, 'Session value:', session);
-        
-        // Check if we just processed an email confirmation
         const isRecentEmailConfirmation = recentEmailConfirmationRef.current;
         const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
           ? window.location.hash 
           : '';
         const isSignupConfirmation = hash && hash.includes('type=signup');
         
-        console.log('Email confirmation check:', {
-          isRecentEmailConfirmation,
-          isSignupConfirmation,
-          hash: hash ? hash.substring(0, 50) : 'no hash'
-        });
-        
-        // If this is a recent email confirmation, wait a bit before checking session
-        // Supabase might need time to fully process the confirmation
         if (isRecentEmailConfirmation || isSignupConfirmation) {
-          console.log('SIGNED_OUT during email confirmation - waiting before verifying...');
-          // Wait a bit for Supabase to process
           await new Promise(resolve => setTimeout(resolve, 300));
         }
         
-        // If session is already null and not an email confirmation, proceed immediately
         const hasSessionInState = session !== null;
         if (!hasSessionInState && !isRecentEmailConfirmation && !isSignupConfirmation) {
-          console.log('Session already null and not email confirmation - proceeding to clear immediately');
-          // Actually signed out - clear session and reset email confirmation flag
-          console.log('✅ Actually signed out - clearing session and user (fast path)');
           recentEmailConfirmationRef.current = false;
           setSession(null);
           setUser(null);
           setUserRole(null);
           setLoading(false);
-          console.log('✅ Session and user cleared, loading set to false - state updates dispatched');
           return;
         }
         
-        // Always verify we're actually signed out before clearing the session
-        // This prevents false positives from race conditions or event ordering issues
-        console.log('Calling supabase.auth.getSession()...');
         let currentSession = null;
         try {
-          // Reduced timeout from 1000ms to 300ms for faster response
           const sessionResult = await Promise.race([
             supabase.auth.getSession(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 300))
           ]);
           currentSession = sessionResult?.data?.session;
-          console.log('Supabase getSession result:', !!currentSession, 'Error:', sessionResult?.error);
-        } catch (error) {
-          // If getSession fails or times out, assume we're signed out
+        } catch {
           currentSession = null;
         }
         
-        console.log('Session state check:', {
-          hasSessionInState,
-          currentSession: !!currentSession,
-          shouldIgnore: currentSession || (hasSessionInState && (isRecentEmailConfirmation || isSignupConfirmation))
-        });
-        
         if (currentSession || (hasSessionInState && (isRecentEmailConfirmation || isSignupConfirmation))) {
-          // We still have a session, so this SIGNED_OUT event is a false positive
-          // This can happen during email confirmation or other auth flows
-          console.log('SIGNED_OUT event received, but session still exists or was just confirmed - ignoring and restoring session', {
-            hasCurrentSession: !!currentSession,
-            hasSessionInState,
-            isRecentEmailConfirmation,
-            isSignupConfirmation
-          });
-          
           if (isSignupConfirmation || isRecentEmailConfirmation) {
             // Clear any stale recovery mode for email confirmations
             updateRecoveryMode(false);
@@ -315,8 +270,6 @@ export const AuthProvider = ({ children }) => {
               await checkUserRole(currentSession.user);
             }
           } else if (hasSessionInState) {
-            // Session exists in state but not in Supabase yet - wait a bit more and check again
-            console.log('Session in state but not in Supabase yet - checking again...');
             await new Promise(resolve => setTimeout(resolve, 200));
             const { data: { session: retrySession } } = await supabase.auth.getSession();
             if (retrySession) {
@@ -325,32 +278,16 @@ export const AuthProvider = ({ children }) => {
               if (retrySession?.user) {
                 await checkUserRole(retrySession.user);
               }
-            } else {
-              // Still no session, but keep the one in state for now
-              console.log('Still no session in Supabase, but keeping session in state');
             }
           }
           setLoading(false);
           return;
         }
         
-        // Actually signed out - clear session and reset email confirmation flag
-        console.log('✅ Actually signed out - clearing session and user');
         recentEmailConfirmationRef.current = false;
-        // Ensure we clear the session even if it's already null (force state update)
-        setSession((prevSession) => {
-          console.log('setSession called, previous session:', !!prevSession, 'Setting to null');
-          return null;
-        });
-        setUser((prevUser) => {
-          console.log('setUser called, previous user:', !!prevUser, 'Setting to null');
-          return null;
-        });
-        setLoading((prevLoading) => {
-          console.log('setLoading called, previous loading:', prevLoading, 'Setting to false');
-          return false;
-        });
-        console.log('✅ Session and user cleared, loading set to false - state updates dispatched');
+        setSession(null);
+        setUser(null);
+        setLoading(false);
       } else {
         // Check persisted recovery mode before setting session
         const persistedRecovery = getRecoveryModeFromStorage();
@@ -407,7 +344,6 @@ export const AuthProvider = ({ children }) => {
 
   const signUp = async (email, password, userData) => {
     try {
-      console.log('Attempting signup with:', { email, hasPassword: !!password });
       const options = { data: userData };
       // Ensure verification link redirects to this app (web). Supabase uses Site URL if not set.
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
@@ -421,13 +357,6 @@ export const AuthProvider = ({ children }) => {
 
       if (error) {
         console.error('Signup error:', error);
-        // Log full error details for debugging
-        console.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          status: error.status,
-          name: error.name,
-        });
         
         // Check for duplicate email errors in various formats
         const errorMessage = (error.message || '').toLowerCase();
@@ -451,26 +380,7 @@ export const AuthProvider = ({ children }) => {
         throw error;
       }
       
-      // Log the full response for debugging
-      const userCreatedAt = data?.user?.created_at;
-      const now = new Date();
-      const createdAt = userCreatedAt ? new Date(userCreatedAt) : null;
-      const secondsSinceCreation = createdAt ? (now - createdAt) / 1000 : null;
-      
-      console.log('Signup response:', {
-        hasData: !!data,
-        hasUser: !!data?.user,
-        userId: data?.user?.id,
-        email: data?.user?.email,
-        emailConfirmed: data?.user?.email_confirmed_at,
-        hasSession: !!data?.session,
-        createdAt: userCreatedAt,
-        secondsSinceCreation,
-      });
-      
-      // Additional check: if no user was created, it might be a duplicate email
       if (!data || !data.user) {
-        console.warn('Signup returned success but no user was created - likely duplicate email');
         const duplicateError = {
           message: 'User already registered',
           code: 'user_already_registered',
@@ -478,53 +388,37 @@ export const AuthProvider = ({ children }) => {
         return { data: null, error: duplicateError };
       }
       
-      // Check if we have a session - if yes, it's definitely a new account
       if (data.session) {
-        console.log('Signup success with session - new account created');
-        // Update profile with phone number if provided
         if (userData?.phone && data.user?.id) {
           try {
             await supabase
               .from('profiles')
               .update({ phone: userData.phone })
               .eq('id', data.user.id);
-            console.log('Phone number saved to profile');
-          } catch (phoneError) {
-            console.warn('Failed to save phone number:', phoneError);
+          } catch {
             // Don't fail signup if phone save fails
           }
         }
         return { data, error: null };
       }
       
-      // When email confirmations are enabled, Supabase returns a user object but no session.
-      // If the email is not confirmed, we should NOT try to sign in as it will create
-      // a temporary session that gets invalidated, causing the user to be signed out.
       const emailConfirmed = data?.user?.email_confirmed_at;
       
       if (!emailConfirmed) {
-        // Email not confirmed - this is expected for new signups with email confirmation enabled
-        // Don't try to sign in, just return the signup data
-        console.log('Signup success - new account created, email verification required');
-        // Update profile with phone number if provided (profile should exist from trigger)
         if (userData?.phone && data.user?.id) {
           try {
             await supabase
               .from('profiles')
               .update({ phone: userData.phone })
               .eq('id', data.user.id);
-            console.log('Phone number saved to profile');
-          } catch (phoneError) {
-            console.warn('Failed to save phone number:', phoneError);
+          } catch {
             // Don't fail signup if phone save fails
           }
         }
         return { data, error: null };
       }
       
-      // Email is confirmed but no session - this is unusual, but try to sign in
-      // This might happen if email confirmations were disabled or user confirmed before this check
-      console.log('No session after signup but email is confirmed, attempting sign in...');
+      // Email confirmed but no session - try to sign in
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -537,7 +431,6 @@ export const AuthProvider = ({ children }) => {
         if (errorMsg.includes('invalid login') || 
             errorMsg.includes('invalid credentials') ||
             errorMsg.includes('invalid password')) {
-          console.warn('Sign in failed with invalid credentials - likely duplicate email');
           const duplicateError = {
             message: 'User already registered',
             code: 'user_already_registered',
@@ -545,19 +438,12 @@ export const AuthProvider = ({ children }) => {
           return { data: null, error: duplicateError };
         }
         
-        // Other errors - log but assume it's a new account (might be network issues, etc.)
-        console.warn('Sign in check failed with unexpected error:', signInError);
         return { data, error: null };
       }
       
-      // Sign in succeeded - check if user ID matches
       if (signInData?.user?.id === data.user?.id) {
-        // Same user ID - new account that we can sign into
-        console.log('Signup success - new account created and signed in');
         return { data: signInData, error: null };
       } else {
-        // Different user ID - email already existed, we signed into the existing account
-        console.warn('Sign in returned different user ID - email already exists');
         // Sign out since we don't want to sign into someone else's account
         await supabase.auth.signOut();
         const duplicateError = {
@@ -568,7 +454,6 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Signup catch error:', error);
-      // Check error in catch block too
       const errorMessage = (error?.message || '').toLowerCase();
       const errorCode = (error?.code || '').toLowerCase();
       
@@ -686,21 +571,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAdmin = () => {
-    // CRITICAL: Only return true for admins, NOT coaches
-    // Check profiles table role first (source of truth), then user_metadata
-    // Coaches should NEVER be treated as admins
-    if (userRole === 'coach') {
-      return false; // Coaches are NOT admins
-    }
-    
-    // Check if user is admin (from profiles table or user_metadata)
+    if (userRole === 'coach') return false;
     const metadataRole = user?.user_metadata?.role;
     const profileRole = userRole;
-    
-    return (
-      profileRole === 'admin' || 
-      metadataRole === 'admin'
-    );
+    return profileRole === 'admin' || metadataRole === 'admin';
   };
 
   const refreshUserRole = async () => {

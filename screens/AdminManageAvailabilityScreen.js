@@ -9,6 +9,9 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  useWindowDimensions,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -21,7 +24,14 @@ import BookingRequestsModal from '../components/BookingRequestsModal';
 import ActiveBookingsModal from '../components/ActiveBookingsModal';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, sydneyDateTimeToUTC, getDayOfWeekFromDateString, addDaysToDateString, utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
 
+const MOBILE_BREAKPOINT = 768; // Mobile-first: tablet and smaller get mobile layout
+
 export default function ManageAvailabilityScreen({ onNavigate }) {
+  const { width: screenWidth } = useWindowDimensions?.() ?? Dimensions.get('window');
+  const isMobile = screenWidth < MOBILE_BREAKPOINT;
+
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+
   const { user, userRole } = useAuth();
   const [availabilities, setAvailabilities] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -1491,7 +1501,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={() => {
           loadAvailabilities();
@@ -1501,76 +1511,147 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         }} />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Manage Availability & Bookings</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.requestsButton}
-            onPress={() => setRequestsModalVisible(true)}
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <Text style={[styles.title, isMobile && styles.titleMobile]} numberOfLines={1}>
+          {isMobile ? 'Availability & Bookings' : 'Manage Availability & Bookings'}
+        </Text>
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.headerActionsScroll}
+            contentContainerStyle={styles.headerActionsScrollContent}
           >
-            <View style={styles.requestsButtonContent}>
-              <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-              <Text style={styles.requestsButtonText}>Requests</Text>
-            </View>
-            {pendingRequestsCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
-                </Text>
-              </View>
+            {onNavigate && (
+              <TouchableOpacity
+                style={[styles.dashboardButton, styles.headerButtonMobile]}
+                onPress={() => onNavigate('admin-dashboard')}
+              >
+                <Ionicons name="grid-outline" size={18} color="#0D9488" />
+                <Text style={[styles.dashboardButtonText, styles.headerButtonTextMobile]}>Dashboard</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
-          {userRole === 'admin' && (
-            <>
-              <TouchableOpacity
-                style={styles.activeBookingsButton}
-                onPress={() => setActiveBookingsModalVisible(true)}
-              >
-                <View style={styles.activeBookingsButtonContent}>
-                  <Ionicons name="calendar-outline" size={20} color="#34C759" />
-                  <Text style={styles.activeBookingsButtonText}>Active Bookings</Text>
+            <TouchableOpacity
+              style={[styles.requestsButton, styles.headerButtonMobile]}
+              onPress={() => setRequestsModalVisible(true)}
+            >
+              <View style={styles.requestsButtonContent}>
+                <Ionicons name="document-text-outline" size={18} color="#007AFF" />
+                <Text style={[styles.requestsButtonText, styles.headerButtonTextMobile]}>Requests</Text>
+              </View>
+              {pendingRequestsCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}</Text>
                 </View>
-                {unassignedBookingsCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}
-                    </Text>
+              )}
+            </TouchableOpacity>
+            {userRole === 'admin' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.activeBookingsButton, styles.headerButtonMobile]}
+                  onPress={() => setActiveBookingsModalVisible(true)}
+                >
+                  <View style={styles.activeBookingsButtonContent}>
+                    <Ionicons name="calendar-outline" size={18} color="#34C759" />
+                    <Text style={[styles.activeBookingsButtonText, styles.headerButtonTextMobile]}>Active</Text>
                   </View>
-                )}
-              </TouchableOpacity>
+                  {unassignedBookingsCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.historyButton, styles.headerButtonMobile]}
+                  onPress={() => onNavigate && onNavigate('admin-history')}
+                >
+                  <View style={styles.historyButtonContent}>
+                    <Ionicons name="time-outline" size={18} color="#007AFF" />
+                    <Text style={[styles.historyButtonText, styles.headerButtonTextMobile]}>Past</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              style={[styles.bulkButton, styles.headerButtonMobile]}
+              onPress={() => setShowBulkDrawer(true)}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#fff" />
+              <Text style={[styles.bulkButtonText, styles.headerButtonTextMobile]}>Add</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        ) : (
+          <View style={styles.headerButtons}>
+            {onNavigate && (
               <TouchableOpacity
-                style={styles.historyButton}
-                onPress={() => onNavigate && onNavigate('admin-history')}
+                style={styles.dashboardButton}
+                onPress={() => onNavigate('admin-dashboard')}
               >
-                <View style={styles.historyButtonContent}>
-                  <Ionicons name="time-outline" size={20} color="#007AFF" />
-                  <Text style={styles.historyButtonText}>View Past Sessions</Text>
-                </View>
+                <Ionicons name="grid-outline" size={20} color="#0D9488" />
+                <Text style={styles.dashboardButtonText}>Dashboard</Text>
               </TouchableOpacity>
-            </>
-          )}
-          <TouchableOpacity
-            style={styles.bulkButton}
-            onPress={() => setShowBulkDrawer(true)}
-          >
-            <Ionicons name="add-circle-outline" size={20} color="#fff" />
-            <Text style={styles.bulkButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
+            )}
+            <TouchableOpacity
+              style={styles.requestsButton}
+              onPress={() => setRequestsModalVisible(true)}
+            >
+              <View style={styles.requestsButtonContent}>
+                <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+                <Text style={styles.requestsButtonText}>Requests</Text>
+              </View>
+              {pendingRequestsCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {userRole === 'admin' && (
+              <>
+                <TouchableOpacity
+                  style={styles.activeBookingsButton}
+                  onPress={() => setActiveBookingsModalVisible(true)}
+                >
+                  <View style={styles.activeBookingsButtonContent}>
+                    <Ionicons name="calendar-outline" size={20} color="#34C759" />
+                    <Text style={styles.activeBookingsButtonText}>Active Bookings</Text>
+                  </View>
+                  {unassignedBookingsCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.historyButton}
+                  onPress={() => onNavigate && onNavigate('admin-history')}
+                >
+                  <View style={styles.historyButtonContent}>
+                    <Ionicons name="time-outline" size={20} color="#007AFF" />
+                    <Text style={styles.historyButtonText}>View Past Sessions</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={styles.bulkButton} onPress={() => setShowBulkDrawer(true)}>
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={styles.bulkButtonText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Pending requests notification banner (admin) */}
       {userRole === 'admin' && pendingRequestsCount > 0 && (
         <TouchableOpacity
-          style={styles.requestsBanner}
+          style={[styles.requestsBanner, isMobile && styles.bannerMobile]}
           onPress={() => setRequestsModalVisible(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="document-text" size={20} color="#007AFF" />
-          <Text style={styles.requestsBannerText}>
+          <Ionicons name="document-text" size={isMobile ? 18 : 20} color="#007AFF" />
+          <Text style={[styles.requestsBannerText, isMobile && styles.bannerTextMobile]} numberOfLines={2}>
             {pendingRequestsCount} pending request{pendingRequestsCount !== 1 ? 's' : ''} (cancellations & rain checks)
           </Text>
-          <Text style={styles.requestsBannerAction}>View</Text>
+          <Text style={[styles.requestsBannerAction, isMobile && styles.bannerActionMobile]}>View</Text>
           <Ionicons name="chevron-forward" size={18} color="#007AFF" />
         </TouchableOpacity>
       )}
@@ -1578,86 +1659,145 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
       {/* Unassigned bookings notification banner (admin) */}
       {userRole === 'admin' && unassignedBookingsCount > 0 && (
         <TouchableOpacity
-          style={styles.unassignedBookingsBanner}
+          style={[styles.unassignedBookingsBanner, isMobile && styles.bannerMobile]}
           onPress={() => setActiveBookingsModalVisible(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="calendar-outline" size={20} color="#34C759" />
-          <Text style={styles.unassignedBookingsBannerText}>
-            {unassignedBookingsCount} outstanding booking{unassignedBookingsCount !== 1 ? 's' : ''} need{unassignedBookingsCount === 1 ? 's' : ''} a coach assigned
+          <Ionicons name="calendar-outline" size={isMobile ? 18 : 20} color="#34C759" />
+          <Text style={[styles.unassignedBookingsBannerText, isMobile && styles.bannerTextMobile]} numberOfLines={2}>
+            {unassignedBookingsCount} booking{unassignedBookingsCount !== 1 ? 's' : ''} need{unassignedBookingsCount === 1 ? 's' : ''} a coach
           </Text>
-          <Text style={styles.unassignedBookingsBannerAction}>View</Text>
+          <Text style={[styles.unassignedBookingsBannerAction, isMobile && styles.bannerActionMobile]}>View</Text>
           <Ionicons name="chevron-forward" size={18} color="#34C759" />
         </TouchableOpacity>
       )}
 
-      {/* Location Filter */}
-      <View style={styles.filters}>
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Location:</Text>
-          <View style={styles.filterButtons}>
+      {/* Location Filter — compact dropdown on mobile, chips on desktop */}
+      <View style={[styles.filters, isMobile && styles.filtersMobile]}>
+        <View style={[styles.filterGroup, isMobile && styles.filterGroupMobile]}>
+          <Text style={[styles.filterLabel, isMobile && styles.filterLabelMobile]}>Location:</Text>
+          {isMobile ? (
             <TouchableOpacity
-              style={[
-                styles.filterButton,
-                !selectedLocationId && styles.filterButtonActive,
-              ]}
-              onPress={() => setSelectedLocationId(null)}
+              style={styles.locationDropdownTrigger}
+              onPress={() => setLocationPickerVisible(true)}
+              activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  !selectedLocationId && styles.filterButtonTextActive,
-                ]}
-              >
-                All
+              <Text style={styles.locationDropdownText} numberOfLines={1}>
+                {!selectedLocationId ? 'All' : locations.find(l => l.id === selectedLocationId)?.name ?? 'All'}
               </Text>
+              <Ionicons name="chevron-down" size={20} color="#8E8E93" />
             </TouchableOpacity>
-            {locations.map((location) => (
+          ) : (
+            <View style={styles.filterButtons}>
               <TouchableOpacity
-                key={location.id}
                 style={[
                   styles.filterButton,
-                  selectedLocationId === location.id && styles.filterButtonActive,
+                  !selectedLocationId && styles.filterButtonActive,
                 ]}
-                onPress={() => {
-                  setSelectedLocationId(location.id);
-                }}
+                onPress={() => setSelectedLocationId(null)}
               >
                 <Text
                   style={[
                     styles.filterButtonText,
-                    selectedLocationId === location.id && styles.filterButtonTextActive,
+                    !selectedLocationId && styles.filterButtonTextActive,
                   ]}
                 >
-                  {location.name}
+                  All
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
+              {locations.map((location) => (
+                <TouchableOpacity
+                  key={location.id}
+                  style={[
+                    styles.filterButton,
+                    selectedLocationId === location.id && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setSelectedLocationId(location.id)}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      selectedLocationId === location.id && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    {location.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-
       </View>
 
+      {/* Location picker modal (mobile only) */}
+      {isMobile && (
+        <Modal
+          visible={locationPickerVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setLocationPickerVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.locationPickerOverlay}
+            activeOpacity={1}
+            onPress={() => setLocationPickerVisible(false)}
+          />
+          <View style={styles.locationPickerSheet}>
+            <View style={styles.locationPickerHandle} />
+            <Text style={styles.locationPickerTitle}>Select location</Text>
+            <ScrollView style={styles.locationPickerList} showsVerticalScrollIndicator>
+              <TouchableOpacity
+                style={[styles.locationPickerOption, !selectedLocationId && styles.locationPickerOptionActive]}
+                onPress={() => { setSelectedLocationId(null); setLocationPickerVisible(false); }}
+              >
+                <Text style={[styles.locationPickerOptionText, !selectedLocationId && styles.locationPickerOptionTextActive]}>All</Text>
+                {!selectedLocationId && <Ionicons name="checkmark" size={20} color="#007AFF" />}
+              </TouchableOpacity>
+              {locations.map((location) => (
+                <TouchableOpacity
+                  key={location.id}
+                  style={[styles.locationPickerOption, selectedLocationId === location.id && styles.locationPickerOptionActive]}
+                  onPress={() => { setSelectedLocationId(location.id); setLocationPickerVisible(false); }}
+                >
+                  <Text style={[styles.locationPickerOptionText, selectedLocationId === location.id && styles.locationPickerOptionTextActive]} numberOfLines={2}>
+                    {location.name}
+                  </Text>
+                  {selectedLocationId === location.id && <Ionicons name="checkmark" size={20} color="#007AFF" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
+
       {/* Calendar and List View Container */}
-      <View style={styles.calendarListViewContainer}>
+      <View style={[styles.calendarListViewContainer, isMobile && styles.calendarListViewContainerMobile]}>
         {/* Calendar - Always render to prevent disappearing */}
-        <View style={styles.calendarWrapper}>
+        <View style={[styles.calendarWrapper, isMobile && styles.calendarWrapperMobile]}>
           {/* Week Navigation - inside white calendar container */}
-          <View style={styles.weekNav}>
-            <TouchableOpacity onPress={() => navigateWeek(-1)}>
-              <Ionicons name="chevron-back" size={24} color="#000" />
+          <View style={[styles.weekNav, isMobile && styles.weekNavMobile]}>
+            <TouchableOpacity
+              onPress={() => navigateWeek(-1)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={isMobile && styles.weekNavButton}
+            >
+              <Ionicons name="chevron-back" size={isMobile ? 22 : 24} color="#000" />
             </TouchableOpacity>
-            <Text style={styles.weekText}>
+            <Text style={[styles.weekText, isMobile && styles.weekTextMobile]}>
               {new Date(selectedDate).toLocaleDateString('en-US', {
                 month: 'long',
                 year: 'numeric',
               })}
             </Text>
-            <TouchableOpacity onPress={() => navigateWeek(1)}>
-              <Ionicons name="chevron-forward" size={24} color="#000" />
+            <TouchableOpacity
+              onPress={() => navigateWeek(1)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={isMobile && styles.weekNavButton}
+            >
+              <Ionicons name="chevron-forward" size={isMobile ? 22 : 24} color="#000" />
             </TouchableOpacity>
           </View>
-          <View style={styles.calendarContainer}>
+          <View style={[styles.calendarContainer, isMobile && styles.calendarContainerMobile]}>
             {loadingWeek && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#000" />
@@ -1665,18 +1805,20 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               </View>
             )}
             {!selectedLocationId ? (
-              <View style={styles.calendarDisabledContainer}>
-                <View style={styles.calendarDisabledCard}>
-                  <Ionicons name="location-outline" size={56} color="#007AFF" />
-                  <Text style={styles.calendarDisabledTitle}>
+              <View style={[styles.calendarDisabledContainer, isMobile && styles.calendarDisabledContainerMobile]}>
+                <View style={[styles.calendarDisabledCard, isMobile && styles.calendarDisabledCardMobile]}>
+                  <Ionicons name="location-outline" size={isMobile ? 40 : 56} color="#007AFF" />
+                  <Text style={[styles.calendarDisabledTitle, isMobile && styles.calendarDisabledTitleMobile]}>
                     Select a Location
                   </Text>
-                  <Text style={styles.calendarDisabledText}>
-                    To view the calendar schedule, please select a specific location from the filter above.
+                  <Text style={[styles.calendarDisabledText, isMobile && styles.calendarDisabledTextMobile]}>
+                    {isMobile ? 'Pick a location above to see the calendar.' : 'To view the calendar schedule, please select a specific location from the filter above.'}
                   </Text>
-                  <Text style={styles.calendarDisabledSubtext}>
-                    The calendar view is only available when viewing a single location at a time.
-                  </Text>
+                  {!isMobile && (
+                    <Text style={styles.calendarDisabledSubtext}>
+                      The calendar view is only available when viewing a single location at a time.
+                    </Text>
+                  )}
                 </View>
               </View>
             ) : (
@@ -1694,7 +1836,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         </View>
 
         {/* List View */}
-        <View style={styles.listViewWrapper}>
+        <View style={[styles.listViewWrapper, isMobile && styles.listViewWrapperMobile]}>
           {/* Tabs */}
           <View style={styles.tabsContainer}>
             <TouchableOpacity
@@ -1870,21 +2012,48 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
+  contentMobile: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
   },
+  headerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    marginBottom: 16,
+    gap: 12,
+  },
   title: {
     fontSize: 32,
     fontWeight: '700',
     color: '#000',
   },
+  titleMobile: {
+    fontSize: 22,
+  },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  headerButtonsMobile: {
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  headerActionsScroll: {
+    flexGrow: 0,
+    maxHeight: 48,
+  },
+  headerActionsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 8,
   },
   requestsButton: {
     flexDirection: 'row',
@@ -1897,6 +2066,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#007AFF',
     position: 'relative',
+  },
+  headerButtonMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  headerButtonTextMobile: {
+    fontSize: 14,
+  },
+  dashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+  },
+  dashboardButtonText: {
+    color: '#0D9488',
+    fontSize: 14,
+    fontWeight: '600',
   },
   requestsButtonContent: {
     flexDirection: 'row',
@@ -1919,6 +2111,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 122, 255, 0.25)',
     gap: 10,
+  },
+  bannerMobile: {
+    padding: 10,
+    marginBottom: 12,
+    gap: 8,
+    borderRadius: 10,
+  },
+  bannerTextMobile: {
+    fontSize: 13,
+    flex: 1,
+  },
+  bannerActionMobile: {
+    fontSize: 13,
   },
   requestsBannerText: {
     flex: 1,
@@ -2082,6 +2287,95 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: '#fff',
   },
+  filtersMobile: {
+    padding: 12,
+    marginBottom: 14,
+  },
+  filterGroupMobile: {
+    marginBottom: 0,
+  },
+  filterLabelMobile: {
+    marginBottom: 6,
+    fontSize: 13,
+  },
+  locationDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 48,
+  },
+  locationDropdownText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    flex: 1,
+    marginRight: 8,
+  },
+  locationPickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  locationPickerSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 8,
+    paddingBottom: 34,
+    maxHeight: '70%',
+  },
+  locationPickerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C7C7CC',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  locationPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  locationPickerList: {
+    maxHeight: 320,
+    paddingHorizontal: 12,
+  },
+  locationPickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 4,
+    backgroundColor: '#F9F9F9',
+  },
+  locationPickerOptionActive: {
+    backgroundColor: '#E3F2FD',
+  },
+  locationPickerOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    flex: 1,
+    marginRight: 8,
+  },
+  locationPickerOptionTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
   calendarWrapper: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -2155,6 +2449,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     alignItems: 'flex-start',
+  },
+  calendarListViewContainerMobile: {
+    flexDirection: 'column',
+    width: '100%',
+  },
+  calendarWrapperMobile: {
+    width: '100%',
+    minHeight: 420,
+  },
+  weekNavMobile: {
+    width: '100%',
+  },
+  weekNavButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekTextMobile: {
+    fontSize: 16,
+  },
+  calendarContainerMobile: {
+    minHeight: 420,
+  },
+  calendarDisabledContainerMobile: {
+    minHeight: 420,
+    padding: 24,
+  },
+  listViewWrapperMobile: {
+    width: '100%',
+    maxHeight: 420,
+    minHeight: 280,
   },
   calendarContainer: {
     position: 'relative',
@@ -2306,6 +2632,11 @@ const styles = StyleSheet.create({
       elevation: 4,
     }),
   },
+  calendarDisabledCardMobile: {
+    padding: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
   calendarDisabledTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -2314,6 +2645,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
+  calendarDisabledTitleMobile: {
+    fontSize: 17,
+    marginTop: 12,
+    marginBottom: 6,
+  },
   calendarDisabledText: {
     fontSize: 15,
     fontWeight: '500',
@@ -2321,6 +2657,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 8,
+  },
+  calendarDisabledTextMobile: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 0,
   },
   calendarDisabledSubtext: {
     fontSize: 13,

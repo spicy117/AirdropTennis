@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -26,7 +27,13 @@ if (Platform.OS !== 'web') {
   }
 }
 
-export default function AdminLocationsCourtsScreen() {
+const MIN_TOUCH_TARGET = 44; // iOS/Android recommended minimum
+
+export default function AdminLocationsCourtsScreen({ onNavigate }) {
+  const { width: screenWidth } = useWindowDimensions?.() ?? Dimensions.get('window');
+  const isNarrow = screenWidth < 400;
+  const contentPadding = isNarrow ? 14 : 20;
+
   const [locations, setLocations] = useState([]);
   const [courts, setCourts] = useState([]);
   const [courtTypes, setCourtTypes] = useState([]);
@@ -748,28 +755,48 @@ export default function AdminLocationsCourtsScreen() {
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingHorizontal: contentPadding, paddingVertical: contentPadding }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={loadData} />
         }
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Locations & Courts</Text>
-            <Text style={styles.subtitle}>
+        <View style={[styles.header, isNarrow && styles.headerNarrow]}>
+          <View style={[styles.headerTextWrap, isNarrow && styles.headerTextWrapNarrow]}>
+            <Text style={[styles.title, isNarrow && styles.titleNarrow]} numberOfLines={isNarrow ? 2 : 1}>
+              Locations & Courts
+            </Text>
+            <Text style={[styles.subtitle, isNarrow && styles.subtitleNarrow]} numberOfLines={1}>
               {locations.length} locations, {courts.length} courts
             </Text>
           </View>
-          <View style={styles.headerActions}>
+          <View style={[styles.headerActions, isNarrow && styles.headerActionsNarrow]}>
+            {onNavigate && (
+              <TouchableOpacity
+                style={styles.dashboardBtn}
+                onPress={() => onNavigate('admin-dashboard')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="grid-outline" size={18} color="#0D9488" />
+                <Text style={styles.dashboardBtnText}>Dashboard</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleButtonActive]}
               onPress={() => setViewMode('list')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="List view"
             >
               <Ionicons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#000'} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.viewToggleButton, viewMode === 'map' && styles.viewToggleButtonActive]}
               onPress={() => setViewMode('map')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Map view"
             >
               <Ionicons name="map" size={20} color={viewMode === 'map' ? '#fff' : '#000'} />
             </TouchableOpacity>
@@ -787,7 +814,7 @@ export default function AdminLocationsCourtsScreen() {
 
         {/* Search Bar */}
         {viewMode === 'list' && (
-          <View style={styles.searchContainer}>
+          <View style={[styles.searchContainer, isNarrow && styles.searchContainerNarrow]}>
             <Ionicons name="search-outline" size={20} color="#8E8E93" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
@@ -850,27 +877,35 @@ export default function AdminLocationsCourtsScreen() {
           filteredLocations.map((location) => {
             const locationCourts = getFilteredCourtsForLocation(location.id);
             return (
-              <View key={location.id} style={styles.card}>
+              <View key={location.id} style={[styles.card, isNarrow && styles.cardNarrow]}>
                 <View style={styles.cardHeader}>
-                  <View style={styles.cardIcon}>
-                    <Ionicons name="location" size={24} color="#007AFF" />
+                  <View style={[styles.cardIcon, isNarrow && styles.cardIconNarrow]}>
+                    <Ionicons name="location" size={isNarrow ? 20 : 24} color="#007AFF" />
                   </View>
                   <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle}>{location.name}</Text>
+                    <Text style={[styles.cardTitle, isNarrow && styles.cardTitleNarrow]} numberOfLines={2}>{location.name}</Text>
                     {location.address && (
-                      <Text style={styles.cardSubtitle}>{location.address}</Text>
+                      <Text style={[styles.cardSubtitle, isNarrow && styles.cardSubtitleNarrow]} numberOfLines={2}>{location.address}</Text>
                     )}
                   </View>
                   <View style={styles.cardActions}>
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => openLocationModal(location)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${location.name}`}
                     >
                       <Ionicons name="pencil" size={20} color="#007AFF" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => deleteLocation(location)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${location.name}`}
                     >
                       <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                     </TouchableOpacity>
@@ -882,10 +917,14 @@ export default function AdminLocationsCourtsScreen() {
                     <Text style={styles.courtsListTitle}>
                       Courts ({locationCourts.length})
                     </Text>
-                      <TouchableOpacity
-                        style={styles.addCourtButton}
-                        onPress={() => openCourtModal(null, location.id)}
-                      >
+                    <TouchableOpacity
+                      style={styles.addCourtButton}
+                      onPress={() => openCourtModal(null, location.id)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityLabel="Add court"
+                    >
                       <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
                       <Text style={styles.addCourtButtonText}>Add Court</Text>
                     </TouchableOpacity>
@@ -894,13 +933,13 @@ export default function AdminLocationsCourtsScreen() {
                     <Text style={styles.noCourtsText}>No courts yet</Text>
                   ) : (
                     locationCourts.map((court) => (
-                      <View key={court.id} style={styles.courtItem}>
+                      <View key={court.id} style={[styles.courtItem, isNarrow && styles.courtItemNarrow]}>
                         <View style={styles.courtItemLeft}>
                           <Ionicons name="tennisball" size={16} color="#34C759" />
                           <View style={styles.courtItemInfo}>
-                            <Text style={styles.courtItemText}>{court.name}</Text>
+                            <Text style={styles.courtItemText} numberOfLines={1}>{court.name}</Text>
                             {court.court_types?.name && (
-                              <Text style={styles.courtItemType}>{court.court_types.name}</Text>
+                              <Text style={styles.courtItemType} numberOfLines={1}>{court.court_types.name}</Text>
                             )}
                           </View>
                         </View>
@@ -908,12 +947,20 @@ export default function AdminLocationsCourtsScreen() {
                           <TouchableOpacity
                             style={styles.courtActionButton}
                             onPress={() => openCourtModal(court)}
+                            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                            accessible
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit ${court.name}`}
                           >
                             <Ionicons name="pencil" size={16} color="#007AFF" />
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.courtActionButton}
                             onPress={() => deleteCourt(court)}
+                            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                            accessible
+                            accessibilityRole="button"
+                            accessibilityLabel={`Delete ${court.name}`}
                           >
                             <Ionicons name="trash-outline" size={16} color="#FF3B30" />
                           </TouchableOpacity>
@@ -942,7 +989,7 @@ export default function AdminLocationsCourtsScreen() {
               <Text style={styles.modalTitle}>
                 {editingLocation ? 'Edit Location' : 'New Location'}
               </Text>
-              <TouchableOpacity onPress={closeLocationModal}>
+              <TouchableOpacity onPress={closeLocationModal} style={styles.modalCloseHitArea} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessible accessibilityRole="button" accessibilityLabel="Close">
                 <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
@@ -1035,7 +1082,7 @@ export default function AdminLocationsCourtsScreen() {
               <Text style={styles.modalTitle}>
                 {editingCourt ? 'Edit Court' : 'New Court'}
               </Text>
-              <TouchableOpacity onPress={closeCourtModal}>
+              <TouchableOpacity onPress={closeCourtModal} style={styles.modalCloseHitArea} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessible accessibilityRole="button" accessibilityLabel="Close">
                 <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
@@ -1205,20 +1252,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  headerNarrow: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    marginBottom: 16,
+  },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  headerTextWrapNarrow: {
+    marginRight: 0,
+    marginBottom: 10,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  headerActionsNarrow: {
+    marginTop: 0,
+    flexWrap: 'wrap',
+  },
+  dashboardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+  },
+  dashboardBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D9488',
+  },
   viewToggleButton: {
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
     width: 40,
     height: 40,
     borderRadius: 8,
@@ -1238,9 +1321,15 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 4,
   },
+  titleNarrow: {
+    fontSize: 24,
+  },
   subtitle: {
     fontSize: 16,
     color: '#8E8E93',
+  },
+  subtitleNarrow: {
+    fontSize: 14,
   },
   addButtonSmall: {
     flexDirection: 'row',
@@ -1265,6 +1354,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E5E5EA',
+  },
+  searchContainerNarrow: {
+    marginBottom: 12,
   },
   searchIcon: {
     marginRight: 8,
@@ -1302,6 +1394,10 @@ const styles = StyleSheet.create({
       elevation: 3,
     }),
   },
+  cardNarrow: {
+    padding: 12,
+    marginBottom: 10,
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1317,6 +1413,7 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     flex: 1,
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: 16,
@@ -1324,16 +1421,32 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 4,
   },
+  cardTitleNarrow: {
+    fontSize: 15,
+  },
   cardSubtitle: {
     fontSize: 14,
     color: '#8E8E93',
   },
+  cardSubtitleNarrow: {
+    fontSize: 13,
+  },
+  cardIconNarrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
   cardActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
   },
   actionButton: {
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
     padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   courtsList: {
     marginTop: 12,
@@ -1345,7 +1458,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   courtsListTitle: {
     fontSize: 12,
@@ -1357,8 +1472,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: 'center',
   },
   addCourtButtonText: {
     fontSize: 12,
@@ -1383,6 +1500,7 @@ const styles = StyleSheet.create({
   },
   courtItemInfo: {
     flex: 1,
+    minWidth: 0,
   },
   courtItemText: {
     fontSize: 14,
@@ -1395,10 +1513,18 @@ const styles = StyleSheet.create({
   },
   courtItemActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
   },
   courtActionButton: {
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
     padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  courtItemNarrow: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
   noCourtsText: {
     fontSize: 12,
@@ -1486,6 +1612,12 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+  },
+  modalCloseHitArea: {
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalTitle: {
     fontSize: 20,

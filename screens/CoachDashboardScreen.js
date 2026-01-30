@@ -9,12 +9,12 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
-import CoachRainCheckModal from '../components/CoachRainCheckModal';
 
 export default function CoachDashboardScreen({ onNavigate }) {
   const { user, userRole } = useAuth();
@@ -24,8 +24,8 @@ export default function CoachDashboardScreen({ onNavigate }) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [rainCheckModalVisible, setRainCheckModalVisible] = useState(false);
-  const [pendingRainChecks, setPendingRainChecks] = useState(0);
+  const [rainCheckConfirm, setRainCheckConfirm] = useState({ visible: false, message: '', bookings: [] });
+  const [rainCheckResult, setRainCheckResult] = useState({ visible: false, success: true, title: '', message: '' });
 
   // Redirect if not a coach
   useEffect(() => {
@@ -54,35 +54,8 @@ export default function CoachDashboardScreen({ onNavigate }) {
     if (user && userRole === 'coach') {
       loadBookings();
       loadPastBookings();
-      loadPendingRainCheckCount();
     }
   }, [user, userRole]);
-
-  const loadPendingRainCheckCount = async () => {
-    if (!user || userRole !== 'coach') return;
-
-    try {
-      // Get all pending rain check requests
-      const { data, error } = await supabase
-        .from('booking_requests')
-        .select(`
-          id,
-          booking:booking_id (coach_id)
-        `)
-        .eq('status', 'pending')
-        .eq('request_type', 'raincheck');
-
-      if (error) throw error;
-
-      // Count only those assigned to this coach
-      const coachRainChecks = (data || []).filter(
-        request => request.booking?.coach_id === user.id
-      );
-      setPendingRainChecks(coachRainChecks.length);
-    } catch (error) {
-      console.error('Error loading rain check count:', error);
-    }
-  };
 
   const loadBookings = async () => {
     if (!user || userRole !== 'coach') return;
@@ -153,6 +126,74 @@ export default function CoachDashboardScreen({ onNavigate }) {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const runRainCheckCancel = async (bookings) => {
+    const ids = bookings.map((b) => b.id);
+    await supabase
+      .from('booking_requests')
+      .update({ status: 'rejected' })
+      .in('booking_id', ids)
+      .eq('status', 'pending');
+    let refundFailures = 0;
+    for (const b of bookings) {
+      const { error: delErr } = await supabase.from('bookings').delete().eq('id', b.id);
+      if (delErr) {
+        console.error('Error cancelling booking:', b.id, delErr);
+        refundFailures++;
+        continue;
+      }
+      if (b.credit_cost > 0 && b.user_id) {
+        const { error: refErr } = await supabase.rpc('add_wallet_balance', {
+          user_id: b.user_id,
+          amount: b.credit_cost,
+        });
+        if (refErr) {
+          console.error('Error refunding:', b.user_id, refErr);
+          refundFailures++;
+        }
+      }
+    }
+    await loadBookings();
+    return refundFailures;
+  };
+
+  const handleRainCheckBookings = (bookings) => {
+    if (!bookings?.length) return;
+    const n = bookings.length;
+    const message = `Cancel ${n} booking${n !== 1 ? 's' : ''} and refund ${n} student${n !== 1 ? 's' : ''}?`;
+    setRainCheckConfirm({ visible: true, message, bookings });
+  };
+
+  const handleRainCheckConfirmAction = async () => {
+    const { bookings } = rainCheckConfirm;
+    setRainCheckConfirm((prev) => ({ ...prev, visible: false }));
+    try {
+      const refundFailures = await runRainCheckCancel(bookings);
+      if (refundFailures > 0) {
+        setRainCheckResult({
+          visible: true,
+          success: false,
+          title: 'Partially complete',
+          message: `${refundFailures} refund(s) failed – please refund manually if needed.`,
+        });
+      } else {
+        setRainCheckResult({
+          visible: true,
+          success: true,
+          title: 'Success',
+          message: `Booking${bookings.length !== 1 ? 's' : ''} cancelled and student${bookings.length !== 1 ? 's' : ''} refunded.`,
+        });
+      }
+    } catch (err) {
+      console.error('Rain check error:', err);
+      setRainCheckResult({
+        visible: true,
+        success: false,
+        title: 'Error',
+        message: 'Failed to rain check. Please try again.',
+      });
     }
   };
 
@@ -308,40 +349,11 @@ export default function CoachDashboardScreen({ onNavigate }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Coach Dashboard</Text>
-          {/* Rain Check Requests Button */}
-          <TouchableOpacity
-            style={styles.rainCheckButton}
-            onPress={() => setRainCheckModalVisible(true)}
-          >
-            <Ionicons name="rainy" size={18} color="#007AFF" />
-            <Text style={styles.rainCheckButtonText}>Rain Checks</Text>
-            {pendingRainChecks > 0 && (
-              <View style={styles.rainCheckBadge}>
-                <Text style={styles.rainCheckBadgeText}>{pendingRainChecks}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
         <Text style={styles.subtitle}>
           {groupedSessions.length} {groupedSessions.length === 1 ? 'session' : 'sessions'} • {totalStudents} {totalStudents === 1 ? 'student' : 'students'}
         </Text>
       </View>
-
-      {/* Rain check notification banner */}
-      {pendingRainChecks > 0 && (
-        <TouchableOpacity
-          style={styles.rainCheckBanner}
-          onPress={() => setRainCheckModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="rainy" size={20} color="#007AFF" />
-          <Text style={styles.rainCheckBannerText}>
-            You have {pendingRainChecks} pending rain check request{pendingRainChecks !== 1 ? 's' : ''}
-          </Text>
-          <Text style={styles.rainCheckBannerAction}>View</Text>
-          <Ionicons name="chevron-forward" size={18} color="#007AFF" />
-        </TouchableOpacity>
-      )}
 
       {/* Current/Future Sessions Section */}
       <View style={styles.section}>
@@ -365,6 +377,7 @@ export default function CoachDashboardScreen({ onNavigate }) {
               key={session.key}
               session={session}
               isAdmin={false}
+              onRainCheckBookings={handleRainCheckBookings}
             />
           ))
         )}
@@ -438,16 +451,65 @@ export default function CoachDashboardScreen({ onNavigate }) {
         )}
       </View>
 
-      {/* Rain Check Modal */}
-      <CoachRainCheckModal
-        visible={rainCheckModalVisible}
-        onClose={() => setRainCheckModalVisible(false)}
-        coachId={user?.id}
-        onRequestProcessed={() => {
-          loadPendingRainCheckCount();
-          loadBookings();
-        }}
-      />
+      {/* Rain check confirmation modal (in-app) */}
+      <Modal
+        visible={rainCheckConfirm.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRainCheckConfirm((prev) => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Rain check</Text>
+            <Text style={styles.modalMessage}>{rainCheckConfirm.message}</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setRainCheckConfirm((prev) => ({ ...prev, visible: false }))}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleRainCheckConfirmAction}
+              >
+                <Text style={styles.modalButtonPrimaryText}>Rain check</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rain check result modal (in-app) */}
+      <Modal
+        visible={rainCheckResult.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRainCheckResult((prev) => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={[
+              styles.resultIconContainer,
+              rainCheckResult.success ? styles.resultIconSuccess : styles.resultIconError,
+            ]}>
+              <Ionicons
+                name={rainCheckResult.success ? 'checkmark-circle' : 'close-circle'}
+                size={48}
+                color={rainCheckResult.success ? '#10B981' : '#EF4444'}
+              />
+            </View>
+            <Text style={styles.modalTitle}>{rainCheckResult.title}</Text>
+            <Text style={styles.modalMessage}>{rainCheckResult.message}</Text>
+            <TouchableOpacity
+              style={[styles.modalButton, rainCheckResult.success ? styles.resultButtonSuccess : styles.resultButtonError]}
+              onPress={() => setRainCheckResult((prev) => ({ ...prev, visible: false }))}
+            >
+              <Text style={styles.modalButtonPrimaryText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -476,56 +538,6 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     }),
-  },
-  rainCheckButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 6,
-  },
-  rainCheckButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  rainCheckBadge: {
-    backgroundColor: '#FF3B30',
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  rainCheckBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  rainCheckBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.12)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 122, 255, 0.25)',
-    gap: 10,
-  },
-  rainCheckBannerText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  rainCheckBannerAction: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
   },
   subtitle: {
     fontSize: 15,
@@ -631,5 +643,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
     marginLeft: 8,
+  },
+  // In-app modals (rain check)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    maxWidth: 360,
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 20,
+      elevation: 10,
+    }),
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  modalButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#E5E7EB',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  modalButtonCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  modalButtonPrimaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  resultIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  resultIconSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  resultIconError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  resultButtonSuccess: {
+    backgroundColor: '#10B981',
+  },
+  resultButtonError: {
+    backgroundColor: '#EF4444',
   },
 });

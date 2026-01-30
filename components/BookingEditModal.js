@@ -331,21 +331,6 @@ export default function BookingEditModal({
                   <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.optionButton}
-                  onPress={() => setRequestType('raincheck')}
-                >
-                  <View style={styles.optionIconContainer}>
-                    <Ionicons name="rainy-outline" size={24} color="#007AFF" />
-                  </View>
-                  <View style={styles.optionContent}>
-                    <Text style={styles.optionTitle}>Rain Check</Text>
-                    <Text style={styles.optionDescription}>
-                      Request to reschedule due to rain. Requires admin approval.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
-                </TouchableOpacity>
               </>
             ) : (
               <>

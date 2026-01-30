@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { AcademyProvider } from './contexts/AcademyContext';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import AuthSelectionScreen from './screens/AuthSelectionScreen';
 import SignInScreen from './screens/SignInScreen';
@@ -96,24 +97,12 @@ function AppNavigator() {
 
   // Navigate to Auth when user signs out
   useEffect(() => {
-    const sessionValue = session;
-    const loadingValue = loading;
-    console.log('Navigation effect triggered - loading:', loadingValue, 'session:', !!sessionValue, 'session type:', typeof sessionValue);
-    
-    if (!loadingValue && !sessionValue) {
-      console.log('✅ Conditions met for navigation - loading is false and session is null/falsy');
-      console.log('Session cleared, attempting to navigate to Auth...');
-      // Navigate to Auth when signing out
+    if (!loading && !session) {
       const navigateToAuth = (attempt = 0) => {
         try {
           if (navigationRef.current) {
             const currentRoute = navigationRef.current?.getCurrentRoute();
-            console.log('Current route:', currentRoute?.name, 'Attempt:', attempt);
-            
-            // Navigate to Auth if we're not already there
             if (currentRoute?.name !== 'Auth') {
-              console.log('Dispatching navigation to Auth...');
-              // Use reset to clear navigation stack when signing out
               navigationRef.current?.dispatch(
                 CommonActions.reset({
                   index: 0,
@@ -127,37 +116,21 @@ function AppNavigator() {
                   ],
                 })
               );
-              console.log('✅ Successfully navigated to Auth');
-            } else {
-              console.log('Already on Auth screen');
             }
-            
-            // Update URL to root when logged out
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
               window.history.replaceState(null, '', '/');
             }
-          } else {
-            console.log('Navigation ref not ready, attempt:', attempt);
-            // Navigation not ready yet, retry
-            if (attempt < 10) {
-              setTimeout(() => navigateToAuth(attempt + 1), 100 * (attempt + 1));
-            } else {
-              console.error('Navigation ref never became ready after 10 attempts');
-            }
+          } else if (attempt < 10) {
+            setTimeout(() => navigateToAuth(attempt + 1), 100 * (attempt + 1));
           }
         } catch (error) {
-          console.error('Error navigating to auth:', error, 'Attempt:', attempt);
-          // Retry on error
+          console.error('Error navigating to auth:', error);
           if (attempt < 10) {
             setTimeout(() => navigateToAuth(attempt + 1), 100 * (attempt + 1));
           }
         }
       };
-
-      // Start navigation attempts immediately
       navigateToAuth();
-    } else {
-      console.log('❌ Navigation effect skipped - loading:', loadingValue, 'hasSession:', !!sessionValue);
     }
   }, [session, loading]);
 
@@ -205,9 +178,8 @@ function AppNavigator() {
         const timer = setTimeout(() => {
           try {
             const cleanUrl = window.location.pathname + window.location.search;
-            if (window.history && window.history.replaceState) {
+            if (window.history?.replaceState) {
               window.history.replaceState(null, '', cleanUrl);
-              console.log('Cleaned up auth callback URL');
             }
           } catch (error) {
             console.error('Error cleaning up URL:', error);
@@ -220,18 +192,12 @@ function AppNavigator() {
   }, [session, isPasswordRecovery]); // React to recovery mode changes
 
   // Force navigation when session changes and we're logged out
-  // This ensures navigation happens even if the conditional rendering doesn't trigger it
-  // MUST be before any conditional returns to maintain hooks order
   useEffect(() => {
     if (!loading && !session && navigationRef.current) {
-      console.log('Force navigation effect triggered - session is null');
-      // Small delay to ensure navigator is ready
       const timer = setTimeout(() => {
         try {
           const currentRoute = navigationRef.current?.getCurrentRoute();
-          console.log('Force navigation check - current route:', currentRoute?.name);
           if (currentRoute?.name === 'Home') {
-            console.log('Force navigating from Home to Auth');
             navigationRef.current?.dispatch(
               CommonActions.reset({
                 index: 0,
@@ -254,13 +220,11 @@ function AppNavigator() {
     }
   }, [session, loading]);
 
-  // When returning from Stripe with session_id, don't block on auth loading so HomeScreen
-  // can mount and process the payment. HomeScreen will retry until user is ready.
   const hasPendingStripeRedirect = Platform.OS === 'web' && typeof window !== 'undefined' && (() => {
     try {
       return new URLSearchParams(window.location.search || '').get('session_id') ||
         (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('stripe_session_id'));
-    } catch (e) {
+    } catch {
       return null;
     }
   })();
@@ -376,9 +340,11 @@ export default function App() {
   return (
     <GlobalErrorBoundary>
       <AuthProvider>
-        <LanguageProvider>
-          <AppNavigator />
-        </LanguageProvider>
+        <AcademyProvider fallbackSubdomain={null}>
+          <LanguageProvider>
+            <AppNavigator />
+          </LanguageProvider>
+        </AcademyProvider>
       </AuthProvider>
     </GlobalErrorBoundary>
   );

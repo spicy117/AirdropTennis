@@ -18,9 +18,32 @@ import { Ionicons } from '@expo/vector-icons';
  * - session: { serviceName, startTime, endTime, locationName, students: [], totalRevenue }
  * - isAdmin: boolean - shows revenue info if true
  */
-const GroupedSessionCard = ({ session, isAdmin = false }) => {
+const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) => {
   const [expanded, setExpanded] = useState(false);
+  const [selectedBookingIds, setSelectedBookingIds] = useState([]);
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const isCoachMode = typeof onRainCheckBookings === 'function';
+
+  const toggleBookingSelection = (bookingId) => {
+    setSelectedBookingIds((prev) =>
+      prev.includes(bookingId) ? prev.filter((id) => id !== bookingId) : [...prev, bookingId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (!session.bookings?.length) return;
+    const allIds = session.bookings.map((b) => b.id);
+    const allSelected = allIds.every((id) => selectedBookingIds.includes(id));
+    setSelectedBookingIds(allSelected ? [] : allIds);
+  };
+
+  const handleRainCheckPress = () => {
+    const selected = (session.bookings || []).filter((b) => selectedBookingIds.includes(b.id));
+    if (selected.length && onRainCheckBookings) {
+      onRainCheckBookings(selected);
+      setSelectedBookingIds([]);
+    }
+  };
 
   const toggleExpand = () => {
     Animated.spring(rotateAnim, {
@@ -151,51 +174,93 @@ const GroupedSessionCard = ({ session, isAdmin = false }) => {
       {/* Expandable Roster */}
       {expanded && (
         <View style={styles.rosterContainer}>
+          {/* Coach: Select all row */}
+          {isCoachMode && session.students?.length > 0 && (
+            <View style={styles.selectAllRow}>
+              {Platform.OS === 'web' ? (
+                <label style={styles.selectAllLabel}>
+                  <input
+                    type="checkbox"
+                    checked={session.bookings?.length > 0 && session.bookings.every((b) => selectedBookingIds.includes(b.id))}
+                    onChange={toggleSelectAll}
+                    style={{ marginRight: 8, cursor: 'pointer' }}
+                  />
+                  <span style={styles.selectAllText}>Select all</span>
+                </label>
+              ) : (
+                <TouchableOpacity style={styles.selectAllTouchable} onPress={toggleSelectAll}>
+                  <View style={[styles.studentCheckbox, session.bookings?.length > 0 && session.bookings.every((b) => selectedBookingIds.includes(b.id)) && styles.studentCheckboxChecked]}>
+                    {(session.bookings?.length > 0 && session.bookings.every((b) => selectedBookingIds.includes(b.id))) && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </View>
+                  <Text style={styles.selectAllText}>Select all</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           <ScrollView 
             style={styles.rosterScrollView}
             nestedScrollEnabled={true}
             showsVerticalScrollIndicator={true}
           >
             {session.students?.length > 0 ? (
-              session.students.map((student, index) => (
-                <View key={student.id || index} style={styles.studentRow}>
-                  {/* Avatar */}
-                  <View
-                    style={[
-                      styles.studentAvatar,
-                      { backgroundColor: getAvatarColor(student.name) },
-                    ]}
-                  >
-                    <Text style={styles.studentAvatarText}>
-                      {getInitials(student.name)}
-                    </Text>
-                  </View>
-
-                  {/* Name & Email */}
-                  <View style={styles.studentInfo}>
-                    <Text style={styles.studentName} numberOfLines={1}>
-                      {student.name}
-                    </Text>
-                    {student.email && (
-                      <Text style={styles.studentEmail} numberOfLines={1}>
-                        {student.email}
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* Status Indicators */}
-                  <View style={styles.studentStatus}>
-                    {student.isSeasonPass && (
-                      <View style={styles.passIndicator}>
-                        <Ionicons name="star" size={12} color="#D97706" />
+              session.students.map((student, index) => {
+                const booking = session.bookings?.find((b) => b.id === student.bookingId);
+                const isSelected = booking && selectedBookingIds.includes(booking.id);
+                return (
+                  <View key={student.id || index} style={styles.studentRow}>
+                    {isCoachMode && booking && (
+                      <View style={styles.checkboxWrap}>
+                        {Platform.OS === 'web' ? (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleBookingSelection(booking.id)}
+                            style={{ cursor: 'pointer', margin: 0 }}
+                            aria-label={`Select ${student.name}`}
+                          />
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() => toggleBookingSelection(booking.id)}
+                            style={[styles.studentCheckbox, isSelected && styles.studentCheckboxChecked]}
+                          >
+                            {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                          </TouchableOpacity>
+                        )}
                       </View>
                     )}
-                    <View style={styles.presentIndicator}>
-                      <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                    <View
+                      style={[
+                        styles.studentAvatar,
+                        { backgroundColor: getAvatarColor(student.name) },
+                      ]}
+                    >
+                      <Text style={styles.studentAvatarText}>
+                        {getInitials(student.name)}
+                      </Text>
+                    </View>
+                    <View style={styles.studentInfo}>
+                      <Text style={styles.studentName} numberOfLines={1}>
+                        {student.name}
+                      </Text>
+                      {student.email && (
+                        <Text style={styles.studentEmail} numberOfLines={1}>
+                          {student.email}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.studentStatus}>
+                      {student.isSeasonPass && (
+                        <View style={styles.passIndicator}>
+                          <Ionicons name="star" size={12} color="#D97706" />
+                        </View>
+                      )}
+                      <View style={styles.presentIndicator}>
+                        <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             ) : (
               <View style={styles.emptyRoster}>
                 <Ionicons name="people-outline" size={32} color="#D1D5DB" />
@@ -203,6 +268,30 @@ const GroupedSessionCard = ({ session, isAdmin = false }) => {
               </View>
             )}
           </ScrollView>
+          {/* Coach: Rain check button when any selected */}
+          {isCoachMode && selectedBookingIds.length > 0 && (
+            <View style={styles.rainCheckFooter}>
+              {Platform.OS === 'web' ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRainCheckPress();
+                  }}
+                  style={styles.rainCheckButtonWeb}
+                >
+                  <Ionicons name="rainy-outline" size={18} color="#007AFF" />
+                  Rain check ({selectedBookingIds.length})
+                </button>
+              ) : (
+                <TouchableOpacity style={styles.rainCheckButton} onPress={handleRainCheckPress} activeOpacity={0.8}>
+                  <Ionicons name="rainy-outline" size={18} color="#007AFF" />
+                  <Text style={styles.rainCheckButtonText}>Rain check ({selectedBookingIds.length})</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       )}
     </>
@@ -251,12 +340,18 @@ export const groupBookingsBySession = (bookings) => {
         coachName: booking.coachName || null,
         coachId: booking.coach_id || null,
         students: [],
+        bookings: [],
         totalRevenue: 0,
       });
     }
 
     const session = sessionMap.get(sessionKey);
-    
+    session.bookings.push({
+      id: booking.id,
+      user_id: booking.user_id,
+      credit_cost: parseFloat(booking.credit_cost) || 0,
+    });
+
     if (!session.coachName && booking.coachName) {
       session.coachName = booking.coachName;
       session.coachId = booking.coach_id;
@@ -454,6 +549,45 @@ const styles = StyleSheet.create({
     maxHeight: 280,
     paddingVertical: 8,
   },
+  selectAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  selectAllLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  selectAllTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  checkboxWrap: {
+    marginRight: 12,
+    justifyContent: 'center',
+  },
+  studentCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentCheckboxChecked: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
   studentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -511,6 +645,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     marginTop: 8,
+  },
+  rainCheckFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  rainCheckButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.25)',
+  },
+  rainCheckButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  rainCheckButtonWeb: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 16,
+    paddingRight: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    border: '1px solid rgba(0, 122, 255, 0.25)',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#007AFF',
   },
 });
 

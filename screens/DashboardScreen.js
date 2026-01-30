@@ -1392,7 +1392,7 @@ const statStyles = StyleSheet.create({
 // ============================================
 // Main Dashboard Screen
 // ============================================
-export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory }) {
+export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory, onGoToBookings }) {
   const insets = useSafeAreaInsets();
   const { user, userRole } = useAuth();
   const { language, updateLanguage } = useLanguage();
@@ -1415,6 +1415,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     return () => sub?.remove?.();
   }, []);
   const servicesUse2x2 = windowWidth <= 768;
+  const isNarrowHeader = windowWidth <= 480;
 
   const [creditBalance, setCreditBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -1561,8 +1562,8 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
+        <View style={[styles.header, isNarrowHeader && styles.headerNarrow]}>
+          <View style={[styles.headerLeft, isNarrowHeader && styles.headerLeftNarrow]}>
             {!isDesktop && onOpenSidebar && (
               <TouchableOpacity
                 style={styles.menuButton}
@@ -1574,31 +1575,43 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                 <Ionicons name="menu" size={24} color="#0F172A" />
               </TouchableOpacity>
             )}
-            <View>
-              <Text style={styles.greeting}>{t('welcome')}</Text>
-              <Text style={styles.userName}>{userName}</Text>
+            <View style={[styles.headerTextWrap, isNarrowHeader && styles.headerTextWrapNarrow]}>
+              <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">{t('welcome')}</Text>
+              <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{userName}</Text>
             </View>
           </View>
           {isStudent && (
-            <View style={styles.headerRight}>
+            <View style={[styles.headerRight, isNarrowHeader && styles.headerRightNarrow]}>
+              {onGoToBookings && (
+                <TouchableOpacity
+                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
+                  onPress={onGoToBookings}
+                  accessible={true}
+                  accessibilityLabel={t('upcomingLessonsButton')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="calendar-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
+                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('upcomingLessonsButton')}</Text>}
+                </TouchableOpacity>
+              )}
               {onGoToHistory && (
                 <TouchableOpacity
-                  style={styles.historyButton}
+                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
                   onPress={onGoToHistory}
                   accessible={true}
                   accessibilityLabel={t('viewSessionHistory')}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="time-outline" size={14} color="#64748B" />
-                  <Text style={styles.historyButtonText}>History</Text>
+                  <Ionicons name="time-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
+                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('history')}</Text>}
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.langToggle}
+                style={[styles.langToggle, isNarrowHeader && styles.langToggleNarrow]}
                 onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
               >
-                <Ionicons name="language-outline" size={14} color="#64748B" />
-                <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
+                <Ionicons name="language-outline" size={isNarrowHeader ? 18 : 14} color="#64748B" />
+                <Text style={[styles.langText, isNarrowHeader && styles.langTextNarrow]}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1609,7 +1622,8 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          <StatCard
+          {/* Credit Balance tile - hidden for now, re-enable when ready */}
+          {/* <StatCard
             icon="wallet"
             iconColor="#10B981"
             iconBg="rgba(16, 185, 129, 0.12)"
@@ -1618,7 +1632,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
             action="Top Up"
             actionColor="#10B981"
             onAction={() => setShowTopUpModal(true)}
-          />
+          /> */}
           <StatCard
             icon="calendar"
             iconColor="#3B82F6"
@@ -1707,42 +1721,56 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.bookingsList}>
-              {upcomingBookings.slice(0, 4).map((booking, i) => (
+            <>
+              <View style={styles.bookingsList}>
+                {upcomingBookings.slice(0, 4).map((booking, i) => (
+                  <TouchableOpacity
+                    key={booking.id}
+                    style={[styles.bookingItem, i > 0 && { marginTop: isMobile ? 8 : 10 }]}
+                    onPress={() => {
+                      setSelectedBooking(booking);
+                      setEditModalVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                    accessible={true}
+                    accessibilityLabel={`Edit booking: ${booking.service_name || 'Tennis Lesson'} on ${formatTime(booking.start_time)}`}
+                    accessibilityRole="button"
+                  >
+                    {booking.hasPendingRainCheck && (
+                      <View style={styles.rainCheckTag}>
+                        <Ionicons name="rainy" size={12} color="#007AFF" />
+                        <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
+                      </View>
+                    )}
+                    <View style={styles.bookingDate}>
+                      <Text style={styles.bookingDay}>{new Date(booking.start_time).getDate()}</Text>
+                      <Text style={styles.bookingMonth}>
+                        {new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short' })}
+                      </Text>
+                    </View>
+                    <View style={styles.bookingInfo}>
+                      <Text style={styles.bookingTitle}>{booking.service_name || t('tennisLesson')}</Text>
+                      <Text style={styles.bookingMeta}>
+                        {formatTime(booking.start_time)} • {booking.locations?.name || 'TBD'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {isStudent && onGoToBookings && (
                 <TouchableOpacity
-                  key={booking.id}
-                  style={[styles.bookingItem, i > 0 && { marginTop: isMobile ? 8 : 10 }]}
-                  onPress={() => {
-                    setSelectedBooking(booking);
-                    setEditModalVisible(true);
-                  }}
-                  activeOpacity={0.7}
+                  style={styles.seeAllBookingsButton}
+                  onPress={onGoToBookings}
                   accessible={true}
-                  accessibilityLabel={`Edit booking: ${booking.service_name || 'Tennis Lesson'} on ${formatTime(booking.start_time)}`}
+                  accessibilityLabel={t('seeAllBookings')}
                   accessibilityRole="button"
                 >
-                  {booking.hasPendingRainCheck && (
-                    <View style={styles.rainCheckTag}>
-                      <Ionicons name="rainy" size={12} color="#007AFF" />
-                      <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
-                    </View>
-                  )}
-                  <View style={styles.bookingDate}>
-                    <Text style={styles.bookingDay}>{new Date(booking.start_time).getDate()}</Text>
-                    <Text style={styles.bookingMonth}>
-                      {new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short' })}
-                    </Text>
-                  </View>
-                  <View style={styles.bookingInfo}>
-                    <Text style={styles.bookingTitle}>{booking.service_name || t('tennisLesson')}</Text>
-                    <Text style={styles.bookingMeta}>
-                      {formatTime(booking.start_time)} • {booking.locations?.name || 'TBD'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color="#CBD5E1" />
+                  <Text style={styles.seeAllBookingsText}>{t('seeAllBookings')}</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#3B82F6" />
                 </TouchableOpacity>
-              ))}
-            </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -1844,6 +1872,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: isMobile ? 12 : 0,
     flex: 1,
+    minWidth: 0,
+  },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerNarrow: {
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  headerLeftNarrow: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerTextWrapNarrow: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerRightNarrow: {
+    flexShrink: 0,
+    gap: 6,
+  },
+  historyButtonIconOnly: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minWidth: 36,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  langToggleNarrow: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minWidth: 36,
+    minHeight: 36,
+  },
+  langTextNarrow: {
+    fontSize: 11,
   },
   menuButton: {
     padding: isMobile ? 8 : 0,
@@ -1958,6 +2024,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   historyLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  seeAllBookingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: isMobile ? 12 : 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  seeAllBookingsText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#3B82F6',

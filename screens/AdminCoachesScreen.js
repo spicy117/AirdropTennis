@@ -19,7 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 const SUPABASE_URL = 'https://qdlzumzkhbnxpkprbuju.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbHp1bXpraGJueHBrcHJidWp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMzcyOTQsImV4cCI6MjA4MzkxMzI5NH0.eT8PBsjdPxRodqIf5e_JRKVV-PztvkG06DDaKjc7fas';
 
-export default function AdminCoachesScreen() {
+export default function AdminCoachesScreen({ onNavigate }) {
   const { user } = useAuth();
   const [coaches, setCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -317,8 +317,20 @@ export default function AdminCoachesScreen() {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Coaches</Text>
-        <Text style={styles.subtitle}>Manage coach accounts</Text>
+        <View>
+          <Text style={styles.title}>Coaches</Text>
+          <Text style={styles.subtitle}>Manage coach accounts</Text>
+        </View>
+        {onNavigate && (
+          <TouchableOpacity
+            style={styles.dashboardBtn}
+            onPress={() => onNavigate('admin-dashboard')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="grid-outline" size={18} color="#0D9488" />
+            <Text style={styles.dashboardBtnText}>Dashboard</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Add Coach Form */}
@@ -423,6 +435,26 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  dashboardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+  },
+  dashboardBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D9488',
   },
   title: {
     fontSize: 32,
