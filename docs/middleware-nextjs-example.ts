@@ -1,6 +1,8 @@
 /**
  * Next.js middleware: extract subdomain for multi-tenant routing.
  * Use when serving the app from Next.js (e.g. *.servestream.com).
+ * This file is kept as reference only — do not place at project root or Vercel
+ * will treat it as an Edge Function and the Expo build will fail.
  *
  * Example: airdroptennis.servestream.com → subdomain = 'airdroptennis'
  * The subdomain is added to request headers so pages/API routes can read it.
