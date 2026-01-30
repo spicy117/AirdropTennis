@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform, Image } from 'react-native';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AcademyProvider } from './contexts/AcademyContext';
@@ -336,7 +336,25 @@ function AppNavigator() {
   );
 }
 
+// Tennis ball icon for favicon / tab (same as sign-in and Add to Home Screen)
+const tennisBallIcon = require('./assets/tennis-ball-icon.png');
+
 export default function App() {
+  // Set tab favicon on web so browser tabs show tennis ball instead of default
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const src = Image.resolveAssetSource?.(tennisBallIcon);
+    const href = src?.uri ?? (typeof tennisBallIcon === 'number' ? null : tennisBallIcon);
+    if (!href) return;
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  }, []);
+
   return (
     <GlobalErrorBoundary>
       <AuthProvider>
