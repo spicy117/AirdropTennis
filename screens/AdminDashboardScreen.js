@@ -20,6 +20,7 @@ import { getTranslation } from '../utils/translations';
 
 // Nav items matching Sidebar (excluding admin-dashboard) so mobile users can reach all sections
 const ADMIN_NAV_BUTTONS = [
+  { id: 'admin-active-bookings', labelKey: 'navActiveBookings', icon: 'calendar-outline' },
   { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline' },
   { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline' },
   { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline' },

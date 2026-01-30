@@ -20,6 +20,7 @@ const NON_ADMIN_NAV_ITEMS = [
 // Admin-only items. The entire ADMIN header + these links are wrapped in {userRole === 'admin' && (...)} so it cannot render for coaches.
 const ADMIN_NAV_ITEMS = [
   { id: 'admin-dashboard', labelKey: 'navAdminDashboard', icon: 'grid-outline', activeIcon: 'grid' },
+  { id: 'admin-active-bookings', labelKey: 'navActiveBookings', icon: 'calendar-outline', activeIcon: 'calendar' },
   { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline', activeIcon: 'location' },
   { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline', activeIcon: 'time', badgeKey: 'unassigned' },
   { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline', activeIcon: 'people' },

@@ -350,6 +350,13 @@ export const groupBookingsBySession = (bookings) => {
       id: booking.id,
       user_id: booking.user_id,
       credit_cost: parseFloat(booking.credit_cost) || 0,
+      location_id: booking.location_id,
+      locationName: booking.locationName || booking.locations?.name || 'Unknown Location',
+      start_time: booking.start_time,
+      end_time: booking.end_time,
+      service_name: booking.service_name || null,
+      coach_id: booking.coach_id || null,
+      academy_id: booking.academy_id || null,
     });
 
     if (!session.coachName && booking.coachName) {

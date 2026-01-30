@@ -37,6 +37,7 @@ export default {
   navHistory: '历史',
   navCoachDashboard: '教练工作台',
   navAdminDashboard: '管理后台',
+  navActiveBookings: '当前预约',
   navLocations: '场地',
   navAvailability: '可预订时间',
   navStudents: '学生',

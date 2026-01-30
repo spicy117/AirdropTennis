@@ -26,6 +26,7 @@ import AdminManageAvailabilityScreen from './AdminManageAvailabilityScreen';
 import AdminLocationsCourtsScreen from './AdminLocationsCourtsScreen';
 import AdminCoachesScreen from './AdminCoachesScreen';
 import AdminHistoryScreen from './AdminHistoryScreen';
+import AdminActiveBookingsScreen from './AdminActiveBookingsScreen';
 import CoachDashboardScreen from './CoachDashboardScreen';
 import StudentHistoryScreen from './StudentHistoryScreen';
 import { getSydneyToday, sydneyDateTimeToUTC } from '../utils/timezone';
@@ -865,6 +866,13 @@ export default function HomeScreen() {
       case 'admin-dashboard':
         if (userRole === 'admin') {
           return <AdminDashboardScreen onNavigate={handleNavigate} />;
+        } else if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return studentFallbackDashboard;
+      case 'admin-active-bookings':
+        if (userRole === 'admin') {
+          return <AdminActiveBookingsScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }

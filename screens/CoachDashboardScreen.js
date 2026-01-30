@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
 
 export default function CoachDashboardScreen({ onNavigate }) {
@@ -138,6 +138,24 @@ export default function CoachDashboardScreen({ onNavigate }) {
       .eq('status', 'pending');
     let refundFailures = 0;
     for (const b of bookings) {
+      // Snapshot to rain_check_history before deleting so location/time/data can be viewed later
+      const locationName = b.locationName || b.locations?.name || null;
+      const { error: histErr } = await supabase.from('rain_check_history').insert({
+        original_booking_id: b.id,
+        user_id: b.user_id,
+        coach_id: b.coach_id ?? null,
+        location_id: b.location_id ?? null,
+        location_name: locationName,
+        start_time: b.start_time,
+        end_time: b.end_time,
+        service_name: b.service_name ?? null,
+        credit_cost: parseFloat(b.credit_cost) || 0,
+        reason: 'rain_check',
+        academy_id: b.academy_id ?? null,
+      });
+      if (histErr) {
+        console.warn('Rain check history insert failed (continuing):', histErr);
+      }
       const { error: delErr } = await supabase.from('bookings').delete().eq('id', b.id);
       if (delErr) {
         console.error('Error cancelling booking:', b.id, delErr);
@@ -179,6 +197,41 @@ export default function CoachDashboardScreen({ onNavigate }) {
           message: `${refundFailures} refund(s) failed – please refund manually if needed.`,
         });
       } else {
+        // Notify students by SMS
+        const items = bookings.map((b) => ({
+          user_id: b.user_id,
+          location_name: b.locationName || b.locations?.name || 'Unknown location',
+          start_time: b.start_time,
+        }));
+        if (items.length > 0) {
+          const url = `${SUPABASE_URL}/functions/v1/send-rain-check-sms`;
+          console.log('Calling send-rain-check-sms with', items.length, 'items', url);
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({ items }),
+            });
+            const text = await res.text();
+            let data;
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = null;
+            }
+            console.log('Rain check SMS response:', res.status, data ?? text);
+            if (!res.ok) {
+              console.warn('Rain check SMS failed:', res.status, text);
+            } else if (data?.ok && data.sent === 0 && data.total > 0) {
+              console.warn('Rain check SMS: no students had phone in profiles. Add profiles.phone (E.164).');
+            }
+          } catch (e) {
+            console.warn('Rain check SMS request error:', e);
+          }
+        }
         setRainCheckResult({
           visible: true,
           success: true,

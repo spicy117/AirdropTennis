@@ -138,8 +138,48 @@ When a booking is **assigned to a coach** (either on insert with `coach_id` or w
    - **Student:** `profiles.phone` for `profiles.id = booking.user_id`. If missing, student SMS is skipped (coach still receives their SMS).
 
 **Messages:**
-- **Coach:** *"You've been assigned: [Student Name] at [Location] on [Date/Time] ([Service])."*
-- **Student:** *"Booking confirmed."*
+- **Coach:** *"You've been assigned: [Student Name] at [Location] on [Date/Time] ([Service])."* then *"To view your upcoming bookings: app.airdroptennis.com"*
+- **Student:** *Booking confirmed with date, location, and "To view your upcoming bookings: app.airdroptennis.com" then "See you on the court!"*
+
+---
+
+## Rain Check SMS (Students)
+
+When a coach submits a **rain check** (cancels selected bookings and refunds students), the app calls an Edge Function to send one SMS per affected student. No database webhook is used; the app invokes the function after a successful rain check.
+
+### Deploy the rain check function
+
+Uses the same Twilio secrets as above (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE`).
+
+```bash
+supabase functions deploy send-rain-check-sms --no-verify-jwt
+```
+
+**Message (per student):**  
+*"Due to rain, your upcoming tennis lesson at [Location], [Date/Time] has been cancelled. You have been refunded for this session.*  
+*Please re-book your lesson: app.airdroptennis.com*  
+*We apologise for any inconvenience."*
+
+Students need `profiles.phone` (E.164) set to receive the SMS.
+
+**Troubleshooting rain check SMS**
+
+- **No SMS received:** Check Supabase → Edge Functions → `send-rain-check-sms` → Logs. You should see e.g. `send-rain-check-sms called with N items` and `profiles with phone: M of N`. If `M` is 0, add `profiles.phone` (E.164, e.g. `+61412345678`) for the affected students.
+- **401 / Unauthorized when coach submits rain check:** Deploy the function with `--no-verify-jwt` so the app can call it with the coach’s session:  
+  `supabase functions deploy send-rain-check-sms --no-verify-jwt`
+- **Twilio errors in logs:** Same as other SMS: check Twilio secrets and E.164 phone format.
+
+---
+
+## Rain Check History (Supabase table)
+
+When a coach submits a rain check, the app **snapshots** each cancelled booking into `rain_check_history` before deleting it from `bookings`. That way you keep location, time, student, and service for reporting or history.
+
+- **Table:** `rain_check_history` (see `supabase/migrations/003_rain_check_history.sql`).
+- **Columns:** `original_booking_id`, `user_id`, `coach_id`, `location_id`, `location_name`, `start_time`, `end_time`, `service_name`, `credit_cost`, `cancelled_at`, `reason` (e.g. `rain_check`), `academy_id`.
+- **Apply migration:** In Supabase SQL Editor, run the contents of `003_rain_check_history.sql`, or use `supabase db push` / `supabase migration up` if you use the CLI.
+
+You can query `rain_check_history` in the dashboard or build a “Rain check history” screen that lists past rain checks by coach or student.
 
 ---
 

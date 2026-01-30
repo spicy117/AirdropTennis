@@ -37,6 +37,7 @@ export default {
   navHistory: 'History',
   navCoachDashboard: 'Coach Dashboard',
   navAdminDashboard: 'Admin Dashboard',
+  navActiveBookings: 'Active Bookings',
   navLocations: 'Locations',
   navAvailability: 'Availability',
   navStudents: 'Students',
