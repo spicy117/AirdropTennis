@@ -115,8 +115,20 @@ export default function AdminActiveBookingsScreen({ onNavigate }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Active Bookings</Text>
-        <Text style={styles.subtitle}>All upcoming lessons</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>Active Bookings</Text>
+          <Text style={styles.subtitle}>All upcoming lessons</Text>
+        </View>
+        {onNavigate && (
+          <TouchableOpacity
+            style={styles.dashboardBtn}
+            onPress={() => onNavigate('admin-dashboard')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="grid-outline" size={18} color="#0D9488" />
+            <Text style={styles.dashboardBtnText}>Dashboard</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -174,6 +186,31 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  headerLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dashboardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
+    flexShrink: 0,
+  },
+  dashboardBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D9488',
   },
   title: {
     fontSize: 24,

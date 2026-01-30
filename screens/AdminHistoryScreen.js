@@ -337,7 +337,7 @@ export default function AdminHistoryScreen({ onNavigate }) {
       }
     >
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.title}>Booking History</Text>
           <Text style={styles.subtitle}>Past sessions and completed bookings</Text>
         </View>
@@ -463,6 +463,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  headerLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
   dashboardBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,6 +477,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: 'rgba(13, 148, 136, 0.3)',
+    flexShrink: 0,
   },
   dashboardBtnText: {
     fontSize: 14,
