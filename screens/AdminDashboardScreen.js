@@ -9,7 +9,10 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
+
+const DESKTOP_BREAKPOINT = 768;
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import StatCard from '../components/StatCard';
@@ -30,6 +33,8 @@ const ADMIN_NAV_BUTTONS = [
 ];
 
 export default function AdminDashboardScreen({ onNavigate }) {
+  const { width } = useWindowDimensions?.() ?? { width: 400 };
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
   const [assignLessonVisible, setAssignLessonVisible] = useState(false);
@@ -327,7 +332,7 @@ export default function AdminDashboardScreen({ onNavigate }) {
     <>
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={onRefresh} />
       }
@@ -347,15 +352,15 @@ export default function AdminDashboardScreen({ onNavigate }) {
       </View>
 
       {/* Nav buttons (replaces Total Students / Total Revenue on mobile so side tabs are accessible) */}
-      <View style={styles.navButtonsSection}>
+      <View style={[styles.navButtonsSection, isDesktop && styles.navButtonsSectionDesktop]}>
         <Text style={styles.navButtonsLabel}>Menu</Text>
-        <View style={styles.navButtonsGrid}>
+        <View style={[styles.navButtonsGrid, isDesktop && styles.navButtonsGridDesktop]}>
           {ADMIN_NAV_BUTTONS.map((item) => {
             const showBadge = item.id === 'admin-availability' && outstandingTasksCount > 0;
             return (
               <TouchableOpacity
                 key={item.id}
-                style={styles.navButton}
+                style={[styles.navButton, isDesktop && styles.navButtonDesktop]}
                 onPress={() => onNavigate && onNavigate(item.id)}
                 activeOpacity={0.7}
               >
@@ -376,8 +381,8 @@ export default function AdminDashboardScreen({ onNavigate }) {
         </View>
       </View>
 
-      <View style={styles.grid}>
-        <View style={styles.statWrap}>
+      <View style={[styles.grid, isDesktop && styles.gridDesktop]}>
+        <View style={[styles.statWrap, isDesktop && styles.statWrapDesktop]}>
           <StatCard
             title="Total Bookings"
             value={stats.totalBookings.toString()}
@@ -385,7 +390,7 @@ export default function AdminDashboardScreen({ onNavigate }) {
             iconColor="#2563EB"
           />
         </View>
-        <View style={styles.statWrap}>
+        <View style={[styles.statWrap, isDesktop && styles.statWrapDesktop]}>
           <StatCard
             title="Today's Bookings"
             value={stats.todayBookings.toString()}
@@ -510,6 +515,12 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  contentDesktop: {
+    maxWidth: 900,
+    alignSelf: 'center',
+    width: '100%',
+    paddingHorizontal: 32,
+  },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -549,6 +560,13 @@ const styles = StyleSheet.create({
   navButtonsSection: {
     marginBottom: 24,
   },
+  navButtonsSectionDesktop: {
+    marginBottom: 20,
+  },
+  navButtonsGridDesktop: {
+    marginHorizontal: 0,
+    gap: 12,
+  },
   navButtonsLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -585,6 +603,12 @@ const styles = StyleSheet.create({
       elevation: 2,
     }),
   },
+  navButtonDesktop: {
+    width: 'auto',
+    minWidth: 120,
+    flex: 1,
+    maxWidth: 160,
+  },
   navButtonIconWrap: {
     marginBottom: 6,
   },
@@ -618,10 +642,20 @@ const styles = StyleSheet.create({
     marginHorizontal: -6,
     marginBottom: 32,
   },
+  gridDesktop: {
+    marginHorizontal: 0,
+    gap: 16,
+  },
   statWrap: {
     width: '50%',
     paddingHorizontal: 6,
     paddingBottom: 12,
+  },
+  statWrapDesktop: {
+    width: 'auto',
+    flex: 1,
+    minWidth: 200,
+    paddingHorizontal: 0,
   },
   sessionsSection: {
     marginTop: 8,
