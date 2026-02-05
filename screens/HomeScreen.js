@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   Modal,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
@@ -50,9 +53,12 @@ const getIsDesktop = () => {
   return false;
 };
 
+const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.85);
+
 export default function HomeScreen() {
   const { signOut, user, isAdmin, userRole } = useAuth();
-  
+  const insets = useSafeAreaInsets();
+
   const [activeScreen, setActiveScreen] = useState('dashboard');
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
@@ -363,8 +369,51 @@ export default function HomeScreen() {
     }
   };
 
-  const handleOpenSidebar = useCallback(() => setSidebarVisible(true), []);
-  const handleCloseSidebar = useCallback(() => setSidebarVisible(false), []);
+  const drawerSlideAnim = useRef(new Animated.Value(1)).current;
+  const drawerBackdropAnim = useRef(new Animated.Value(0)).current;
+
+  const handleOpenSidebar = useCallback(() => {
+    setSidebarVisible(true);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(drawerSlideAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(drawerBackdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      drawerSlideAnim.setValue(1);
+      drawerBackdropAnim.setValue(0);
+      setSidebarVisible(false);
+    });
+  }, [drawerSlideAnim, drawerBackdropAnim]);
+
+  useEffect(() => {
+    if (sidebarVisible) {
+      drawerSlideAnim.setValue(1);
+      drawerBackdropAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(drawerSlideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }),
+        Animated.timing(drawerBackdropAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [sidebarVisible]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -979,19 +1028,39 @@ export default function HomeScreen() {
       {!isDesktop && (
         <Modal
           visible={sidebarVisible}
-          animationType="slide"
+          animationType="none"
           transparent={true}
+          statusBarTranslucent
           onRequestClose={handleCloseSidebar}
         >
           <View style={styles.sidebarModalOverlay}>
-            <TouchableOpacity
-              style={styles.sidebarModalBackdrop}
-              activeOpacity={1}
-              onPress={handleCloseSidebar}
-            />
-            <View style={styles.sidebarModalContent}>
+            <Animated.View
+              style={[
+                styles.sidebarModalBackdrop,
+                { opacity: drawerBackdropAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] }) },
+              ]}
+            >
+              <TouchableOpacity
+                style={StyleSheet.absoluteFill}
+                activeOpacity={1}
+                onPress={handleCloseSidebar}
+              />
+            </Animated.View>
+            <Animated.View
+              style={[
+                styles.sidebarModalContent,
+                {
+                  width: DRAWER_WIDTH,
+                  paddingTop: Math.max(insets.top, 12),
+                  transform: [{ translateX: drawerSlideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, DRAWER_WIDTH] }) }],
+                },
+              ]}
+            >
               <View style={styles.sidebarModalHeader}>
-                <Text style={styles.sidebarModalTitle}>Menu</Text>
+                <View style={styles.sidebarModalBrand}>
+                  <Text style={styles.sidebarModalLogo}>🎾</Text>
+                  <Text style={styles.sidebarModalBrandText}>Airdrop Tennis</Text>
+                </View>
                 <TouchableOpacity
                   onPress={handleCloseSidebar}
                   style={styles.sidebarModalCloseButton}
@@ -999,7 +1068,7 @@ export default function HomeScreen() {
                   accessibilityLabel="Close menu"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={24} color="#0F172A" />
+                  <Ionicons name="close" size={22} color="#64748B" />
                 </TouchableOpacity>
               </View>
               <Sidebar
@@ -1010,8 +1079,9 @@ export default function HomeScreen() {
                   await handleSignOut();
                 }}
                 isMobile={true}
+                hideHeader={true}
               />
-            </View>
+            </Animated.View>
           </View>
         </Modal>
       )}
@@ -1160,39 +1230,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   sidebarModalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   sidebarModalContent: {
-    width: 280,
-    backgroundColor: '#FAFAFA',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    overflow: 'hidden',
     ...(Platform.OS !== 'web' && {
       shadowColor: '#000',
-      shadowOffset: { width: -2, height: 0 },
-      shadowOpacity: 0.25,
-      shadowRadius: 10,
-      elevation: 10,
+      shadowOffset: { width: -4, height: 0 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 16,
+    }),
+    ...(Platform.OS === 'web' && {
+      boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12)',
     }),
   },
   sidebarModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
-  sidebarModalTitle: {
-    fontSize: 20,
+  sidebarModalBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sidebarModalLogo: {
+    fontSize: 24,
+  },
+  sidebarModalBrandText: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#000',
+    color: '#0F172A',
+    letterSpacing: -0.3,
   },
   sidebarModalCloseButton: {
-    padding: 4,
-    minWidth: 40,
-    minHeight: 40,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },

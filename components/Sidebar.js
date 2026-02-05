@@ -29,7 +29,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
-export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile = false }) {
+export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile = false, hideHeader = false }) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
@@ -123,11 +123,13 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
 
   return (
     <View style={[styles.container, isMobile && styles.mobileContainer]}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>🎾 Airdrop Tennis</Text>
-      </View>
+      {!hideHeader && (
+        <View style={styles.header}>
+          <Text style={styles.logo}>🎾 Airdrop Tennis</Text>
+        </View>
+      )}
 
-      <ScrollView style={styles.menu} showsVerticalScrollIndicator={false}>
+      <ScrollView style={[styles.menu, hideHeader && styles.menuNoHeader]} showsVerticalScrollIndicator={false}>
         {filteredNav.map((item) => {
           const isActive = activeScreen === item.id;
           return (
@@ -239,6 +241,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRightWidth: 0,
+    backgroundColor: '#FFFFFF',
     ...(Platform.OS === 'web' && {
       height: '100vh',
     }),
@@ -256,6 +259,9 @@ const styles = StyleSheet.create({
   menu: {
     flex: 1,
     paddingTop: 20,
+  },
+  menuNoHeader: {
+    paddingTop: 8,
   },
   separator: {
     flexDirection: 'row',
