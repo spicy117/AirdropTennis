@@ -1527,7 +1527,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.requestsButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
+              style={[styles.requestsButton, styles.headerButtonMobile, styles.headerButtonWrapItem, pendingRequestsCount > 0 && styles.headerButtonMobileWithBadge]}
               onPress={() => setRequestsModalVisible(true)}
             >
               <View style={styles.requestsButtonContent}>
@@ -1543,7 +1543,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
             {userRole === 'admin' && (
               <>
                 <TouchableOpacity
-                  style={[styles.activeBookingsButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
+                  style={[styles.activeBookingsButton, styles.headerButtonMobile, styles.headerButtonWrapItem, unassignedBookingsCount > 0 && styles.headerButtonMobileWithBadge]}
                   onPress={() => setActiveBookingsModalVisible(true)}
                 >
                   <View style={styles.activeBookingsButtonContent}>
@@ -2041,14 +2041,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerActionsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
+    flexDirection: 'column',
     gap: 8,
   },
   headerButtonWrapItem: {
-    flex: 1,
-    minWidth: 100,
+    alignSelf: 'stretch',
     justifyContent: 'center',
   },
   requestsButton: {
@@ -2064,8 +2061,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   headerButtonMobile: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  headerButtonMobileWithBadge: {
+    paddingRight: 36,
   },
   headerButtonTextMobile: {
     fontSize: 14,
