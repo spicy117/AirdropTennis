@@ -183,6 +183,56 @@ You can query `rain_check_history` in the dashboard or build a “Rain check his
 
 ---
 
+## User Cancellation SMS (Admin + Coach)
+
+When a **user cancels their booking** (free cancellation or admin-approved late cancellation), the app:
+
+1. Inserts a snapshot into `user_cancellation_history`
+2. Deletes the booking and refunds credits
+3. Calls `send-user-cancellation-sms` to notify **both admin and the assigned coach**
+
+### Deploy the user cancellation function
+
+Uses the same Twilio secrets and `ADMIN_PHONE` as above.
+
+```bash
+supabase functions deploy send-user-cancellation-sms --no-verify-jwt
+```
+
+**Messages (admin and coach):**
+*"A booking has been cancelled by the user.*  
+*[Date/Time] at [Location]*  
+*Student: [Name]*  
+*app.airdroptennis.com"*
+
+- **Admin:** Receives SMS if `ADMIN_PHONE` is set in Edge Function secrets.
+- **Coach:** Receives SMS if the booking had a `coach_id` and that coach has `profiles.phone` (E.164) set.
+
+### User cancellation history table
+
+Run the migration to create the table:
+
+```bash
+# In Supabase SQL Editor, run supabase/migrations/004_user_cancellation_history.sql
+# Or: supabase db push
+```
+
+- **Table:** `user_cancellation_history`
+- **Columns:** `original_booking_id`, `user_id`, `coach_id`, `location_id`, `location_name`, `start_time`, `end_time`, `service_name`, `credit_cost`, `cancelled_at`, `reason`, `academy_id`
+
+### Troubleshooting user cancellation SMS
+
+- **No SMS received (admin or coach):**
+  1. **Deploy the function** if you haven't: `supabase functions deploy send-user-cancellation-sms --no-verify-jwt`
+  2. **Check Edge Function logs:** Supabase → Edge Functions → `send-user-cancellation-sms` → Logs. You should see incoming requests when a user cancels.
+  3. **404 when cancelling:** The function isn't deployed. Run the deploy command above.
+  4. **ADMIN_PHONE:** Must be set in Supabase → Edge Functions → Secrets. Use E.164 format (e.g. `+61412345678`).
+  5. **Coach phone:** The assigned coach needs `profiles.phone` in E.164 format. Check the `profiles` table for the coach's row.
+  6. **Twilio secrets:** Same as other SMS functions – `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE` must be set.
+- **Browser console:** After cancelling, check the console for `User cancellation SMS failed:` or `no messages sent` – these indicate what went wrong.
+
+---
+
 ## Extending (Optional)
 
 - **Multiple admins:** Store admin phone numbers in a table (e.g. `profiles` where `role = 'admin'`) and in the Edge Function query all admin phones and send to each.

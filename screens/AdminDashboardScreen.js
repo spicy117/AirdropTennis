@@ -44,10 +44,12 @@ export default function AdminDashboardScreen({ onNavigate }) {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [rainCheckConfirm, setRainCheckConfirm] = useState({ visible: false, message: '', bookings: [] });
   const [rainCheckResult, setRainCheckResult] = useState({ visible: false, success: true, title: '', message: '' });
+  const [outstandingTasksCount, setOutstandingTasksCount] = useState(0);
 
   useEffect(() => {
     loadStats();
     loadUpcomingSessions();
+    loadOutstandingTasks();
   }, []);
 
   const loadStats = async () => {
@@ -190,6 +192,21 @@ export default function AdminDashboardScreen({ onNavigate }) {
   const onRefresh = () => {
     loadStats();
     loadUpcomingSessions();
+    loadOutstandingTasks();
+  };
+
+  const loadOutstandingTasks = async () => {
+    try {
+      const [unassignedRes, pendingRes] = await Promise.all([
+        supabase.from('bookings').select('*', { count: 'exact', head: true }).is('coach_id', null),
+        supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      ]);
+      const unassigned = unassignedRes.count || 0;
+      const pending = pendingRes.count || 0;
+      setOutstandingTasksCount(unassigned + pending);
+    } catch (err) {
+      console.error('Error loading outstanding tasks:', err);
+    }
   };
 
   const runRainCheckCancel = async (bookings) => {
@@ -235,6 +252,7 @@ export default function AdminDashboardScreen({ onNavigate }) {
     }
     loadStats();
     loadUpcomingSessions();
+    loadOutstandingTasks();
     return refundFailures;
   };
 
@@ -332,19 +350,29 @@ export default function AdminDashboardScreen({ onNavigate }) {
       <View style={styles.navButtonsSection}>
         <Text style={styles.navButtonsLabel}>Menu</Text>
         <View style={styles.navButtonsGrid}>
-          {ADMIN_NAV_BUTTONS.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.navButton}
-              onPress={() => onNavigate && onNavigate(item.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.navButtonIconWrap}>
-                <Ionicons name={item.icon} size={22} color="#0D9488" />
-              </View>
-              <Text style={styles.navButtonText} numberOfLines={1}>{t(item.labelKey)}</Text>
-            </TouchableOpacity>
-          ))}
+          {ADMIN_NAV_BUTTONS.map((item) => {
+            const showBadge = item.id === 'admin-availability' && outstandingTasksCount > 0;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.navButton}
+                onPress={() => onNavigate && onNavigate(item.id)}
+                activeOpacity={0.7}
+              >
+                {showBadge && (
+                  <View style={styles.navButtonBadge}>
+                    <Text style={styles.navButtonBadgeText}>
+                      {outstandingTasksCount > 99 ? '99+' : outstandingTasksCount}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.navButtonIconWrap}>
+                  <Ionicons name={item.icon} size={22} color="#0D9488" />
+                </View>
+                <Text style={styles.navButtonText} numberOfLines={1}>{t(item.labelKey)}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -467,7 +495,7 @@ export default function AdminDashboardScreen({ onNavigate }) {
     <AdminAssignLessonModal
       visible={assignLessonVisible}
       onClose={() => setAssignLessonVisible(false)}
-      onAssigned={() => { loadStats(); loadUpcomingSessions(); }}
+      onAssigned={() => { loadStats(); loadUpcomingSessions(); loadOutstandingTasks(); }}
     />
     </>
   );
@@ -548,6 +576,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    position: 'relative',
     ...(Platform.OS !== 'web' && {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -558,6 +587,24 @@ const styles = StyleSheet.create({
   },
   navButtonIconWrap: {
     marginBottom: 6,
+  },
+  navButtonBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  navButtonBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   navButtonText: {
     fontSize: 12,

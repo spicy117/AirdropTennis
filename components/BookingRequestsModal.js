@@ -12,7 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 
 export default function BookingRequestsModal({
   visible,
@@ -44,6 +44,9 @@ export default function BookingRequestsModal({
             location_id,
             user_id,
             credit_cost,
+            coach_id,
+            academy_id,
+            service_name,
             locations:location_id (id, name)
           )
         `)
@@ -111,7 +114,50 @@ export default function BookingRequestsModal({
       const userId = booking?.user_id;
 
       if (request.request_type === 'cancel') {
-        // Delete the booking
+        // Fetch full booking from bookings table to ensure we have coach_id (nested select can miss it)
+        const { data: fullBooking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            user_id,
+            coach_id,
+            location_id,
+            start_time,
+            end_time,
+            service_name,
+            credit_cost,
+            academy_id,
+            locations:location_id (name)
+          `)
+          .eq('id', request.booking_id)
+          .single();
+
+        if (fetchErr || !fullBooking) {
+          console.error('Error fetching booking for cancellation:', fetchErr);
+          Alert.alert('Error', 'Could not load booking details. Please try again.');
+          setProcessingId(null);
+          return;
+        }
+
+        const locationName = fullBooking.locations?.name || booking?.locations?.name || null;
+
+        // 1. Insert into user_cancellation_history before deleting
+        const { error: histErr } = await supabase.from('user_cancellation_history').insert({
+          original_booking_id: request.booking_id,
+          user_id: fullBooking.user_id ?? null,
+          coach_id: fullBooking.coach_id ?? null,
+          location_id: fullBooking.location_id ?? null,
+          location_name: locationName,
+          start_time: fullBooking.start_time,
+          end_time: fullBooking.end_time,
+          service_name: fullBooking.service_name ?? null,
+          credit_cost: creditCost,
+          reason: request.reason || null,
+          academy_id: fullBooking.academy_id ?? null,
+        });
+        if (histErr) console.warn('user_cancellation_history insert failed (continuing):', histErr);
+
+        // 2. Delete the booking
         const { error: deleteError } = await supabase
           .from('bookings')
           .delete()
@@ -121,6 +167,42 @@ export default function BookingRequestsModal({
           console.error('Error deleting booking:', deleteError);
           Alert.alert('Warning', 'Request approved but failed to cancel booking. Please cancel manually.');
         } else {
+          // 3. Notify admin and coach (fire-and-forget)
+          const student = booking?.profiles;
+          const studentName = student
+            ? `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email
+            : null;
+          try {
+            const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-user-cancellation-sms`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                item: {
+                  user_id: fullBooking.user_id,
+                  student_name: studentName,
+                  location_name: locationName || 'Unknown location',
+                  start_time: fullBooking.start_time,
+                  coach_id: fullBooking.coach_id ?? null,
+                },
+              }),
+            });
+            const smsText = await smsRes.text();
+            if (!smsRes.ok) {
+              console.warn('User cancellation SMS failed:', smsRes.status, smsText);
+            } else {
+              try {
+                const smsData = JSON.parse(smsText);
+                if (smsData?.sent === 0) {
+                  console.warn('User cancellation SMS: no messages sent. Check ADMIN_PHONE and coach profiles.phone (E.164).', smsData);
+                }
+              } catch (_) {}
+            }
+          } catch (smsErr) {
+            console.warn('User cancellation SMS request error:', smsErr);
+          }
           // Refund credits to student's wallet if booking had a cost
           let refundSuccess = true;
           if (creditCost > 0 && userId) {

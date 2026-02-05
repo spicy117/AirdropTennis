@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 
 /**
  * Check if cancellation is within the free cancellation window
@@ -86,17 +86,87 @@ export default function BookingEditModal({
       setLoading(true);
 
       if (freeCancellationAvailable) {
-        // Get credit cost and user_id before deleting the booking
-        const creditCost = parseFloat(booking.credit_cost) || 0;
-        const userId = booking.user_id;
+        // Fetch full booking from DB to ensure we have coach_id (parent may pass incomplete data)
+        const { data: fullBooking, error: fetchErr } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            user_id,
+            coach_id,
+            location_id,
+            start_time,
+            end_time,
+            service_name,
+            credit_cost,
+            academy_id,
+            locations:location_id (name)
+          `)
+          .eq('id', booking.id)
+          .single();
 
-        // Free cancellation - directly delete the booking
+        if (fetchErr || !fullBooking) {
+          throw new Error('Could not load booking details. Please try again.');
+        }
+
+        const creditCost = parseFloat(fullBooking.credit_cost) || 0;
+        const userId = fullBooking.user_id;
+        const locationName = fullBooking.locations?.name || null;
+
+        // 1. Insert into user_cancellation_history before deleting (for history + notifications)
+        const { error: histErr } = await supabase.from('user_cancellation_history').insert({
+          original_booking_id: fullBooking.id,
+          user_id: userId,
+          coach_id: fullBooking.coach_id ?? null,
+          location_id: fullBooking.location_id ?? null,
+          location_name: locationName,
+          start_time: fullBooking.start_time,
+          end_time: fullBooking.end_time,
+          service_name: fullBooking.service_name ?? null,
+          credit_cost: creditCost,
+          reason: reason.trim(),
+          academy_id: fullBooking.academy_id ?? null,
+        });
+        if (histErr) console.warn('user_cancellation_history insert failed (continuing):', histErr);
+
+        // 2. Free cancellation - directly delete the booking
         const { error: deleteError } = await supabase
           .from('bookings')
           .delete()
-          .eq('id', booking.id);
+          .eq('id', fullBooking.id);
 
         if (deleteError) throw deleteError;
+
+        // 3. Notify admin and coach (fire-and-forget)
+        try {
+          const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-user-cancellation-sms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              item: {
+                user_id: userId,
+                location_name: locationName || 'Unknown location',
+                start_time: fullBooking.start_time,
+                coach_id: fullBooking.coach_id ?? null,
+              },
+            }),
+          });
+          const smsText = await smsRes.text();
+          if (!smsRes.ok) {
+            console.warn('User cancellation SMS failed:', smsRes.status, smsText);
+          } else {
+            try {
+              const smsData = JSON.parse(smsText);
+              if (smsData?.sent === 0) {
+                console.warn('User cancellation SMS: no messages sent. Check ADMIN_PHONE and coach profiles.phone (E.164).', smsData);
+              }
+            } catch (_) {}
+          }
+        } catch (smsErr) {
+          console.warn('User cancellation SMS request error:', smsErr);
+        }
 
         // Refund credits to user's wallet if booking had a cost
         if (creditCost > 0 && userId) {
