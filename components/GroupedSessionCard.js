@@ -7,8 +7,11 @@ import {
   Platform,
   Animated,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+const MOBILE_BREAKPOINT = 480;
 
 /**
  * GroupedSessionCard - Elite Branded Session Card for Coaches/Admins
@@ -19,6 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
  * - isAdmin: boolean - shows revenue info if true
  */
 const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) => {
+  const { width } = useWindowDimensions?.() ?? { width: 400 };
+  const isMobile = width < MOBILE_BREAKPOINT;
   const [expanded, setExpanded] = useState(false);
   const [selectedBookingIds, setSelectedBookingIds] = useState([]);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -124,13 +129,13 @@ const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) =
 
           {/* Service Info */}
           <View style={styles.serviceInfo}>
-            <Text style={styles.serviceName} numberOfLines={1}>
+            <Text style={[styles.serviceName, isMobile && styles.serviceNameMobile]} numberOfLines={1}>
               {session.serviceName || 'Tennis Session'}
             </Text>
             <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={14} color="#0D9488" />
-                <Text style={styles.timeText}>
+              <View style={[styles.metaItem, isMobile && styles.metaItemMobile]}>
+                <Ionicons name="time-outline" size={isMobile ? 12 : 14} color="#0D9488" />
+                <Text style={[styles.timeText, isMobile && styles.timeTextMobile]} numberOfLines={1}>
                   {formatTime(session.startTime)} - {formatTime(session.endTime)}
                 </Text>
               </View>
@@ -138,13 +143,13 @@ const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) =
           </View>
 
           {/* Capacity Badge */}
-          <View style={styles.capacityContainer}>
-            <View style={styles.capacityBadge}>
-              <Text style={styles.capacityCount}>{studentCount}</Text>
-              <Text style={styles.capacityDivider}>/</Text>
-              <Text style={styles.capacityMax}>{maxCapacity}</Text>
+          <View style={[styles.capacityContainer, isMobile && styles.capacityContainerMobile]}>
+            <View style={[styles.capacityBadge, isMobile && styles.capacityBadgeMobile]}>
+              <Text style={[styles.capacityCount, isMobile && styles.capacityCountMobile]}>{studentCount}</Text>
+              <Text style={[styles.capacityDivider, isMobile && styles.capacityDividerMobile]}>/</Text>
+              <Text style={[styles.capacityMax, isMobile && styles.capacityMaxMobile]}>{maxCapacity}</Text>
             </View>
-            <Text style={styles.capacityLabel}>Students</Text>
+            <Text style={[styles.capacityLabel, isMobile && styles.capacityLabelMobile]}>Students</Text>
           </View>
         </View>
 
@@ -446,6 +451,7 @@ const styles = StyleSheet.create({
   serviceInfo: {
     flex: 1,
     marginRight: 12,
+    minWidth: 0,
   },
   serviceName: {
     fontSize: 18,
@@ -456,6 +462,10 @@ const styles = StyleSheet.create({
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     }),
   },
+  serviceNameMobile: {
+    fontSize: 15,
+    marginBottom: 4,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -465,13 +475,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
+  metaItemMobile: {
+    gap: 3,
+    flexShrink: 1,
+  },
   timeText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#0D9488',
   },
+  timeTextMobile: {
+    fontSize: 11,
+  },
   capacityContainer: {
     alignItems: 'center',
+  },
+  capacityContainerMobile: {
+    marginLeft: 4,
   },
   capacityBadge: {
     flexDirection: 'row',
@@ -481,10 +501,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 12,
   },
+  capacityBadgeMobile: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
   capacityCount: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1E40AF',
+  },
+  capacityCountMobile: {
+    fontSize: 16,
   },
   capacityDivider: {
     fontSize: 16,
@@ -492,10 +520,17 @@ const styles = StyleSheet.create({
     color: '#93C5FD',
     marginHorizontal: 2,
   },
+  capacityDividerMobile: {
+    fontSize: 12,
+    marginHorizontal: 1,
+  },
   capacityMax: {
     fontSize: 14,
     fontWeight: '600',
     color: '#60A5FA',
+  },
+  capacityMaxMobile: {
+    fontSize: 12,
   },
   capacityLabel: {
     fontSize: 10,
@@ -504,6 +539,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  capacityLabelMobile: {
+    fontSize: 9,
+    marginTop: 2,
   },
   // Info Row
   infoRow: {
