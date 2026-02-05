@@ -1568,7 +1568,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               </>
             )}
             <TouchableOpacity
-              style={[styles.bulkButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
+              style={[styles.bulkButton, styles.headerButtonMobile, styles.headerButtonWrapItem, styles.headerButtonWrapItemFull]}
               onPress={() => setShowBulkDrawer(true)}
             >
               <Ionicons name="add-circle-outline" size={18} color="#fff" />
@@ -2041,12 +2041,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerActionsWrap: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   headerButtonWrapItem: {
-    alignSelf: 'stretch',
+    flex: 1,
+    minWidth: 120,
     justifyContent: 'center',
+  },
+  headerButtonWrapItemFull: {
+    minWidth: '100%',
   },
   requestsButton: {
     flexDirection: 'row',
