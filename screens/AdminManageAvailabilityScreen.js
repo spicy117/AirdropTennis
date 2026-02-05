@@ -1516,15 +1516,10 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
           {isMobile ? 'Availability & Bookings' : 'Manage Availability & Bookings'}
         </Text>
         {isMobile ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.headerActionsScroll}
-            contentContainerStyle={styles.headerActionsScrollContent}
-          >
+          <View style={styles.headerActionsWrap}>
             {onNavigate && (
               <TouchableOpacity
-                style={[styles.dashboardButton, styles.headerButtonMobile]}
+                style={[styles.dashboardButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
                 onPress={() => onNavigate('admin-dashboard')}
               >
                 <Ionicons name="grid-outline" size={18} color="#0D9488" />
@@ -1532,7 +1527,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.requestsButton, styles.headerButtonMobile]}
+              style={[styles.requestsButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
               onPress={() => setRequestsModalVisible(true)}
             >
               <View style={styles.requestsButtonContent}>
@@ -1540,7 +1535,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
                 <Text style={[styles.requestsButtonText, styles.headerButtonTextMobile]}>Requests</Text>
               </View>
               {pendingRequestsCount > 0 && (
-                <View style={styles.badge}>
+                <View style={[styles.badge, isMobile && styles.badgeMobile]}>
                   <Text style={styles.badgeText}>{pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}</Text>
                 </View>
               )}
@@ -1548,7 +1543,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
             {userRole === 'admin' && (
               <>
                 <TouchableOpacity
-                  style={[styles.activeBookingsButton, styles.headerButtonMobile]}
+                  style={[styles.activeBookingsButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
                   onPress={() => setActiveBookingsModalVisible(true)}
                 >
                   <View style={styles.activeBookingsButtonContent}>
@@ -1556,13 +1551,13 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
                     <Text style={[styles.activeBookingsButtonText, styles.headerButtonTextMobile]}>Active</Text>
                   </View>
                   {unassignedBookingsCount > 0 && (
-                    <View style={styles.badge}>
+                    <View style={[styles.badge, isMobile && styles.badgeMobile]}>
                       <Text style={styles.badgeText}>{unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.historyButton, styles.headerButtonMobile]}
+                  style={[styles.historyButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
                   onPress={() => onNavigate && onNavigate('admin-history')}
                 >
                   <View style={styles.historyButtonContent}>
@@ -1573,13 +1568,13 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               </>
             )}
             <TouchableOpacity
-              style={[styles.bulkButton, styles.headerButtonMobile]}
+              style={[styles.bulkButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
               onPress={() => setShowBulkDrawer(true)}
             >
               <Ionicons name="add-circle-outline" size={18} color="#fff" />
               <Text style={[styles.bulkButtonText, styles.headerButtonTextMobile]}>Add</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </View>
         ) : (
           <View style={styles.headerButtons}>
             {onNavigate && (
@@ -2045,15 +2040,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  headerActionsScroll: {
-    flexGrow: 0,
-    maxHeight: 48,
-  },
-  headerActionsScrollContent: {
+  headerActionsWrap: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
-    paddingRight: 8,
+  },
+  headerButtonWrapItem: {
+    flex: 1,
+    minWidth: 100,
+    justifyContent: 'center',
   },
   requestsButton: {
     flexDirection: 'row',
@@ -2219,6 +2215,10 @@ const styles = StyleSheet.create({
       shadowRadius: 4,
       elevation: 5,
     }),
+  },
+  badgeMobile: {
+    top: 4,
+    right: 4,
   },
   badgeText: {
     color: '#fff',
