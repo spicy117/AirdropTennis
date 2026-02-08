@@ -24,7 +24,8 @@
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/tennis-ball-icon.png"
+      "favicon": "./assets/tennis-ball-icon.png",
+      "bundler": "metro"
     }
   }
 }

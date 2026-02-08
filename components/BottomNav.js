@@ -10,13 +10,14 @@ import { getTranslation } from '../utils/translations';
 const PERMISSIONS = {
   coach: ['coach-dashboard', 'profile'],
   admin: ['admin-dashboard', 'admin-students', 'admin-availability', 'admin-history', 'profile'],
-  student: ['dashboard', 'bookings', 'history', 'profile'],
+  student: ['dashboard', 'bookings', 'history', 'performance', 'profile'],
 };
 
 const ALL_BOTTOM_NAV_LINKS = [
   { id: 'dashboard', labelKey: 'navHome', icon: 'home-outline', activeIcon: 'home' },
   { id: 'bookings', labelKey: 'navBookings', icon: 'calendar-outline', activeIcon: 'calendar' },
   { id: 'history', labelKey: 'navHistory', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'performance', labelKey: 'navPerformance', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
   { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
   { id: 'coach-dashboard', labelKey: 'navCoachDashboard', icon: 'shield-outline', activeIcon: 'shield' },
   { id: 'admin-dashboard', labelKey: 'navAdmin', icon: 'grid-outline', activeIcon: 'grid' },

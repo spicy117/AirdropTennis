@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getTranslation } from '../utils/translations';
+import { getStreak } from '../utils/playerData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getWalletBalance } from '../lib/stripe';
 import WalletTopUpModal from '../components/WalletTopUpModal';
@@ -1392,7 +1393,7 @@ const statStyles = StyleSheet.create({
 // ============================================
 // Main Dashboard Screen
 // ============================================
-export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory, onGoToBookings }) {
+export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory, onGoToBookings, onGoToPerformance }) {
   const insets = useSafeAreaInsets();
   const { user, userRole } = useAuth();
   const { language, updateLanguage } = useLanguage();
@@ -1428,6 +1429,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [streakCount, setStreakCount] = useState(0);
 
   const userName =
     [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
@@ -1441,6 +1443,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     if (user) {
       loadBookings();
       loadWalletBalance();
+      loadAttendance();
     }
   }, [user]);
 
@@ -1448,8 +1451,29 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     if (user && refreshTrigger !== undefined) {
       loadBookings();
       loadWalletBalance();
+      loadAttendance();
     }
   }, [refreshTrigger]);
+
+  const loadAttendance = async () => {
+    if (!user) return;
+    try {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const { data } = await supabase
+        .from('bookings')
+        .select('start_time')
+        .eq('user_id', user.id)
+        .lte('start_time', new Date().toISOString());
+      const dates = (data || [])
+        .map((b) => (b.start_time ? new Date(b.start_time).toISOString().slice(0, 10) : ''))
+        .filter(Boolean);
+      const { streak } = getStreak(dates);
+      setStreakCount(streak);
+    } catch (err) {
+      console.error('Error loading attendance:', err);
+    }
+  };
 
   const loadWalletBalance = async () => {
     if (!user) return;
@@ -1594,6 +1618,18 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                   {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('upcomingLessonsButton')}</Text>}
                 </TouchableOpacity>
               )}
+              {onGoToPerformance && (
+                <TouchableOpacity
+                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
+                  onPress={onGoToPerformance}
+                  accessible={true}
+                  accessibilityLabel={t('navPerformance')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="stats-chart-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
+                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('navPerformance')}</Text>}
+                </TouchableOpacity>
+              )}
               {onGoToHistory && (
                 <TouchableOpacity
                   style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
@@ -1619,6 +1655,21 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
 
         {/* Season Pass Hero - Hidden for now, will be re-enabled later */}
         {/* <SeasonPassHero onLearnMore={() => setShowSeasonPassModal(true)} /> */}
+
+        {/* Streak pill - compact, tappable to Performance */}
+        {isStudent && onGoToPerformance && (
+          <TouchableOpacity
+            style={styles.streakPill}
+            onPress={onGoToPerformance}
+            activeOpacity={0.7}
+            accessible={true}
+            accessibilityLabel={`${streakCount} week streak. View performance.`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="flash" size={14} color="#E3FF00" style={{ marginRight: 4 }} />
+            <Text style={styles.streakPillText}>{streakCount} week{streakCount !== 1 ? 's' : ''}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
@@ -1971,6 +2022,25 @@ const styles = StyleSheet.create({
     fontSize: isMobile ? 12 : 11,
     fontWeight: '600',
     color: '#64748B',
+  },
+
+  // Streak pill
+  streakPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.08)',
+    paddingVertical: isMobile ? 6 : 8,
+    paddingHorizontal: isMobile ? 12 : 14,
+    borderRadius: 20,
+    marginBottom: isMobile ? 14 : 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  streakPillText: {
+    fontSize: isMobile ? 12 : 13,
+    fontWeight: '600',
+    color: '#0F172A',
   },
 
   // Stats Row

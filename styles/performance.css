@@ -1,0 +1,162 @@
+/* Performance page - Inter, IBM Plex Mono, Dancing Script, Source Serif Pro */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&display=swap');
+
+@media (max-width: 640px) {
+  .perf-charts-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Coach's Insight - Signed Technical Memo layout (25/75 split) */
+.perf-coach-insight-layout {
+  display: flex;
+  gap: 32px;
+  min-height: 220px;
+  align-items: stretch;
+}
+
+.perf-coach-insight-layout .perf-coach-meta {
+  flex: 0 0 25%;
+  min-width: 0;
+}
+
+.perf-coach-insight-layout .perf-coach-memo-body {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .perf-coach-insight-layout {
+    flex-direction: column;
+  }
+  .perf-coach-insight-layout .perf-coach-meta {
+    flex: none;
+    min-width: 100%;
+    padding-right: 0;
+    padding-bottom: 20px;
+    border-right: none;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .perf-coach-insight-layout .perf-coach-meta input {
+    max-width: 100%;
+  }
+}
+
+/* Focus Area pill tag */
+.perf-focus-pill {
+  display: inline-block;
+  background-color: #05070a;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Focus Area pill input (admin edit) */
+.perf-focus-pill-input {
+  background-color: #05070a !important;
+  color: #fff !important;
+  border-radius: 20px !important;
+}
+.perf-focus-pill-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Coach signature (handwritten) */
+.perf-coach-signature {
+  font-family: 'Dancing Script', cursive;
+  font-size: 22px;
+  font-weight: 600;
+  color: #05070a;
+}
+
+/* Memo body text (serif, high readability, 1.6 line height) */
+.perf-memo-body {
+  font-family: 'Source Serif Pro', Georgia, serif;
+  line-height: 1.6;
+  font-size: 15px;
+  color: #05070a;
+}
+
+/* Coach's Insight card */
+.perf-coach-insight-card {
+  position: relative;
+}
+
+/* Consistency heatmap tile - fill the card */
+.perf-heatmap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.perf-heatmap-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.perf-heatmap-wrapper .react-calendar-heatmap {
+  font-family: inherit;
+  width: 100%;
+  max-width: 100%;
+  transform: scale(2);
+  transform-origin: top center;
+  margin-bottom: 6px;
+}
+
+/* Label spacing: extra gap between weekday labels (Mon/Wed/Fri) and grid */
+.react-calendar-heatmap .react-calendar-heatmap-month-labels {
+  transform: translate(36px, 0);
+}
+.react-calendar-heatmap .react-calendar-heatmap-all-weeks {
+  transform: translate(36px, 14px);
+}
+
+.perf-heatmap-wrapper .react-calendar-heatmap text {
+  font-size: 9px;
+  fill: #94a3b8;
+  font-weight: 500;
+}
+
+/* Level 0: No activity - light gray for intentional yellow pop */
+.react-calendar-heatmap .heatmap-level-0 {
+  fill: #f1f5f9 !important;
+}
+
+/* Level 1-2 lessons: 30% opacity yellow */
+.react-calendar-heatmap .heatmap-level-1 {
+  fill: rgba(227, 255, 0, 0.3) !important;
+}
+
+/* Level 3+ lessons: 100% opacity yellow */
+.react-calendar-heatmap .heatmap-level-3 {
+  fill: #e3ff00 !important;
+}
+
+.react-calendar-heatmap rect {
+  rx: 3;
+}
+
+/* Legend: closer to grid */
+.perf-heatmap-legend {
+  margin-top: 6px;
+}
+
+/* 2px gap: gutterSize is passed as prop; rects get margin via SVG spacing */
+
+/* Radar chart: bolder axis labels (dark navy) */
+.recharts-polar-angle-axis-tick text {
+  font-weight: 600 !important;
+  fill: #05070a !important;
+}

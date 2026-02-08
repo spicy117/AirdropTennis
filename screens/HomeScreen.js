@@ -32,6 +32,8 @@ import AdminHistoryScreen from './AdminHistoryScreen';
 import AdminActiveBookingsScreen from './AdminActiveBookingsScreen';
 import CoachDashboardScreen from './CoachDashboardScreen';
 import StudentHistoryScreen from './StudentHistoryScreen';
+import PerformanceScreen from './PerformanceScreen';
+import AdminPerformanceScreen from './AdminPerformanceScreen';
 import { getSydneyToday, sydneyDateTimeToUTC } from '../utils/timezone';
 import { calculateBookingCost } from '../utils/pricing';
 import { 
@@ -92,7 +94,7 @@ export default function HomeScreen() {
   // CRITICAL: Coaches should NEVER see admin functions - they can ONLY access coach-dashboard and profile
   useEffect(() => {
     if (userRole === 'coach') {
-      const allowedScreens = ['coach-dashboard', 'profile'];
+      const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
       if (!allowedScreens.includes(activeScreen)) {
         console.warn(`Coach on restricted screen: ${activeScreen}. Redirecting to coach-dashboard.`);
         setActiveScreen('coach-dashboard');
@@ -814,7 +816,7 @@ export default function HomeScreen() {
 
   const handleNavigate = (screen) => {
     if (userRole === 'coach') {
-      const allowedScreens = ['coach-dashboard', 'profile'];
+      const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
       if (!allowedScreens.includes(screen)) {
         console.warn(`Coach attempted to access restricted screen: ${screen}. Redirecting to coach-dashboard.`);
         setActiveScreen('coach-dashboard');
@@ -845,6 +847,7 @@ export default function HomeScreen() {
         onOpenSidebar={handleOpenSidebar}
         onGoToHistory={() => setActiveScreen('history')}
         onGoToBookings={() => setActiveScreen('bookings')}
+        onGoToPerformance={() => setActiveScreen('performance')}
       />
     );
 
@@ -870,6 +873,7 @@ export default function HomeScreen() {
             refreshTrigger={dashboardRefreshKey}
             onGoToHistory={() => setActiveScreen('history')}
             onGoToBookings={() => setActiveScreen('bookings')}
+            onGoToPerformance={() => setActiveScreen('performance')}
           />
         );
       case 'bookings':
@@ -893,6 +897,11 @@ export default function HomeScreen() {
             onGoHome={() => setActiveScreen('dashboard')}
           />
         );
+      case 'performance':
+        if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return <PerformanceScreen onBack={() => setActiveScreen('dashboard')} />;
       case 'profile':
         // Profile is accessible to all roles; admins get Dashboard button to return to admin home
         return <ProfileScreen onSignOut={handleSignOut} onNavigate={handleNavigate} />;
@@ -961,6 +970,15 @@ export default function HomeScreen() {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
         return studentFallbackDashboard;
+      case 'admin-performance':
+        if (userRole === 'admin' || userRole === 'coach') {
+          return (
+            <AdminPerformanceScreen
+              onBack={() => handleNavigate(userRole === 'admin' ? 'admin-dashboard' : 'coach-dashboard')}
+            />
+          );
+        }
+        return studentFallbackDashboard;
       // Coach screens
       case 'coach-dashboard':
         return <CoachDashboardScreen onNavigate={handleNavigate} />;
@@ -979,6 +997,7 @@ export default function HomeScreen() {
               onOpenSidebar={handleOpenSidebar}
               onGoToHistory={() => setActiveScreen('history')}
               onGoToBookings={() => setActiveScreen('bookings')}
+              onGoToPerformance={() => setActiveScreen('performance')}
             />
           );
         }
@@ -993,6 +1012,7 @@ export default function HomeScreen() {
             refreshTrigger={dashboardRefreshKey}
             onGoToHistory={() => setActiveScreen('history')}
             onGoToBookings={() => setActiveScreen('bookings')}
+            onGoToPerformance={() => setActiveScreen('performance')}
           />
         );
     }

@@ -13,6 +13,8 @@ const NON_ADMIN_NAV_ITEMS = [
   { id: 'dashboard', labelKey: 'navHome', icon: 'home-outline', activeIcon: 'home' },
   { id: 'bookings', labelKey: 'navMyBookings', icon: 'calendar-outline', activeIcon: 'calendar' },
   { id: 'history', labelKey: 'navHistory', icon: 'time-outline', activeIcon: 'time' },
+  { id: 'performance', labelKey: 'navPerformance', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
+  { id: 'admin-performance', labelKey: 'navPerformanceManagement', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
   { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
   { id: 'coach-dashboard', labelKey: 'navCoachDashboard', icon: 'shield-outline', activeIcon: 'shield' },
 ];
@@ -26,6 +28,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline', activeIcon: 'people' },
   { id: 'admin-coaches', labelKey: 'navCoaches', icon: 'shield-outline', activeIcon: 'shield' },
   { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline', activeIcon: 'archive' },
+  { id: 'admin-performance', labelKey: 'navPerformanceManagement', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
   { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
@@ -74,9 +77,9 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
   const filteredNav = useMemo(
     () =>
       NON_ADMIN_NAV_ITEMS.filter((item) => {
-        if (userRole === 'coach') return ['coach-dashboard', 'profile'].includes(item.id);
+        if (userRole === 'coach') return ['coach-dashboard', 'admin-performance', 'profile'].includes(item.id);
         if (userRole === 'admin') return false; // admins see only the admin block below
-        return ['dashboard', 'profile', 'history'].includes(item.id); // students
+        return ['dashboard', 'profile', 'history', 'performance'].includes(item.id); // students
       }),
     [userRole]
   );
