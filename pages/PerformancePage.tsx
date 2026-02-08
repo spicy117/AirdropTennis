@@ -342,88 +342,60 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
         </div>
 
         {/* Activity Stats Row */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: 24,
-            marginBottom: 32,
-          }}
-        >
+        <div className="perf-activity-stats">
           {/* Card 1: Total Hours */}
           <motion.article
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: PREMIUM_ELEVATION,
-              border: '1px solid #F1F5F9',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
+            className="perf-activity-stat-card"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
           >
-            <Clock style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+            <div className="perf-stat-icon">
+              <Clock style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="perf-stat-value" style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
                 {totalHours.toFixed(1)}
               </div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Total Hours</div>
+              <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Total Hours</div>
             </div>
           </motion.article>
 
           {/* Card 2: Monthly Attendance */}
           <motion.article
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: PREMIUM_ELEVATION,
-              border: '1px solid #F1F5F9',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
+            className="perf-activity-stat-card"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <CheckCircle style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+            <div className="perf-stat-icon">
+              <CheckCircle style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="perf-stat-value" style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
                 {monthlyAttendance}%
               </div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Monthly Attendance</div>
+              <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Monthly Attendance</div>
             </div>
           </motion.article>
 
           {/* Card 3: Skill Gain */}
           <motion.article
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: PREMIUM_ELEVATION,
-              border: '1px solid #F1F5F9',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
+            className="perf-activity-stat-card"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
           >
-            <TrendingUp style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
-            <div>
+            <div className="perf-stat-icon">
+              <TrendingUp style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <span
                 style={{
                   display: 'inline-block',
                   backgroundColor: skillGain >= 0 ? '#22C55E' : '#94a3b8',
                   color: '#fff',
-                  padding: '6px 14px',
+                  padding: '6px 12px',
                   borderRadius: 999,
                   fontSize: 14,
                   fontWeight: 600,
@@ -431,7 +403,7 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
               >
                 {skillGain >= 0 ? '+' : ''}{skillGain} Overall
               </span>
-              <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 8 }}>Skill Gain</div>
+              <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 8 }}>Skill Gain</div>
             </div>
           </motion.article>
         </div>

@@ -10,6 +10,63 @@
   }
 }
 
+/* Activity Stats - responsive tiles */
+.perf-activity-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.perf-activity-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+  border: 1px solid #f1f5f9;
+}
+
+@media (max-width: 480px) {
+  .perf-activity-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .perf-activity-stat-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+  }
+
+  .perf-activity-stat-card .perf-stat-icon {
+    flex-shrink: 0;
+  }
+
+  .perf-activity-stat-card .perf-stat-value {
+    font-size: 22px !important;
+  }
+
+  .perf-activity-stat-card .perf-stat-label {
+    font-size: 11px !important;
+  }
+}
+
+/* Slightly larger breakpoint for tablets - 2 cols then 1 */
+@media (max-width: 640px) and (min-width: 481px) {
+  .perf-activity-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .perf-activity-stat-card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Coach's Insight - Signed Technical Memo layout (25/75 split) */
 .perf-coach-insight-layout {
   display: flex;

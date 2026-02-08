@@ -499,40 +499,45 @@ export default function AdminPerformancePage({ onBack }: AdminPerformancePagePro
             </div>
 
             {/* Activity Stats Row */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                gap: 24,
-                marginBottom: 24,
-              }}
-            >
-              <div style={cardStyle}>
-                <Clock style={{ width: 24, height: 24, color: OPTIC_YELLOW, marginBottom: 12 }} />
-                <div style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{totalHours.toFixed(1)}</div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Total Hours</div>
+            <div className="perf-activity-stats">
+              <div className="perf-activity-stat-card">
+                <div className="perf-stat-icon">
+                  <Clock style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="perf-stat-value" style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{totalHours.toFixed(1)}</div>
+                  <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Total Hours</div>
+                </div>
               </div>
-              <div style={cardStyle}>
-                <CheckCircle style={{ width: 24, height: 24, color: OPTIC_YELLOW, marginBottom: 12 }} />
-                <div style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{monthlyAttendance}%</div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Monthly Attendance</div>
+              <div className="perf-activity-stat-card">
+                <div className="perf-stat-icon">
+                  <CheckCircle style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="perf-stat-value" style={{ fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{monthlyAttendance}%</div>
+                  <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 4 }}>Monthly Attendance</div>
+                </div>
               </div>
-              <div style={cardStyle}>
-                <TrendingUp style={{ width: 24, height: 24, color: OPTIC_YELLOW, marginBottom: 12 }} />
-                <span
-                  style={{
-                    display: 'inline-block',
-                    backgroundColor: skillGain >= 0 ? '#22C55E' : '#94a3b8',
-                    color: '#fff',
-                    padding: '6px 14px',
-                    borderRadius: 999,
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  {skillGain >= 0 ? '+' : ''}{skillGain} Overall
-                </span>
-                <div style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 8 }}>Skill Gain</div>
+              <div className="perf-activity-stat-card">
+                <div className="perf-stat-icon">
+                  <TrendingUp style={{ width: 24, height: 24, color: OPTIC_YELLOW }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      backgroundColor: skillGain >= 0 ? '#22C55E' : '#94a3b8',
+                      color: '#fff',
+                      padding: '6px 12px',
+                      borderRadius: 999,
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {skillGain >= 0 ? '+' : ''}{skillGain} Overall
+                  </span>
+                  <div className="perf-stat-label" style={{ fontSize: 12, fontWeight: 500, color: '#64748B', marginTop: 8 }}>Skill Gain</div>
+                </div>
               </div>
             </div>
 
