@@ -34,7 +34,7 @@ function AuthStack() {
 }
 
 function AppNavigator() {
-  const { session, loading, isPasswordRecovery, userRole, user } = useAuth();
+  const { session, loading, isPasswordRecovery, userRole, user, roleLoading } = useAuth();
   const navigationRef = useRef(null);
 
   // CRITICAL: Check for payment redirect on mount. Store session_id and clear URL
@@ -56,44 +56,38 @@ function AppNavigator() {
   // Navigate to Home when user signs in
   // HomeScreen will handle role-based routing internally
   useEffect(() => {
-    if (!loading && session && !isPasswordRecovery && navigationRef.current) {
-      const timer = setTimeout(() => {
-        try {
-          const currentRoute = navigationRef.current?.getCurrentRoute();
-          // Only navigate if we're not already on Home screen
-          if (currentRoute?.name !== 'Home') {
-            navigationRef.current?.navigate('Home');
-            // Update URL based on role - ensure coaches go to coach dashboard
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              const path = window.location.pathname;
-              if (userRole === 'coach') {
-                // Force redirect to coach dashboard for coaches
-                window.history.replaceState(null, '', '/coach/dashboard');
-              } else if (userRole === 'admin') {
-                if (path !== '/home') {
-                  window.history.replaceState(null, '', '/home');
-                }
-              } else if (path !== '/home' && path !== '/') {
-                window.history.replaceState(null, '', '/home');
-              }
-            }
-          } else if (userRole === 'coach') {
-            // If already on Home, ensure URL reflects coach dashboard
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              const path = window.location.pathname;
-              if (path !== '/coach/dashboard' && path !== '/home') {
-                window.history.replaceState(null, '', '/coach/dashboard');
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error navigating to home:', error);
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
+    if (loading || roleLoading || !session || isPasswordRecovery || !navigationRef.current) {
+      return;
     }
-  }, [session, loading, isPasswordRecovery, userRole]);
+    if (userRole == null) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const currentRoute = navigationRef.current?.getCurrentRoute();
+        if (currentRoute?.name !== 'Home') {
+          navigationRef.current?.navigate('Home');
+        }
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          if (userRole === 'coach') {
+            window.history.replaceState(null, '', '/coach/dashboard');
+          } else if (userRole === 'admin') {
+            const path = window.location.pathname;
+            if (path === '/coach/dashboard') {
+              window.history.replaceState(null, '', '/home');
+            } else if (path !== '/home' && path !== '/') {
+              window.history.replaceState(null, '', '/home');
+            }
+          } else if (window.location.pathname !== '/home' && window.location.pathname !== '/') {
+            window.history.replaceState(null, '', '/home');
+          }
+        }
+      } catch (error) {
+        console.error('Error navigating to home:', error);
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [session, loading, roleLoading, isPasswordRecovery, userRole]);
 
   // Navigate to Auth when user signs out
   useEffect(() => {
@@ -242,7 +236,8 @@ function AppNavigator() {
     }
   }, [loading]);
 
-  if (loading && !hasPendingStripeRedirect && !loadingTimeout) {
+  const waitingForRole = session && roleLoading;
+  if ((loading || waitingForRole) && !hasPendingStripeRedirect && !loadingTimeout) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />

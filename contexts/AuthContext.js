@@ -32,6 +32,67 @@ const setRecoveryModeInStorage = (value) => {
   }
 };
 
+/** Create or update public.profiles for an auth user (signup / first login). */
+async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
+  if (!user?.id) return;
+
+  const meta = { ...(user.user_metadata || {}), ...userData };
+  const role =
+    forceRole ||
+    (['admin', 'coach', 'student'].includes(meta.role) ? meta.role : 'student');
+  const first_name = meta.first_name || null;
+  const last_name = meta.last_name || null;
+  const full_name =
+    meta.full_name ||
+    [first_name, last_name].filter(Boolean).join(' ').trim() ||
+    user.email ||
+    null;
+  const phone = meta.phone || null;
+  const email = user.email || meta.email || null;
+
+  let academy_id = null;
+  try {
+    const { data: academy } = await supabase
+      .from('academies')
+      .select('id')
+      .eq('subdomain_prefix', 'airdroptennis')
+      .maybeSingle();
+    academy_id = academy?.id ?? null;
+  } catch {
+    // academies table optional during setup
+  }
+
+  const payload = {
+    first_name,
+    last_name,
+    full_name,
+    phone,
+    role,
+    email,
+    ...(academy_id ? { academy_id } : {}),
+  };
+
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
+    if (error) console.error('ensureUserProfile update failed:', error.message);
+    return;
+  }
+
+  const { error: insertError } = await supabase.from('profiles').insert({
+    id: user.id,
+    ...payload,
+  });
+  if (insertError) {
+    console.error('ensureUserProfile insert failed:', insertError.message);
+  }
+}
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -103,11 +164,11 @@ export const AuthProvider = ({ children }) => {
           }
           setSession(session);
           setUser(session?.user ?? null);
-          // Check role from profiles if needed (don't await - let it run in background)
           if (session?.user) {
-            checkUserRole(session.user).catch(err => {
-              console.error('Error checking user role:', err);
-            });
+            await ensureUserProfile(session.user);
+            await checkUserRole(session.user);
+          } else {
+            setUserRole(null);
           }
         }
       } catch (error) {
@@ -163,6 +224,7 @@ export const AuthProvider = ({ children }) => {
             recentEmailConfirmationRef.current = false;
           }, 5000);
           if (session?.user) {
+            await ensureUserProfile(session.user);
             await checkUserRole(session.user);
           }
           setLoading(false);
@@ -178,6 +240,7 @@ export const AuthProvider = ({ children }) => {
           setUser(session?.user ?? null);
           // Check role from profiles if needed
           if (session?.user) {
+            await ensureUserProfile(session.user);
             await checkUserRole(session.user);
           }
           setLoading(false);
@@ -195,6 +258,7 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
+            await ensureUserProfile(session.user);
             await checkUserRole(session.user);
           }
           setLoading(false);
@@ -215,6 +279,7 @@ export const AuthProvider = ({ children }) => {
           setUser(session?.user ?? null);
           // Check role from profiles if needed
           if (session?.user) {
+            await ensureUserProfile(session.user);
             await checkUserRole(session.user);
           }
         } else {
@@ -313,38 +378,55 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkUserRole = async (user) => {
-    // Profiles table is the source of truth; fallback to user_metadata only if profile has no role
+    if (!user?.id) {
+      setUserRole(null);
+      return;
+    }
+
+    // Clear stale role (e.g. coach from previous account) while fetching from profiles
+    setUserRole(null);
+
     let role = null;
     try {
-      // Add timeout to prevent hanging
-      const profileQuery = supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      
-      const { data: profile } = await Promise.race([
-        profileQuery,
-        new Promise((_, reject) => 
+      const { data: profile, error: profileError } = await Promise.race([
+        supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Role query timeout')), 3000)
-        )
+        ),
       ]);
-      
+
+      if (profileError) {
+        console.error('checkUserRole profiles error:', profileError.message);
+      }
       if (profile?.role && ['admin', 'coach', 'student'].includes(profile.role)) {
         role = profile.role;
       }
     } catch (e) {
-      // ignore - will fallback to user_metadata
+      console.error('checkUserRole failed:', e?.message || e);
     }
+
+    // Only use metadata when profiles row is missing — never override a resolved profile role
     if (!role && user?.user_metadata?.role && ['admin', 'coach', 'student'].includes(user.user_metadata.role)) {
       role = user.user_metadata.role;
     }
-    setUserRole(role || 'student');
+
+    const resolved = role || 'student';
+    setUserRole(resolved);
+
+    if (role && role !== user.user_metadata?.role) {
+      try {
+        await supabase.auth.updateUser({ data: { role } });
+      } catch {
+        // non-blocking: keep login working if metadata sync fails
+      }
+    }
   };
 
   const signUp = async (email, password, userData) => {
     try {
-      const options = { data: userData };
+      // Public signup is always student (coaches/admins are created in admin flows)
+      const signupMeta = { ...userData, role: 'student' };
+      const options = { data: signupMeta };
       // Ensure verification link redirects to this app (web). Supabase uses Site URL if not set.
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
         options.emailRedirectTo = window.location.origin;
@@ -387,36 +469,22 @@ export const AuthProvider = ({ children }) => {
         };
         return { data: null, error: duplicateError };
       }
-      
+
+      // DB trigger should create profile; this covers immediate session + confirmed signup
       if (data.session) {
-        if (userData?.phone && data.user?.id) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({ phone: userData.phone })
-              .eq('id', data.user.id);
-          } catch {
-            // Don't fail signup if phone save fails
-          }
-        }
+        await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
+        await checkUserRole(data.user);
         return { data, error: null };
       }
-      
+
       const emailConfirmed = data?.user?.email_confirmed_at;
-      
+
       if (!emailConfirmed) {
-        if (userData?.phone && data.user?.id) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({ phone: userData.phone })
-              .eq('id', data.user.id);
-          } catch {
-            // Don't fail signup if phone save fails
-          }
-        }
+        // No session until email is confirmed — profile must come from handle_new_user trigger
         return { data, error: null };
       }
+
+      await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
       
       // Email confirmed but no session - try to sign in
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -484,33 +552,10 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) throw error;
-      
-      // Check role from user_metadata first
-      let userRole = data.user?.user_metadata?.role;
-      
-      // If not in user_metadata, check profiles table
-      if (!userRole || (userRole !== 'admin' && userRole !== 'coach' && userRole !== 'student')) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (!profileError && profile?.role) {
-          userRole = profile.role;
-          
-          // Sync role back to user_metadata for future logins
-          if (userRole === 'admin' || userRole === 'coach' || userRole === 'student') {
-            await supabase.auth.updateUser({
-              data: { role: userRole }
-            });
-          }
-        }
-      }
-      
-      // Update state
-      setUserRole(userRole);
-      
+
+      await ensureUserProfile(data.user);
+      await checkUserRole(data.user);
+
       return { data, error: null };
     } catch (error) {
       return { data: null, error };

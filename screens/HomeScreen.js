@@ -58,13 +58,12 @@ const getIsDesktop = () => {
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.85);
 
 export default function HomeScreen() {
-  const { signOut, user, isAdmin, userRole } = useAuth();
+  const { signOut, user, isAdmin, userRole, roleLoading } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [activeScreen, setActiveScreen] = useState('dashboard');
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
-  const [initialScreenSet, setInitialScreenSet] = useState(false);
   const [serviceFilter, setServiceFilter] = useState(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   
@@ -76,31 +75,37 @@ export default function HomeScreen() {
     message: '',
   });
 
-  // Set initial screen based on user role (only once when role is first determined)
-  useEffect(() => {
-    if (!initialScreenSet && userRole !== null && userRole !== undefined) {
-      if (userRole === 'coach') {
-        setActiveScreen('coach-dashboard');
-      } else if (userRole === 'admin') {
-        setActiveScreen('admin-dashboard');
-      } else {
-        setActiveScreen('dashboard'); // Students start on Dashboard screen
-      }
-      setInitialScreenSet(true);
-    }
-  }, [userRole, initialScreenSet]);
+  const homeScreenForRole = (role) => {
+    if (role === 'admin') return 'admin-dashboard';
+    if (role === 'coach') return 'coach-dashboard';
+    return 'dashboard';
+  };
 
-  // STRICT: Monitor activeScreen and redirect coaches if they somehow access restricted screens
-  // CRITICAL: Coaches should NEVER see admin functions - they can ONLY access coach-dashboard and profile
+  // Route to the correct home when role is resolved (profiles is source of truth)
   useEffect(() => {
-    if (userRole === 'coach') {
-      const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
-      if (!allowedScreens.includes(activeScreen)) {
-        console.warn(`Coach on restricted screen: ${activeScreen}. Redirecting to coach-dashboard.`);
-        setActiveScreen('coach-dashboard');
+    if (roleLoading || userRole == null) return;
+    const target = homeScreenForRole(userRole);
+    setActiveScreen((current) => {
+      if (userRole === 'admin') {
+        if (current === 'coach-dashboard' || current === 'dashboard') return target;
       }
+      if (userRole === 'coach' && current.startsWith('admin-') && current !== 'admin-performance') {
+        return target;
+      }
+      const roleDefaults = ['dashboard', 'admin-dashboard', 'coach-dashboard'];
+      if (roleDefaults.includes(current)) return target;
+      return current;
+    });
+  }, [userRole, roleLoading, user?.id]);
+
+  // Coaches cannot access admin-only screens
+  useEffect(() => {
+    if (roleLoading || userRole !== 'coach') return;
+    const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
+    if (!allowedScreens.includes(activeScreen)) {
+      setActiveScreen('coach-dashboard');
     }
-  }, [activeScreen, userRole]);
+  }, [activeScreen, userRole, roleLoading]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -815,6 +820,7 @@ export default function HomeScreen() {
   };
 
   const handleNavigate = (screen) => {
+    if (roleLoading) return;
     if (userRole === 'coach') {
       const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
       if (!allowedScreens.includes(screen)) {
@@ -979,9 +985,15 @@ export default function HomeScreen() {
           );
         }
         return studentFallbackDashboard;
-      // Coach screens
+      // Coach screens — never show coach UI to admins (stale URL / screen state)
       case 'coach-dashboard':
-        return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        if (userRole === 'admin') {
+          return <AdminDashboardScreen onNavigate={handleNavigate} />;
+        }
+        if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return studentFallbackDashboard;
       default:
         // Default to dashboard for students
         if (userRole === 'student' || (!userRole || (userRole !== 'admin' && userRole !== 'coach'))) {
@@ -1020,6 +1032,15 @@ export default function HomeScreen() {
 
   // While returning from Stripe, user may not be loaded yet. Show a focused state
   // so we don't render Dashboard etc. with null user; payment effect will run when user is ready.
+  if (user && roleLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
   const hasPendingStripe = Platform.OS === 'web' && typeof sessionStorage !== 'undefined' && sessionStorage.getItem('stripe_session_id');
   if (!user && hasPendingStripe) {
     return (

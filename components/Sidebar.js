@@ -33,45 +33,13 @@ const ADMIN_NAV_ITEMS = [
 ];
 
 export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile = false, hideHeader = false }) {
-  const { user } = useAuth();
+  const { user, userRole: authUserRole, roleLoading } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
-  const [profileRole, setProfileRole] = useState(undefined); // undefined = not yet loaded; from profiles table only
   const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
 
-  // Diagnostic: confirm Sidebar mounts (you should see this if the component is in the tree).
-  useEffect(() => {
-    console.log("[Sidebar] MOUNTED");
-    return () => console.log("[Sidebar] UNMOUNTED");
-  }, []);
-
-  // Fetch role ONLY from profiles table. Logging + strict default: on error, force 'student'.
-  useEffect(() => {
-    console.log("[Sidebar] getRole effect ran. user?.id =", user?.id);
-    if (!user?.id) return;
-
-    async function getRole() {
-      console.log("[Sidebar] Fetching role for UID:", user.id);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (error) {
-        console.error("[Sidebar] Supabase Error:", error.message);
-        setProfileRole('student'); // Force student on error
-      } else {
-        console.log("[Sidebar] DATABASE ROLE RECEIVED:", data.role);
-        setProfileRole(data.role);
-      }
-    }
-
-    getRole();
-  }, [user?.id]);
-
-  // userRole for nav: from profiles only. Default to 'student' if missing.
-  const userRole = profileRole || 'student';
+  // Same role as HomeScreen (AuthContext loads from profiles first)
+  const userRole = roleLoading || authUserRole == null ? undefined : authUserRole;
 
   // Hard filter before .map(): coach sees only Coach Dashboard + Profile; admin sees all in non-admin (we give them none—they use admin block); student sees Home, Profile, History.
   const filteredNav = useMemo(
@@ -83,6 +51,8 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
       }),
     [userRole]
   );
+
+  if (userRole === undefined) return null;
 
   // Only admins: unassigned bookings count
   useEffect(() => {
@@ -120,9 +90,6 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
     t('user');
 
   const roleLabel = t(userRole === 'coach' ? 'coach' : userRole === 'admin' ? 'admin' : 'student');
-
-  // Flicker fix: if role is not yet loaded from DB, do not render a single link. Return null for the entire Sidebar.
-  if (profileRole === undefined) return null;
 
   return (
     <View style={[styles.container, isMobile && styles.mobileContainer]}>
