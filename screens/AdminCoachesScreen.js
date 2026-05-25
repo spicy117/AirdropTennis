@@ -16,8 +16,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 // Supabase configuration (should match lib/supabase.js)
-const SUPABASE_URL = 'https://qdlzumzkhbnxpkprbuju.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbHp1bXpraGJueHBrcHJidWp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMzcyOTQsImV4cCI6MjA4MzkxMzI5NH0.eT8PBsjdPxRodqIf5e_JRKVV-PztvkG06DDaKjc7fas';
+const SUPABASE_URL = 'https://rozxeqqwxpnfqbyvtvch.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJvenhlcXF3eHBuZnFieXZ0dmNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDMyMjAsImV4cCI6MjA5NTI3OTIyMH0.B3yitpbI_JWRiBpkYfZG2D4CIH5AGrjgn_lgIBjjK-4';
 
 export default function AdminCoachesScreen({ onNavigate }) {
   const { user } = useAuth();
@@ -285,7 +285,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
             text: 'Open Supabase Dashboard',
             onPress: () => {
               if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                window.open('https://supabase.com/dashboard/project/qdlzumzkhbnxpkprbuju/auth/users', '_blank');
+                window.open('https://supabase.com/dashboard/project/rozxeqqwxpnfqbyvtvch/auth/users', '_blank');
               }
             },
           },

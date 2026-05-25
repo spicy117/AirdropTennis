@@ -33,7 +33,7 @@ if (fs.existsSync(envPath)) {
 
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qdlzumzkhbnxpkprbuju.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://rozxeqqwxpnfqbyvtvch.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DEFAULT_PASSWORD = process.env.BULK_IMPORT_DEFAULT_PASSWORD;
 
