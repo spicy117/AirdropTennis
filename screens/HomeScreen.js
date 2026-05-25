@@ -87,7 +87,15 @@ export default function HomeScreen() {
     const target = homeScreenForRole(userRole);
     setActiveScreen((current) => {
       if (userRole === 'admin') {
-        if (current === 'coach-dashboard' || current === 'dashboard') return target;
+        if (
+          current === 'coach-dashboard' ||
+          current === 'dashboard' ||
+          current === 'bookings' ||
+          current === 'history' ||
+          current === 'performance'
+        ) {
+          return target;
+        }
       }
       if (userRole === 'coach' && current.startsWith('admin-') && current !== 'admin-performance') {
         return target;

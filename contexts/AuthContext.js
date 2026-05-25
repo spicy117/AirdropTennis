@@ -62,12 +62,11 @@ async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
     // academies table optional during setup
   }
 
-  const payload = {
+  const profileFields = {
     first_name,
     last_name,
     full_name,
     phone,
-    role,
     email,
     ...(academy_id ? { academy_id } : {}),
   };
@@ -79,14 +78,17 @@ async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
     .maybeSingle();
 
   if (existing?.id) {
-    const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
+    // Never overwrite role from auth metadata on update — admins are promoted in Supabase/dashboard.
+    const updatePayload = forceRole ? { ...profileFields, role: forceRole } : profileFields;
+    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
     if (error) console.error('ensureUserProfile update failed:', error.message);
     return;
   }
 
   const { error: insertError } = await supabase.from('profiles').insert({
     id: user.id,
-    ...payload,
+    ...profileFields,
+    role,
   });
   if (insertError) {
     console.error('ensureUserProfile insert failed:', insertError.message);
@@ -169,7 +171,7 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            resolveProfileAndRoleRef.current?.(session.user);
+            resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
           } else {
             setUserRole(null);
           }
@@ -197,7 +199,7 @@ export const AuthProvider = ({ children }) => {
         if (!isPasswordRecovery && !isRecoverySession && !persistedRecovery) {
           setSession(session);
           setUser(session.user);
-          resolveProfileAndRoleRef.current?.(session.user);
+          resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
         }
         setLoading(false);
         return;
@@ -237,7 +239,7 @@ export const AuthProvider = ({ children }) => {
             recentEmailConfirmationRef.current = false;
           }, 5000);
           if (session?.user) {
-            resolveProfileAndRoleRef.current?.(session.user);
+            resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
           }
           setLoading(false);
           return;
@@ -251,7 +253,7 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            resolveProfileAndRoleRef.current?.(session.user);
+            resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
           }
           setLoading(false);
         } else if (isRecoverySession) {
@@ -268,7 +270,7 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            resolveProfileAndRoleRef.current?.(session.user);
+            resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
           }
           setLoading(false);
         } else {
@@ -425,25 +427,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const resolveProfileAndRole = (user) => {
+  const resolveProfileAndRole = (user, { clearStaleRole = false } = {}) => {
     if (!user?.id) {
       setUserRole(null);
       return;
     }
+    if (clearStaleRole) {
+      setUserRole(null);
+    }
     void Promise.race([
       (async () => {
-        await ensureUserProfile(user);
         await checkUserRole(user);
+        await ensureUserProfile(user);
       })(),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Profile/role load timeout')), PROFILE_ROLE_LOAD_TIMEOUT_MS)
       ),
-    ]).catch((e) => {
+    ]).catch(async (e) => {
       console.error('resolveProfileAndRole failed:', e?.message || e);
-      const fallback = user?.user_metadata?.role;
-      setUserRole(
-        ['admin', 'coach', 'student'].includes(fallback) ? fallback : 'student'
-      );
+      try {
+        await checkUserRole(user);
+      } catch {
+        const fallback = user?.user_metadata?.role;
+        setUserRole(
+          ['admin', 'coach', 'student'].includes(fallback) ? fallback : 'student'
+        );
+      }
     });
   };
   resolveProfileAndRoleRef.current = resolveProfileAndRole;
@@ -498,7 +507,7 @@ export const AuthProvider = ({ children }) => {
 
       // DB trigger should create profile; this covers immediate session + confirmed signup
       if (data.session) {
-        await ensureUserProfile(data.user, signupMeta);
+        await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
         await checkUserRole(data.user);
         return { data, error: null };
       }
@@ -510,7 +519,7 @@ export const AuthProvider = ({ children }) => {
         return { data, error: null };
       }
 
-      await ensureUserProfile(data.user, signupMeta);
+      await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
       
       // Email confirmed but no session - try to sign in
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -579,8 +588,9 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      await ensureUserProfile(data.user);
+      setUserRole(null);
       await checkUserRole(data.user);
+      await ensureUserProfile(data.user);
 
       return { data, error: null };
     } catch (error) {
@@ -641,12 +651,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const isAdmin = () => {
-    if (userRole === 'coach') return false;
-    const metadataRole = user?.user_metadata?.role;
-    const profileRole = userRole;
-    return profileRole === 'admin' || metadataRole === 'admin';
-  };
+  const isAdmin = () => userRole === 'admin';
 
   const refreshUserRole = async () => {
     if (user) {
