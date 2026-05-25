@@ -95,7 +95,8 @@ async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
   }
 }
 
-const SESSION_LOAD_TIMEOUT_MS = 10000;
+// Fallback only if INITIAL_SESSION never fires (do not call getSession in parallel with onAuthStateChange — it can hang).
+const AUTH_INIT_FALLBACK_MS = 5000;
 const PROFILE_ROLE_LOAD_TIMEOUT_MS = 8000;
 
 export const AuthProvider = ({ children }) => {
@@ -109,6 +110,7 @@ export const AuthProvider = ({ children }) => {
   // Track if we just processed an email confirmation to prevent false SIGNED_OUT events
   const recentEmailConfirmationRef = useRef(false);
   const resolveProfileAndRoleRef = useRef(null);
+  const initialSessionHandledRef = useRef(false);
 
   // Helper to update recovery mode state and storage
   const updateRecoveryMode = (value) => {
@@ -133,74 +135,44 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    // Get initial session (generous timeout; onAuthStateChange also delivers session)
-    Promise.race([
-      supabase.auth.getSession(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Session load timeout')), SESSION_LOAD_TIMEOUT_MS)
-      ),
-    ]).then(async (result) => {
-      const { data: { session } } = result;
-      try {
-        // Check if this is a recovery session or email confirmation
-        const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
-          ? window.location.hash 
-          : '';
-        const isRecovery = hash && hash.includes('type=recovery');
-        const isSignupConfirmation = hash && hash.includes('type=signup');
-        const isRecoveryMode = (isRecovery || isRecoveryFromHash || persistedRecoveryMode) && !isSignupConfirmation;
-        
-        if (isRecoveryMode) {
-          updateRecoveryMode(true);
-          // Don't set session for recovery - user needs to reset password first
-          // Also sign out to clear any session Supabase might have stored
-          if (session) {
-            supabase.auth.signOut().catch(() => {
-              // Ignore errors - we're already clearing the session
-            });
-          }
-          setSession(null);
-          setUser(null);
-          setUserRole(null);
-        } else {
-          // Normal session or email confirmation - set the session
-          // Clear any stale recovery mode for email confirmations
-          if (isSignupConfirmation) {
-            updateRecoveryMode(false);
-          }
-          setSession(session);
-          setUser(session?.user ?? null);
-          if (session?.user) {
-            resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
-          } else {
-            setUserRole(null);
-          }
+    const applyInitialSession = (session) => {
+      const hash =
+        Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hash : '';
+      const isRecovery = hash && hash.includes('type=recovery');
+      const isSignupConfirmation = hash && hash.includes('type=signup');
+      const isRecoveryMode =
+        (isRecovery || isRecoveryFromHash || persistedRecoveryMode) && !isSignupConfirmation;
+
+      if (isRecoveryMode) {
+        updateRecoveryMode(true);
+        if (session) {
+          supabase.auth.signOut().catch(() => {});
         }
-      } catch (error) {
-        console.error('Error processing session:', error);
-      } finally {
-        setLoading(false);
+        setSession(null);
+        setUser(null);
+        setUserRole(null);
+        return;
       }
-    }).catch((error) => {
-      console.error('Error getting initial session (or timeout):', error);
-      // Keep loading false; onAuthStateChange may still deliver the session
-      setLoading(false);
-    });
+
+      if (isSignupConfirmation) {
+        updateRecoveryMode(false);
+      }
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
+      } else {
+        setUserRole(null);
+      }
+    };
 
     // Listen for auth changes (including email verification callbacks)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' && session?.user) {
-        const hash =
-          Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hash : '';
-        const isRecoverySession = hash && hash.includes('type=recovery');
-        const persistedRecovery = getRecoveryModeFromStorage();
-        if (!isPasswordRecovery && !isRecoverySession && !persistedRecovery) {
-          setSession(session);
-          setUser(session.user);
-          resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
-        }
+      if (event === 'INITIAL_SESSION') {
+        initialSessionHandledRef.current = true;
+        applyInitialSession(session);
         setLoading(false);
         return;
       }
@@ -382,7 +354,26 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    const fallbackTimer = setTimeout(async () => {
+      if (initialSessionHandledRef.current) return;
+      initialSessionHandledRef.current = true;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        applyInitialSession(session);
+      } catch (e) {
+        console.warn('Auth init fallback:', e?.message || e);
+        setSession(null);
+        setUser(null);
+        setUserRole(null);
+      } finally {
+        setLoading(false);
+      }
+    }, AUTH_INIT_FALLBACK_MS);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkUserRole = async (user) => {
