@@ -93,6 +93,9 @@ async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
   }
 }
 
+const SESSION_LOAD_TIMEOUT_MS = 10000;
+const PROFILE_ROLE_LOAD_TIMEOUT_MS = 8000;
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +106,7 @@ export const AuthProvider = ({ children }) => {
   const roleLoading = user !== null && userRole === null;
   // Track if we just processed an email confirmation to prevent false SIGNED_OUT events
   const recentEmailConfirmationRef = useRef(false);
+  const resolveProfileAndRoleRef = useRef(null);
 
   // Helper to update recovery mode state and storage
   const updateRecoveryMode = (value) => {
@@ -127,12 +131,12 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    // Get initial session with timeout to prevent hanging
+    // Get initial session (generous timeout; onAuthStateChange also delivers session)
     Promise.race([
       supabase.auth.getSession(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Session load timeout')), 2000)
-      )
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session load timeout')), SESSION_LOAD_TIMEOUT_MS)
+      ),
     ]).then(async (result) => {
       const { data: { session } } = result;
       try {
@@ -165,24 +169,19 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            await ensureUserProfile(session.user);
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           } else {
             setUserRole(null);
           }
         }
       } catch (error) {
         console.error('Error processing session:', error);
-        // Still set loading to false so app can render
       } finally {
         setLoading(false);
       }
     }).catch((error) => {
-      // Handle errors getting session - don't block the app from loading
       console.error('Error getting initial session (or timeout):', error);
-      setSession(null);
-      setUser(null);
-      setUserRole(null);
+      // Keep loading false; onAuthStateChange may still deliver the session
       setLoading(false);
     });
 
@@ -190,6 +189,20 @@ export const AuthProvider = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION' && session?.user) {
+        const hash =
+          Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.hash : '';
+        const isRecoverySession = hash && hash.includes('type=recovery');
+        const persistedRecovery = getRecoveryModeFromStorage();
+        if (!isPasswordRecovery && !isRecoverySession && !persistedRecovery) {
+          setSession(session);
+          setUser(session.user);
+          resolveProfileAndRoleRef.current?.(session.user);
+        }
+        setLoading(false);
+        return;
+      }
+
       // Handle password recovery - don't auto-login
       if (event === 'PASSWORD_RECOVERY') {
         updateRecoveryMode(true);
@@ -224,8 +237,7 @@ export const AuthProvider = ({ children }) => {
             recentEmailConfirmationRef.current = false;
           }, 5000);
           if (session?.user) {
-            await ensureUserProfile(session.user);
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           }
           setLoading(false);
           return;
@@ -238,10 +250,8 @@ export const AuthProvider = ({ children }) => {
           updateRecoveryMode(false);
           setSession(session);
           setUser(session?.user ?? null);
-          // Check role from profiles if needed
           if (session?.user) {
-            await ensureUserProfile(session.user);
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           }
           setLoading(false);
         } else if (isRecoverySession) {
@@ -258,8 +268,7 @@ export const AuthProvider = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            await ensureUserProfile(session.user);
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           }
           setLoading(false);
         } else {
@@ -277,10 +286,8 @@ export const AuthProvider = ({ children }) => {
         if (!isPasswordRecovery && !persistedRecovery) {
           setSession(session);
           setUser(session?.user ?? null);
-          // Check role from profiles if needed
           if (session?.user) {
-            await ensureUserProfile(session.user);
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           }
         } else {
           // Still in recovery mode - don't set session
@@ -332,7 +339,7 @@ export const AuthProvider = ({ children }) => {
             setSession(currentSession);
             setUser(currentSession?.user ?? null);
             if (currentSession?.user) {
-              await checkUserRole(currentSession.user);
+              resolveProfileAndRoleRef.current?.(currentSession.user);
             }
           } else if (hasSessionInState) {
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -341,7 +348,7 @@ export const AuthProvider = ({ children }) => {
               setSession(retrySession);
               setUser(retrySession?.user ?? null);
               if (retrySession?.user) {
-                await checkUserRole(retrySession.user);
+                resolveProfileAndRoleRef.current?.(retrySession.user);
               }
             }
           }
@@ -359,9 +366,8 @@ export const AuthProvider = ({ children }) => {
         if (!persistedRecovery) {
           setSession(session);
           setUser(session?.user ?? null);
-          // Check role from profiles if needed
           if (session?.user) {
-            await checkUserRole(session.user);
+            resolveProfileAndRoleRef.current?.(session.user);
           }
         } else {
           // Still in recovery mode
@@ -382,9 +388,6 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       return;
     }
-
-    // Clear stale role (e.g. coach from previous account) while fetching from profiles
-    setUserRole(null);
 
     let role = null;
     try {
@@ -421,6 +424,29 @@ export const AuthProvider = ({ children }) => {
       }
     }
   };
+
+  const resolveProfileAndRole = (user) => {
+    if (!user?.id) {
+      setUserRole(null);
+      return;
+    }
+    void Promise.race([
+      (async () => {
+        await ensureUserProfile(user);
+        await checkUserRole(user);
+      })(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile/role load timeout')), PROFILE_ROLE_LOAD_TIMEOUT_MS)
+      ),
+    ]).catch((e) => {
+      console.error('resolveProfileAndRole failed:', e?.message || e);
+      const fallback = user?.user_metadata?.role;
+      setUserRole(
+        ['admin', 'coach', 'student'].includes(fallback) ? fallback : 'student'
+      );
+    });
+  };
+  resolveProfileAndRoleRef.current = resolveProfileAndRole;
 
   const signUp = async (email, password, userData) => {
     try {
@@ -472,7 +498,7 @@ export const AuthProvider = ({ children }) => {
 
       // DB trigger should create profile; this covers immediate session + confirmed signup
       if (data.session) {
-        await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
+        await ensureUserProfile(data.user, signupMeta);
         await checkUserRole(data.user);
         return { data, error: null };
       }
@@ -484,7 +510,7 @@ export const AuthProvider = ({ children }) => {
         return { data, error: null };
       }
 
-      await ensureUserProfile(data.user, signupMeta, { forceRole: 'student' });
+      await ensureUserProfile(data.user, signupMeta);
       
       // Email confirmed but no session - try to sign in
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({

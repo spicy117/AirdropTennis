@@ -225,18 +225,18 @@ function AppNavigator() {
 
   // Add fallback timeout - if loading takes more than 5 seconds, show app anyway
   const [loadingTimeout, setLoadingTimeout] = useState(false);
-  useEffect(() => {
-    if (loading) {
+  const waitingForRole = session && roleLoading;
+
+  useEffect(() {
+    if (loading || waitingForRole) {
       const timeout = setTimeout(() => {
         setLoadingTimeout(true);
-      }, 5000);
+      }, 6000);
       return () => clearTimeout(timeout);
-    } else {
-      setLoadingTimeout(false);
     }
-  }, [loading]);
+    setLoadingTimeout(false);
+  }, [loading, waitingForRole]);
 
-  const waitingForRole = session && roleLoading;
   if ((loading || waitingForRole) && !hasPendingStripeRedirect && !loadingTimeout) {
     return (
       <View style={styles.loadingContainer}>
