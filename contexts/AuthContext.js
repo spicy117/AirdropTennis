@@ -99,6 +99,11 @@ async function ensureUserProfile(user, userData = {}, { forceRole } = {}) {
 const AUTH_INIT_FALLBACK_MS = 5000;
 const PROFILE_ROLE_LOAD_TIMEOUT_MS = 8000;
 
+/** Temporary bootstrap admins — guaranteed admin UI even if metadata/RLS is stale. */
+const BOOTSTRAP_ADMIN_IDS = new Set([
+  '746f5c51-f9d2-4dc0-9792-071aefe36f22',
+]);
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -384,6 +389,22 @@ export const AuthProvider = ({ children }) => {
     if (!user?.id) {
       setUserRole(null);
       return null;
+    }
+
+    // Hard guarantee for known admin account (fixes stale coach metadata / RLS misses)
+    if (BOOTSTRAP_ADMIN_IDS.has(user.id)) {
+      setUserRole('admin');
+      if (user.user_metadata?.role !== 'admin') {
+        void supabase.auth.updateUser({ data: { role: 'admin' } }).catch(() => {});
+      }
+      void supabase
+        .from('profiles')
+        .update({ role: 'admin' })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.warn('bootstrap admin profile update:', error.message);
+        });
+      return 'admin';
     }
 
     let role = null;
