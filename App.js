@@ -227,11 +227,11 @@ function AppNavigator() {
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const waitingForRole = session && roleLoading;
 
-  useEffect(() {
+  useEffect(() => {
     if (loading || waitingForRole) {
       const timeout = setTimeout(() => {
         setLoadingTimeout(true);
-      }, 6000);
+      }, 4000);
       return () => clearTimeout(timeout);
     }
     setLoadingTimeout(false);

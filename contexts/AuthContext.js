@@ -160,7 +160,11 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        resolveProfileAndRoleRef.current?.(session.user, { clearStaleRole: true });
+        // Don't clear role on reload (same user) — only clear when account changes
+        const switchingUser = user?.id && user.id !== session.user.id;
+        resolveProfileAndRoleRef.current?.(session.user, {
+          clearStaleRole: !!switchingUser,
+        });
       } else {
         setUserRole(null);
       }
@@ -379,7 +383,7 @@ export const AuthProvider = ({ children }) => {
   const checkUserRole = async (user) => {
     if (!user?.id) {
       setUserRole(null);
-      return;
+      return null;
     }
 
     let role = null;
@@ -387,7 +391,7 @@ export const AuthProvider = ({ children }) => {
       const { data: profile, error: profileError } = await Promise.race([
         supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Role query timeout')), 3000)
+          setTimeout(() => reject(new Error('Role query timeout')), 2500)
         ),
       ]);
 
@@ -409,13 +413,11 @@ export const AuthProvider = ({ children }) => {
     const resolved = role || 'student';
     setUserRole(resolved);
 
+    // Sync metadata in background — never block login on this
     if (role && role !== user.user_metadata?.role) {
-      try {
-        await supabase.auth.updateUser({ data: { role } });
-      } catch {
-        // non-blocking: keep login working if metadata sync fails
-      }
+      void supabase.auth.updateUser({ data: { role } }).catch(() => {});
     }
+    return resolved;
   };
 
   const resolveProfileAndRole = (user, { clearStaleRole = false } = {}) => {
@@ -423,28 +425,41 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       return;
     }
+    // Only clear when switching accounts; clearing on every reload causes an infinite spinner
+    // if the profiles read is slow/blocked.
     if (clearStaleRole) {
       setUserRole(null);
     }
-    void Promise.race([
-      (async () => {
-        await checkUserRole(user);
-        await ensureUserProfile(user);
-      })(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile/role load timeout')), PROFILE_ROLE_LOAD_TIMEOUT_MS)
-      ),
-    ]).catch(async (e) => {
-      console.error('resolveProfileAndRole failed:', e?.message || e);
+
+    const fallbackRole = () => {
+      const meta = user?.user_metadata?.role;
+      setUserRole(['admin', 'coach', 'student'].includes(meta) ? meta : 'student');
+    };
+
+    // Always unblock UI within a few seconds even if Supabase hangs
+    const hardTimeout = setTimeout(fallbackRole, 3500);
+
+    void (async () => {
       try {
         await checkUserRole(user);
-      } catch {
-        const fallback = user?.user_metadata?.role;
-        setUserRole(
-          ['admin', 'coach', 'student'].includes(fallback) ? fallback : 'student'
-        );
+      } catch (e) {
+        console.error('resolveProfileAndRole role failed:', e?.message || e);
+        fallbackRole();
+      } finally {
+        clearTimeout(hardTimeout);
       }
-    });
+      // Profile field sync must not gate role / UI
+      try {
+        await Promise.race([
+          ensureUserProfile(user),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Profile sync timeout')), PROFILE_ROLE_LOAD_TIMEOUT_MS)
+          ),
+        ]);
+      } catch (e) {
+        console.warn('ensureUserProfile skipped:', e?.message || e);
+      }
+    })();
   };
   resolveProfileAndRoleRef.current = resolveProfileAndRole;
 

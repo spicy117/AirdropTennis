@@ -1038,9 +1038,18 @@ export default function HomeScreen() {
     }
   };
 
-  // While returning from Stripe, user may not be loaded yet. Show a focused state
-  // so we don't render Dashboard etc. with null user; payment effect will run when user is ready.
-  if (user && roleLoading) {
+  // Brief wait for role; never spin forever (App.js also caps waitingForRole)
+  const [roleWaitTimedOut, setRoleWaitTimedOut] = useState(false);
+  useEffect(() => {
+    if (!user || !roleLoading) {
+      setRoleWaitTimedOut(false);
+      return;
+    }
+    const t = setTimeout(() => setRoleWaitTimedOut(true), 4000);
+    return () => clearTimeout(t);
+  }, [user, roleLoading]);
+
+  if (user && roleLoading && !roleWaitTimedOut) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar style="dark" />
