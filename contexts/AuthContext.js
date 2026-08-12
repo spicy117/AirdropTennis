@@ -388,32 +388,50 @@ export const AuthProvider = ({ children }) => {
 
     let role = null;
     try {
-      const { data: profile, error: profileError } = await Promise.race([
-        supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+      // Prefer SECURITY DEFINER RPC — always returns own profiles.role even if RLS is misconfigured
+      const rpcResult = await Promise.race([
+        supabase.rpc('get_my_role'),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Role query timeout')), 2500)
+          setTimeout(() => reject(new Error('get_my_role timeout')), 4000)
         ),
       ]);
-
-      if (profileError) {
-        console.error('checkUserRole profiles error:', profileError.message);
-      }
-      if (profile?.role && ['admin', 'coach', 'student'].includes(profile.role)) {
-        role = profile.role;
+      const rpcRole = rpcResult?.data;
+      if (typeof rpcRole === 'string' && ['admin', 'coach', 'student'].includes(rpcRole)) {
+        role = rpcRole;
+      } else if (rpcResult?.error) {
+        console.warn('get_my_role:', rpcResult.error.message);
       }
     } catch (e) {
-      console.error('checkUserRole failed:', e?.message || e);
+      console.warn('get_my_role failed:', e?.message || e);
     }
 
-    // Only use metadata when profiles row is missing — never override a resolved profile role
-    if (!role && user?.user_metadata?.role && ['admin', 'coach', 'student'].includes(user.user_metadata.role)) {
-      role = user.user_metadata.role;
+    // Fallback: direct profiles select
+    if (!role) {
+      try {
+        const { data: profile, error: profileError } = await Promise.race([
+          supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Role query timeout')), 4000)
+          ),
+        ]);
+
+        if (profileError) {
+          console.error('checkUserRole profiles error:', profileError.message);
+        }
+        if (profile?.role && ['admin', 'coach', 'student'].includes(profile.role)) {
+          role = profile.role;
+        }
+      } catch (e) {
+        console.error('checkUserRole failed:', e?.message || e);
+      }
     }
 
+    // Do NOT fall back to user_metadata for routing — it stays stale (e.g. coach)
+    // after you promote someone to admin in the profiles table.
     const resolved = role || 'student';
     setUserRole(resolved);
 
-    // Sync metadata in background — never block login on this
+    // Sync metadata in background so it eventually matches profiles
     if (role && role !== user.user_metadata?.role) {
       void supabase.auth.updateUser({ data: { role } }).catch(() => {});
     }
@@ -425,30 +443,24 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       return;
     }
-    // Only clear when switching accounts; clearing on every reload causes an infinite spinner
-    // if the profiles read is slow/blocked.
     if (clearStaleRole) {
       setUserRole(null);
     }
 
-    const fallbackRole = () => {
-      const meta = user?.user_metadata?.role;
-      setUserRole(['admin', 'coach', 'student'].includes(meta) ? meta : 'student');
-    };
-
-    // Always unblock UI within a few seconds even if Supabase hangs
-    const hardTimeout = setTimeout(fallbackRole, 3500);
+    // Only unblock if still null — never overwrite a real profiles role with stale metadata
+    const hardTimeout = setTimeout(() => {
+      setUserRole((current) => current ?? 'student');
+    }, 4500);
 
     void (async () => {
       try {
         await checkUserRole(user);
       } catch (e) {
         console.error('resolveProfileAndRole role failed:', e?.message || e);
-        fallbackRole();
+        setUserRole((current) => current ?? 'student');
       } finally {
         clearTimeout(hardTimeout);
       }
-      // Profile field sync must not gate role / UI
       try {
         await Promise.race([
           ensureUserProfile(user),
