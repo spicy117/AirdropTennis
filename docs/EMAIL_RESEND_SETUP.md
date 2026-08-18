@@ -23,7 +23,22 @@ The new project (`rozxeqqwxpnfqbyvtvch`) needs either:
 
 ---
 
-## Step 1 — Resend account & domain
+## Quick test (Resend sandbox — no custom domain yet)
+
+If your domain isn’t verified yet, Resend lets you send **from** `onboarding@resend.dev` **to the email on your Resend account only**.
+
+1. In Supabase → **Edge Functions** → **Secrets**, add:
+   - `RESEND_API_KEY` = your `re_...` key
+   - `RESEND_FROM_EMAIL` = `onboarding@resend.dev`
+2. Deploy `auth-send-email` and enable the Send Email hook (steps below).
+3. Sign up on the app using **the same email as your Resend account** (e.g. `jasper.kofkin1@gmail.com`).
+
+Once `airdroptennis.com` is verified in Resend, switch to:
+`RESEND_FROM_EMAIL` = `Airdrop Tennis <noreply@airdroptennis.com>`
+
+> **Security:** Never commit API keys to git. Store only in Supabase secrets. If a key was shared in chat or code, rotate it in Resend → API Keys.
+
+---
 
 1. Sign up at [resend.com](https://resend.com).
 2. **Domains** → Add `airdroptennis.com`.
@@ -36,6 +51,18 @@ Use a verified sender, e.g. `noreply@airdroptennis.com`.
 ---
 
 ## Step 2 — Deploy the auth email Edge Function
+
+### Option A: Supabase Dashboard (no CLI)
+
+1. **Edge Functions** → **Create function** → name: `auth-send-email`
+2. Paste the code from `supabase/functions/auth-send-email/index.ts` in this repo.
+3. **Deploy** with **JWT verification OFF** (auth hooks call this without a user JWT).
+4. **Edge Functions → Secrets** → add:
+   - `RESEND_API_KEY`
+   - `RESEND_FROM_EMAIL` (use `onboarding@resend.dev` for sandbox testing)
+5. Copy the function URL for the hook step below.
+
+### Option B: Supabase CLI
 
 From the project root (with [Supabase CLI](https://supabase.com/docs/guides/cli) linked to your project):
 
