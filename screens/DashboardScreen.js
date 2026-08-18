@@ -1673,17 +1673,16 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          {/* Credit Balance tile - hidden for now, re-enable when ready */}
-          {/* <StatCard
+          <StatCard
             icon="wallet"
             iconColor="#10B981"
             iconBg="rgba(16, 185, 129, 0.12)"
-            label="Credit Balance"
+            label={t('creditBalance')}
             value={loadingBalance ? '...' : `$${creditBalance.toFixed(2)}`}
-            action="Top Up"
+            action={t('topUp')}
             actionColor="#10B981"
             onAction={() => setShowTopUpModal(true)}
-          /> */}
+          />
           <StatCard
             icon="calendar"
             iconColor="#3B82F6"
