@@ -496,7 +496,14 @@ export default function AdminPerformancePage({ onBack }: AdminPerformancePagePro
                             strokeWidth={1}
                             radialLines
                           />
-                          <PolarAngleAxis dataKey="subject" tick={<RadarAngleTick />} />
+                          <PolarAngleAxis
+                            dataKey="subject"
+                            tick={(props) => <RadarAngleTick {...props} />}
+                            tickFormatter={(label: string) => {
+                              const item = radarData.find((d) => d.subject === label);
+                              return `${label} ${formatSkillScore(item?.value ?? 0)}`;
+                            }}
+                          />
                           <PolarRadiusAxis
                             angle={30}
                             domain={[0, 10]}
