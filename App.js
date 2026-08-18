@@ -43,12 +43,18 @@ function AppNavigator() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('session_id');
+      const credited = urlParams.get('credited');
+      const balance = urlParams.get('balance');
       if (sessionId) {
         sessionStorage.setItem('stripe_session_id', sessionId);
         sessionStorage.setItem('stripe_redirect_time', Date.now().toString());
-        // Clear session_id from URL so we don't re-detect; HomeScreen reads from sessionStorage
-        const path = window.location.pathname || '/home';
-        window.history.replaceState(null, '', path);
+      }
+      if (credited === '1') {
+        sessionStorage.setItem('stripe_credited', '1');
+        if (balance) sessionStorage.setItem('stripe_credited_balance', balance);
+      }
+      if (sessionId || credited === '1') {
+        window.history.replaceState(null, '', '/home');
       }
     }
   }, []);

@@ -1489,8 +1489,6 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
       setCreditBalance(balance);
     } catch (error) {
       console.error('Error loading wallet balance:', error);
-      // Set to 0 on error to prevent UI issues
-      setCreditBalance(0);
     } finally {
       setLoadingBalance(false);
     }

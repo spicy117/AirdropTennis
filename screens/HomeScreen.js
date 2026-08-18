@@ -132,8 +132,31 @@ export default function HomeScreen() {
   // Handle Stripe redirects after payment - comprehensive detection
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // Check for session_id immediately - check both URL and sessionStorage
       const urlParams = new URLSearchParams(window.location.search);
+      const alreadyCredited =
+        urlParams.get('credited') === '1' ||
+        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('stripe_credited') === '1');
+
+      if (alreadyCredited && user && !processedSessions.has('credited')) {
+        const storedBalance = sessionStorage.getItem('stripe_credited_balance');
+        const newBalance = storedBalance != null && storedBalance !== '' ? parseFloat(storedBalance) : undefined;
+        sessionStorage.removeItem('stripe_credited');
+        sessionStorage.removeItem('stripe_credited_balance');
+        sessionStorage.removeItem('stripe_session_id');
+        setProcessedSessions((prev) => new Set([...prev, 'credited']));
+        setBookingModal({
+          visible: true,
+          success: true,
+          title: 'Top-Up Successful!',
+          message:
+            newBalance != null && !Number.isNaN(newBalance)
+              ? `Your wallet has been topped up successfully. New balance: $${newBalance.toFixed(2)}`
+              : 'Your wallet has been topped up successfully.',
+        });
+        setDashboardRefreshKey((prev) => prev + 1);
+      }
+
+      // Check for session_id immediately - check both URL and sessionStorage
       let immediateSessionId = urlParams.get('session_id');
       
       // ALSO check sessionStorage (in case App.js captured it before URL was cleaned)
@@ -144,7 +167,7 @@ export default function HomeScreen() {
         }
       }
       
-      if (immediateSessionId) {
+      if (immediateSessionId && !alreadyCredited) {
         if (user && session && !processedSessions.has(immediateSessionId)) {
           handleStripeSuccess(immediateSessionId);
         }
@@ -169,6 +192,9 @@ export default function HomeScreen() {
 
         // Handle successful payment - if we have a session_id, process it
         if (sessionId) {
+          if (alreadyCredited || processedSessions.has('credited')) {
+            return;
+          }
           if (!user || !session) {
             setTimeout(() => checkRedirect(), 500);
             return;
