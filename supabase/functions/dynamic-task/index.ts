@@ -1,6 +1,7 @@
 // Stripe Checkout + payment verify for wallet top-up and lesson bookings.
-// Deploy: Edge Functions → dynamic-task (JWT verification ON)
-// Secrets: STRIPE_SECRET_KEY, APP_URL (optional, default app.airdroptennis.com)
+// Deploy: Edge Functions → dynamic-task
+// Verify JWT: OFF (verify-payment must run after Stripe redirect even if the user JWT is not ready)
+// Secrets: STRIPE_SECRET_KEY, APP_URL
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -68,23 +69,23 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     const action = payload?.action;
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const { data: authData, error: authError } = await userClient.auth.getUser();
-    const user = authData?.user;
-    if (authError || !user) {
-      return json({ error: "Unauthorized" }, 401);
+    async function getAuthUser() {
+      const authHeader = req.headers.get("Authorization") || "";
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: authData, error: authError } = await userClient.auth.getUser();
+      if (authError || !authData?.user) return null;
+      return authData.user;
     }
 
+    // Credit wallet from a paid Stripe session. Stripe is the source of truth —
+    // do not require a JWT (redirect-back often runs before session is restored).
     if (action === "verify-payment") {
       const sessionId = payload.sessionId as string;
-      const userId = (payload.userId as string) || user.id;
       if (!sessionId) return json({ error: "sessionId required" }, 400);
-      if (userId !== user.id) return json({ error: "user mismatch" }, 403);
 
       const session = await stripeGet(`checkout/sessions/${sessionId}`);
       if (session.payment_status !== "paid" && session.status !== "complete") {
@@ -93,17 +94,23 @@ Deno.serve(async (req) => {
 
       const meta = session.metadata || {};
       const type = meta.type || "topup";
+      const userId =
+        meta.userId ||
+        session.client_reference_id ||
+        payload.userId;
+      if (!userId) return json({ error: "No user on Stripe session" }, 400);
+
       const amountCents = Number(session.amount_total || 0);
       const amountDollars = amountCents / 100;
       const admin = serviceClient();
 
       let already = false;
-      const { data: existing, error: existingErr } = await admin
+      const { data: existing } = await admin
         .from("stripe_processed_sessions")
         .select("session_id")
         .eq("session_id", sessionId)
         .maybeSingle();
-      if (!existingErr && existing) already = true;
+      if (existing) already = true;
 
       if (!already && type === "topup" && amountDollars > 0) {
         const { error: creditErr } = await admin.rpc("add_wallet_balance", {
@@ -111,26 +118,21 @@ Deno.serve(async (req) => {
           amount: amountDollars,
         });
         if (creditErr) {
-          const { data: row, error: readErr } = await admin
+          const { data: row } = await admin
             .from("profiles")
             .select("wallet_balance")
             .eq("id", userId)
             .maybeSingle();
-          if (readErr) throw creditErr;
           const next = parseFloat(row?.wallet_balance || 0) + amountDollars;
           const { error: updErr } = await admin
             .from("profiles")
             .update({ wallet_balance: next })
             .eq("id", userId);
-          if (updErr) throw creditErr;
+          if (updErr) {
+            console.error("credit failed", creditErr, updErr);
+            throw new Error(creditErr.message || updErr.message || "Failed to credit wallet");
+          }
         }
-        await admin.from("stripe_processed_sessions").insert({
-          session_id: sessionId,
-          user_id: userId,
-          amount: amountDollars,
-          type,
-        });
-      } else if (!already) {
         await admin.from("stripe_processed_sessions").insert({
           session_id: sessionId,
           user_id: userId,
@@ -143,13 +145,18 @@ Deno.serve(async (req) => {
         .from("profiles")
         .select("wallet_balance")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
       return json({
         success: true,
         type,
         newBalance: parseFloat(profile?.wallet_balance || 0),
       });
+    }
+
+    const user = await getAuthUser();
+    if (!user) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
     // Create Checkout Session (top-up or booking)

@@ -58,7 +58,7 @@ const getIsDesktop = () => {
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.85);
 
 export default function HomeScreen() {
-  const { signOut, user, isAdmin, userRole, roleLoading } = useAuth();
+  const { signOut, user, session, isAdmin, userRole, roleLoading } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [activeScreen, setActiveScreen] = useState('dashboard');
@@ -127,6 +127,7 @@ export default function HomeScreen() {
 
   // Track processed session IDs to avoid duplicate processing
   const [processedSessions, setProcessedSessions] = useState(new Set());
+  const stripeInFlightRef = useRef(new Set());
 
   // Handle Stripe redirects after payment - comprehensive detection
   useEffect(() => {
@@ -144,13 +145,7 @@ export default function HomeScreen() {
       }
       
       if (immediateSessionId) {
-        // Process immediately if we have user
-        if (user && !processedSessions.has(immediateSessionId)) {
-          setProcessedSessions(prev => new Set([...prev, immediateSessionId]));
-          // Clear from sessionStorage
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.removeItem('stripe_session_id');
-          }
+        if (user && session && !processedSessions.has(immediateSessionId)) {
           handleStripeSuccess(immediateSessionId);
         }
       }
@@ -168,11 +163,13 @@ export default function HomeScreen() {
             sessionId = hashMatch[1];
           }
         }
+        if (!sessionId && typeof sessionStorage !== 'undefined') {
+          sessionId = sessionStorage.getItem('stripe_session_id');
+        }
 
         // Handle successful payment - if we have a session_id, process it
         if (sessionId) {
-          if (!user) {
-            // Retry in a moment when user might be loaded
+          if (!user || !session) {
             setTimeout(() => checkRedirect(), 500);
             return;
           }
@@ -181,7 +178,6 @@ export default function HomeScreen() {
             return;
           }
 
-          setProcessedSessions(prev => new Set([...prev, sessionId]));
           handleStripeSuccess(sessionId);
           return;
         }
@@ -225,12 +221,11 @@ export default function HomeScreen() {
         clearTimeout(timeoutId);
       };
     }
-  }, [user, processedSessions]);
+  }, [user, session, processedSessions]);
 
   const handleStripeSuccess = async (sessionId) => {
     if (!user) {
       console.error('❌ [PAYMENT] No user found, cannot verify payment');
-      Alert.alert('Error', 'You must be logged in to verify payment.');
       return;
     }
 
@@ -239,19 +234,27 @@ export default function HomeScreen() {
       return;
     }
 
+    if (processedSessions.has(sessionId) || stripeInFlightRef.current.has(sessionId)) {
+      return;
+    }
+    stripeInFlightRef.current.add(sessionId);
+
     try {
       // Verify payment and add funds to wallet (if it was a top-up)
-      // The Edge Function will check the session and add funds if payment was successful
-      // Add timeout to prevent hanging
       const result = await Promise.race([
         verifyPaymentAndAddFunds(sessionId, user.id),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Payment verification timeout')), 10000)
-        )
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Payment verification timeout')), 20000)
+        ),
       ]);
 
       if (!result || !result.success) {
         throw new Error(result?.error || 'Payment verification failed');
+      }
+
+      setProcessedSessions((prev) => new Set([...prev, sessionId]));
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('stripe_session_id');
       }
 
       // If this was a booking payment, create bookings from stored data (webhook/Edge
@@ -365,6 +368,8 @@ export default function HomeScreen() {
         title: 'Payment Error',
         message: errorMessage,
       });
+    } finally {
+      stripeInFlightRef.current.delete(sessionId);
     }
   };
 
