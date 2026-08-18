@@ -1666,7 +1666,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
             accessibilityLabel={`${streakCount} week streak. View performance.`}
             accessibilityRole="button"
           >
-            <Ionicons name="flash" size={14} color="#E3FF00" style={{ marginRight: 4 }} />
+            <Text style={{ fontSize: 13, marginRight: 4, lineHeight: 16 }}>🔥</Text>
             <Text style={styles.streakPillText}>{streakCount} week{streakCount !== 1 ? 's' : ''}</Text>
           </TouchableOpacity>
         )}

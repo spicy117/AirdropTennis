@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, ChevronLeft, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { ChevronLeft, Clock, CheckCircle, TrendingUp } from 'lucide-react';
 import {
   Radar,
   RadarChart,
@@ -138,33 +138,71 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
     fullMark: 10,
   }));
 
-  const baselineDateStr = baselineAssessedAt
-    ? new Date(baselineAssessedAt).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
-    : 'baseline';
+  const formatSkillScore = (n: number) => (Number(n) || 0).toFixed(1);
+
+  const strongestSkill = radarData.reduce((best, cur) => (cur.value > best.value ? cur : best), radarData[0]);
+  const focusSkill = radarData.reduce((weak, cur) => (cur.value < weak.value ? cur : weak), radarData[0]);
 
   const RadarTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: typeof radarData[0] }> }) => {
     if (!active || !payload?.length) return null;
     const d = payload[0]?.payload;
     if (!d) return null;
-    const improvement = d.value - d.baseline;
-    const sign = improvement >= 0 ? '+' : '';
     return (
       <div
+        className="perf-radar-tooltip"
         style={{
           backgroundColor: NAVY,
           color: '#fff',
-          padding: '10px 14px',
+          padding: '8px 12px',
           borderRadius: 10,
           fontSize: 13,
           fontWeight: 500,
           boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          whiteSpace: 'nowrap',
         }}
       >
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.subject}</div>
-        <div style={{ opacity: 0.9 }}>
-          {sign}{improvement} pts since {baselineDateStr}
-        </div>
+        {d.subject} · {formatSkillScore(d.value)} / 10
       </div>
+    );
+  };
+
+  const RadarAngleTick = ({
+    payload,
+    x,
+    y,
+    cx,
+    cy,
+  }: {
+    payload?: { value?: string };
+    x?: number;
+    y?: number;
+    cx?: number;
+    cy?: number;
+  }) => {
+    if (x == null || y == null || cx == null || cy == null || !payload?.value) return null;
+    const item = radarData.find((d) => d.subject === payload.value);
+    const dx = x - cx;
+    const dy = y - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const push = 18;
+    const nx = cx + (dx / dist) * (dist + push);
+    const ny = cy + (dy / dist) * (dist + push);
+    let anchor: 'start' | 'middle' | 'end' = 'middle';
+    if (nx > cx + 10) anchor = 'start';
+    else if (nx < cx - 10) anchor = 'end';
+    return (
+      <text
+        x={nx}
+        y={ny}
+        textAnchor={anchor}
+        dominantBaseline="middle"
+        fill={NAVY}
+        fontSize={12}
+        fontWeight={600}
+        style={{ fontFamily: FONT_STACK }}
+      >
+        {payload.value} {formatSkillScore(item?.value ?? 0)}
+      </text>
     );
   };
 
@@ -251,8 +289,10 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
               ],
             }}
             transition={{ duration: 2.5, repeat: Infinity }}
+            aria-hidden
+            style={{ fontSize: 28, lineHeight: 1 }}
           >
-            <Zap style={{ width: 28, height: 28, color: OPTIC_YELLOW }} fill={OPTIC_YELLOW} />
+            🔥
           </motion.div>
           <div style={{ textAlign: 'center' }}>
             <span
@@ -309,16 +349,32 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
             >
               Skills Profile
             </h2>
-            <div style={{ height: 260 }}>
+            <div className="perf-radar-wrap">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke={GRID_LIGHT} />
-                  <PolarAngleAxis
-                    dataKey="subject"
-                    tick={{ fill: NAVY, fontSize: 11, fontWeight: 600 }}
+                <RadarChart
+                  data={radarData}
+                  outerRadius="68%"
+                  margin={{ top: 36, right: 48, bottom: 36, left: 48 }}
+                >
+                  <PolarGrid
+                    gridType="circle"
+                    stroke={GRID_LIGHT}
+                    strokeWidth={1}
+                    radialLines
                   />
-                  <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                  <Tooltip content={<RadarTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                  <PolarAngleAxis dataKey="subject" tick={<RadarAngleTick />} />
+                  <PolarRadiusAxis
+                    angle={30}
+                    domain={[0, 10]}
+                    ticks={[2, 4, 6, 8, 10]}
+                    axisLine={false}
+                    tick={{ fill: '#94A3B8', fontSize: 11, fontWeight: 500 }}
+                  />
+                  <Tooltip
+                    content={<RadarTooltip />}
+                    cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }}
+                    trigger="hover"
+                  />
                   <Radar
                     name="Baseline"
                     dataKey="baseline"
@@ -326,17 +382,33 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
                     fill="none"
                     strokeWidth={1.5}
                     strokeDasharray="4 4"
+                    isAnimationActive={false}
                   />
                   <Radar
                     name="Current"
                     dataKey="value"
                     stroke={OPTIC_YELLOW}
                     fill={OPTIC_YELLOW}
-                    fillOpacity={0.2}
-                    strokeWidth={2}
+                    fillOpacity={0.32}
+                    strokeWidth={2.5}
+                    isAnimationActive={false}
                   />
                 </RadarChart>
               </ResponsiveContainer>
+            </div>
+            <div className="perf-radar-summaries">
+              <div className="perf-radar-summary">
+                <span className="perf-radar-summary-label">Strongest skill</span>
+                <span className="perf-radar-summary-value">
+                  {strongestSkill.subject} {formatSkillScore(strongestSkill.value)}
+                </span>
+              </div>
+              <div className="perf-radar-summary">
+                <span className="perf-radar-summary-label">Focus area</span>
+                <span className="perf-radar-summary-value">
+                  {focusSkill.subject} {formatSkillScore(focusSkill.value)}
+                </span>
+              </div>
             </div>
           </motion.article>
         </div>
