@@ -348,10 +348,8 @@ export default function HomeScreen() {
         window.history.replaceState({}, '', '/');
       }
 
-      // Refresh dashboard if on dashboard
-      if (activeScreen === 'dashboard') {
-        setDashboardRefreshKey(prev => prev + 1);
-      }
+      // Refresh dashboard after any successful payment
+      setDashboardRefreshKey((prev) => prev + 1);
     } catch (error) {
       console.error('❌ [PAYMENT] Error handling payment:', error);
       console.error('Error details:', {

@@ -97,25 +97,40 @@ Deno.serve(async (req) => {
       const amountDollars = amountCents / 100;
       const admin = serviceClient();
 
-      const { data: existing } = await admin
+      let already = false;
+      const { data: existing, error: existingErr } = await admin
         .from("stripe_processed_sessions")
         .select("session_id")
         .eq("session_id", sessionId)
         .maybeSingle();
+      if (!existingErr && existing) already = true;
 
-      if (!existing && type === "topup" && amountDollars > 0) {
+      if (!already && type === "topup" && amountDollars > 0) {
         const { error: creditErr } = await admin.rpc("add_wallet_balance", {
           user_id: userId,
           amount: amountDollars,
         });
-        if (creditErr) throw creditErr;
+        if (creditErr) {
+          const { data: row, error: readErr } = await admin
+            .from("profiles")
+            .select("wallet_balance")
+            .eq("id", userId)
+            .maybeSingle();
+          if (readErr) throw creditErr;
+          const next = parseFloat(row?.wallet_balance || 0) + amountDollars;
+          const { error: updErr } = await admin
+            .from("profiles")
+            .update({ wallet_balance: next })
+            .eq("id", userId);
+          if (updErr) throw creditErr;
+        }
         await admin.from("stripe_processed_sessions").insert({
           session_id: sessionId,
           user_id: userId,
           amount: amountDollars,
           type,
         });
-      } else if (!existing) {
+      } else if (!already) {
         await admin.from("stripe_processed_sessions").insert({
           session_id: sessionId,
           user_id: userId,
