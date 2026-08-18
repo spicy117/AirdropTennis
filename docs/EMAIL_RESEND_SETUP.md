@@ -1,5 +1,45 @@
 # Email setup with Resend (signup, password reset, welcome)
 
+---
+
+## Emails not working? Start here
+
+**Most common cause:** the `auth-send-email` Edge Function was never deployed, or the Send Email hook is enabled but pointing at a dead URL — then **zero** auth emails go out.
+
+Check: open  
+`https://rozxeqqwxpnfqbyvtvch.supabase.co/functions/v1/auth-send-email`  
+→ if you see **404**, the function is not deployed.
+
+### Fastest fix (~5 min): Resend SMTP (no Edge Function)
+
+1. Supabase → **Authentication → Hooks** → if **Send Email** hook exists → **Disable or delete it** (hook + no function = no mail).
+2. Supabase → **Project Settings → Authentication → SMTP Settings** → enable **Custom SMTP**:
+
+   | Field | Value |
+   |-------|--------|
+   | Host | `smtp.resend.com` |
+   | Port | `465` |
+   | User | `resend` |
+   | Password | your Resend API key (`re_...`) |
+   | Sender email | `onboarding@resend.dev` *(sandbox)* or `noreply@airdroptennis.com` *(after domain verified)* |
+   | Sender name | `Airdrop Tennis` |
+
+3. **Authentication → URL Configuration**
+   - Site URL: `https://app.airdroptennis.com`
+   - Redirect URLs: `https://app.airdroptennis.com/**`
+
+4. **Authentication → Providers → Email** → Confirm email **on**.
+
+5. Test: sign up with **jasper.kofkin1@gmail.com** (Resend sandbox only delivers to your Resend account email when using `onboarding@resend.dev`).
+
+6. Check **Resend → Emails** and **Supabase → Authentication → Logs** if still nothing.
+
+### Branded emails (later): deploy Edge Function + hook
+
+See steps below. Only use the hook **after** the function returns something other than 404.
+
+---
+
 After migrating to a new Supabase project, **auth emails stop working** until you configure a mail provider. Supabase’s built-in email is rate-limited and unreliable in production.
 
 This guide connects **Resend** so you can send and **track** all auth emails (signup confirmation, password reset, invites).
@@ -174,7 +214,8 @@ SMTP is simpler but templates are basic; the hook gives branded HTML and the sam
 
 | Symptom | Fix |
 |---------|-----|
-| No email at all | Hook not enabled, or `RESEND_API_KEY` missing. Check function logs. |
+| Nothing at all / 404 on function URL | **Disable Send Email hook** OR deploy `auth-send-email`. Use SMTP fix above. |
+| No email at all | Hook enabled but function missing; or SMTP not configured. |
 | 401 on hook | `SEND_EMAIL_HOOK_SECRET` doesn’t match dashboard secret. Redeploy after setting. |
 | Email in spam | Complete SPF/DKIM on `airdroptennis.com` in Resend. |
 | Link goes to wrong site | Fix Site URL + Redirect URLs (Step 4). |
