@@ -3,15 +3,15 @@ import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { memberColors, memberRadius, memberShadow, memberWebTransition } from '../../theme/memberTheme';
 
-const MOTIF_STYLES = {
-  arc: styles.motifArc,
-  lines: styles.motifLines,
-  dot: styles.motifDot,
-  cross: styles.motifCross,
-};
-
 export default function MemberServiceCard({ service, onPress, onMoreInfo, infoLabel = 'Info', width }) {
-  const motifStyle = MOTIF_STYLES[service.motif] || MOTIF_STYLES.lines;
+  const motifStyle =
+    service.motif === 'arc'
+      ? styles.motifArc
+      : service.motif === 'dot'
+        ? styles.motifDot
+        : service.motif === 'cross'
+          ? styles.motifCross
+          : styles.motifLines;
 
   return (
     <View style={[width ? { width } : { flex: 1 }]}>

@@ -5,6 +5,7 @@ import { View, ActivityIndicator, StyleSheet, Platform, Image } from 'react-nati
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AcademyProvider } from './contexts/AcademyContext';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import AuthLoadingScreen from './components/auth/AuthLoadingScreen';
 import AuthSelectionScreen from './screens/AuthSelectionScreen';
 import SignInScreen from './screens/SignInScreen';
