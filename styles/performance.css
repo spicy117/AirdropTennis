@@ -1,16 +1,16 @@
-/* Performance page - member-aligned palette */
+/* Performance page - Inter, IBM Plex Mono, Dancing Script, Source Serif Pro */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* Member-aligned palette */
 :root {
   --member-bg: #F6F4EF;
   --member-lime: #D4F934;
   --member-ink: #141414;
   --member-court: #1E3D32;
 }
-
-/* Performance page - Inter, IBM Plex Mono, Dancing Script, Source Serif Pro */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&display=swap');
 
 @media (max-width: 640px) {
   .perf-charts-row {
