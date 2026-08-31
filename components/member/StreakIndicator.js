@@ -1,6 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { memberColors, memberRadius } from '../../theme/memberTheme';
+import { Pressable, Text, StyleSheet, Platform } from 'react-native';
+import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
 
 export default function StreakIndicator({ weeks = 0, onPress, labelActive, labelEmpty }) {
   const hasStreak = weeks > 0;
@@ -9,16 +9,20 @@ export default function StreakIndicator({ weeks = 0, onPress, labelActive, label
     : labelEmpty || 'Start your streak';
 
   return (
-    <TouchableOpacity
-      style={[styles.pill, hasStreak && styles.pillActive]}
+    <Pressable
+      style={({ pressed, hovered }) => [
+        styles.pill,
+        hasStreak && styles.pillActive,
+        hovered && Platform.OS === 'web' && styles.pillHovered,
+        pressed && styles.pillPressed,
+      ]}
       onPress={onPress}
-      activeOpacity={0.75}
       accessibilityRole="button"
       accessibilityLabel={hasStreak ? `${weeks} week streak` : 'Start your streak'}
     >
       <Text style={styles.flame}>🔥</Text>
       <Text style={[styles.text, hasStreak && styles.textActive]}>{text}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -34,10 +38,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: memberColors.border,
     marginBottom: 20,
+    ...memberWebTransition('background-color, transform, border-color'),
   },
   pillActive: {
     backgroundColor: memberColors.limeSoft,
-    borderColor: 'rgba(212, 249, 52, 0.35)',
+    borderColor: 'rgba(212, 249, 52, 0.3)',
+  },
+  pillHovered: {
+    ...(Platform.OS === 'web' && {
+      borderColor: memberColors.borderStrong,
+    }),
+  },
+  pillPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
   },
   flame: {
     fontSize: 14,

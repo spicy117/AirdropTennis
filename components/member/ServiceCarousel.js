@@ -4,20 +4,30 @@ import MemberServiceCard from './MemberServiceCard';
 
 export default function ServiceCarousel({ services, onPress, onMoreInfo, infoLabel }) {
   const { width } = useWindowDimensions();
-  const cardWidth = Math.min(280, width * 0.78);
+  const gap = 12;
+  const cardWidth = Math.min(280, Math.max(240, width * 0.76));
+  const snapInterval = cardWidth + gap;
 
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       decelerationRate="fast"
-      snapToInterval={cardWidth + 12}
+      snapToInterval={snapInterval}
       snapToAlignment="start"
+      disableIntervalMomentum
       contentContainerStyle={styles.content}
-      style={styles.scroll}
+      style={[styles.scroll, Platform.OS === 'web' && styles.scrollWeb]}
     >
       {services.map((service, i) => (
-        <View key={service.id} style={[styles.item, i === services.length - 1 && styles.itemLast]}>
+        <View
+          key={service.id}
+          style={[
+            styles.item,
+            { width: cardWidth },
+            i === services.length - 1 && styles.itemLast,
+          ]}
+        >
           <MemberServiceCard
             service={service}
             onPress={() => onPress(service)}
@@ -35,12 +45,20 @@ const styles = StyleSheet.create({
   scroll: {
     marginHorizontal: -4,
   },
+  scrollWeb: {
+    ...(Platform.OS === 'web' && {
+      scrollSnapType: 'x mandatory',
+      WebkitOverflowScrolling: 'touch',
+    }),
+  },
   content: {
     paddingHorizontal: 4,
-    paddingBottom: 4,
+    paddingBottom: 6,
+    gap: 12,
   },
   item: {
     marginRight: 12,
+    ...(Platform.OS === 'web' && { scrollSnapAlign: 'start' }),
   },
   itemLast: {
     marginRight: 24,

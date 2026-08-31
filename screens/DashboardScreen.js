@@ -31,6 +31,7 @@ import ServiceCarousel from '../components/member/ServiceCarousel';
 import SectionHeader from '../components/member/SectionHeader';
 import SessionTimelineRow from '../components/member/SessionTimelineRow';
 import EmptyState from '../components/member/EmptyState';
+import MemberSkeleton from '../components/member/MemberSkeleton';
 import { memberColors } from '../theme/memberTheme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -53,10 +54,10 @@ const SERVICE_DESC_KEYS = { 'stroke-clinic': 'serviceStrokeClinicDesc', 'boot-ca
 const TAG_KEYS = { Popular: 'tagPopular', Value: 'tagValue', Premium: 'tagPremium' };
 
 const MEMBER_SERVICE_ACCENTS = {
-  'stroke-clinic': { accent: '#1E3D32', accentBg: 'rgba(30, 61, 50, 0.1)' },
-  'boot-camp': { accent: '#B45309', accentBg: 'rgba(180, 83, 9, 0.1)' },
-  'private-lessons': { accent: '#1D4ED8', accentBg: 'rgba(29, 78, 216, 0.08)' },
-  'utr-points-play': { accent: '#6D28D9', accentBg: 'rgba(109, 40, 217, 0.08)' },
+  'stroke-clinic': { motif: 'lines' },
+  'boot-camp': { motif: 'arc' },
+  'private-lessons': { motif: 'dot' },
+  'utr-points-play': { motif: 'cross' },
 };
 
 // Service configurations
@@ -1655,7 +1656,11 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               balance={creditBalance}
               loading={loadingBalance}
               onTopUp={() => setShowTopUpModal(true)}
-              labels={{ availableCredit: t('creditBalance'), topUp: t('topUp') }}
+              labels={{
+                creditBalance: t('creditBalance'),
+                availableForBookings: t('availableForBookings'),
+                topUp: t('topUp'),
+              }}
             />
             </View>
           </View>
@@ -1720,7 +1725,10 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           />
 
           {loadingBooking ? (
-            <ActivityIndicator size="large" color={memberColors.court} style={{ paddingVertical: 40 }} />
+            <View style={[styles.timeline, { padding: 20, gap: 12 }]}>
+              <MemberSkeleton height={52} />
+              <MemberSkeleton height={52} />
+            </View>
           ) : upcomingBookings.length === 0 ? (
             <EmptyState
               icon="calendar-outline"
@@ -1781,6 +1789,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
         onClose={() => setShowTopUpModal(false)}
         userId={user?.id}
         onTopUpSuccess={handleTopUpSuccess}
+        memberVariant
       />
       <BookingEditModal
         visible={editModalVisible}

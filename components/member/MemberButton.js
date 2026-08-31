@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Animated, Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { memberColors, memberRadius, memberTypography } from '../../theme/memberTheme';
+import { memberColors, memberRadius, memberTypography, memberWebTransition, prefersReducedMotion } from '../../theme/memberTheme';
 
 export default function MemberButton({
   label,
@@ -17,12 +17,15 @@ export default function MemberButton({
   accessibilityLabel,
 }) {
   const scale = useRef(new Animated.Value(1)).current;
+  const reduced = prefersReducedMotion();
 
   const onPressIn = () => {
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start();
+    if (reduced) return;
+    Animated.timing(scale, { toValue: 0.97, duration: 100, useNativeDriver: true }).start();
   };
   const onPressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
+    if (reduced) return;
+    Animated.timing(scale, { toValue: 1, duration: 140, useNativeDriver: true }).start();
   };
 
   const variantStyle =
@@ -38,14 +41,14 @@ export default function MemberButton({
     variant === 'secondary' || variant === 'ghost' ? styles.textDark : styles.textLight;
 
   return (
-    <Animated.View style={[{ transform: [{ scale }] }, style]}>
+    <Animated.View style={[{ transform: [{ scale: reduced ? 1 : scale }] }, style]}>
       <TouchableOpacity
         onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         disabled={disabled || loading}
-        activeOpacity={0.9}
-        style={[styles.base, compact && styles.compact, variantStyle, (disabled || loading) && styles.disabled]}
+        activeOpacity={0.92}
+        style={[styles.base, compact && styles.compact, variantStyle, (disabled || loading) && styles.disabled, memberWebTransition('background-color, opacity')]}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel || label}
       >

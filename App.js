@@ -5,7 +5,7 @@ import { View, ActivityIndicator, StyleSheet, Platform, Image } from 'react-nati
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AcademyProvider } from './contexts/AcademyContext';
-import GlobalErrorBoundary from './components/GlobalErrorBoundary';
+import AuthLoadingScreen from './components/auth/AuthLoadingScreen';
 import AuthSelectionScreen from './screens/AuthSelectionScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -244,11 +244,7 @@ function AppNavigator() {
   }, [loading, waitingForRole]);
 
   if ((loading || waitingForRole) && !hasPendingStripeRedirect && !loadingTimeout) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
+    return <AuthLoadingScreen />;
   }
 
   // Configure linking for web to sync URL with navigation state

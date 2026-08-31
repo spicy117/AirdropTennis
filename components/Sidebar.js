@@ -120,7 +120,6 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
                 color={isActive ? (isMemberNav ? memberColors.ink : '#000') : (isMemberNav ? memberColors.inkMuted : '#8E8E93')}
               />
               <Text style={[styles.menuText, isActive && styles.menuTextActive, isMemberNav && memberStyles.menuText, isMemberNav && isActive && memberStyles.menuTextActive]}>{t(item.labelKey)}</Text>
-              {isMemberNav && isActive && <View style={memberStyles.activeDot} />}
             </TouchableOpacity>
           );
         })}
@@ -357,8 +356,10 @@ const memberStyles = StyleSheet.create({
     position: 'relative',
   },
   menuItemActive: {
-    backgroundColor: memberColors.limeSoft,
-    borderLeftWidth: 0,
+    backgroundColor: 'rgba(212, 249, 52, 0.06)',
+    borderLeftWidth: 2,
+    borderLeftColor: memberColors.lime,
+    paddingLeft: 12,
   },
   menuText: {
     fontSize: 15,
@@ -367,17 +368,7 @@ const memberStyles = StyleSheet.create({
   },
   menuTextActive: {
     color: memberColors.ink,
-    fontWeight: '600',
-  },
-  activeDot: {
-    position: 'absolute',
-    left: 0,
-    top: '50%',
-    marginTop: -3,
-    width: 3,
-    height: 6,
-    borderRadius: 2,
-    backgroundColor: memberColors.lime,
+    fontWeight: '700',
   },
   footer: {
     borderTopColor: memberColors.border,

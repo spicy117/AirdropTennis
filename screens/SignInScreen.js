@@ -1,23 +1,15 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import ErrorBanner from '../components/ErrorBanner';
-import SuccessBanner from '../components/SuccessBanner';
 import ShowPasswordToggle from '../components/ShowPasswordToggle';
+import AuthLayout from '../components/auth/AuthLayout';
+import AuthField from '../components/auth/AuthField';
+import AuthPrimaryButton, { AuthTextLink } from '../components/auth/AuthPrimaryButton';
+import { memberColors, memberTypography } from '../theme/memberTheme';
 
-export default function SignInScreen({ navigation, embedded = false }) {
+export default function SignInScreen({ navigation, embedded = false, onGoToSignUp }) {
   const { signIn, resetPassword, resendVerificationEmail } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
@@ -25,22 +17,16 @@ export default function SignInScreen({ navigation, embedded = false }) {
   const [loadingReset, setLoadingReset] = useState(false);
   const [loadingResend, setLoadingResend] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [authView, setAuthView] = useState('login');
   const [showResendOption, setShowResendOption] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
 
   const getErrorMessage = (error) => {
     if (!error) return null;
-    
     const errorMessage = error.message || '';
     const errorCode = error.code || '';
-    
-    // Check for email not confirmed error
+
     if (
       errorMessage.toLowerCase().includes('email not confirmed') ||
       errorMessage.toLowerCase().includes('email not verified') ||
@@ -51,23 +37,21 @@ export default function SignInScreen({ navigation, embedded = false }) {
     ) {
       return t('verifyEmailBeforeSignIn');
     }
-    
+
     if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('invalid')) {
-      return t('invalidEmailOrPassword');
+      return t('incorrectEmailOrPassword');
     }
     if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
       return t('connectionTimeout');
     }
-    
+
     return errorMessage || t('error');
   };
 
   const handleSignIn = async () => {
-    setError(null);
     setFieldErrors({});
-
     const newFieldErrors = {};
-    
+
     if (!formData.email) {
       newFieldErrors.email = t('emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -83,373 +67,262 @@ export default function SignInScreen({ navigation, embedded = false }) {
     }
 
     setLoading(true);
-    const { data, error: signInError } = await signIn(formData.email, formData.password);
+    const { error: signInError } = await signIn(formData.email, formData.password);
     setLoading(false);
 
     if (signInError) {
       const errorMsg = getErrorMessage(signInError);
       const errorMessage = signInError.message || '';
       const errorCode = signInError.code || '';
-      
-      // Check if this is an email not confirmed error
-      const isEmailNotConfirmed = 
+
+      const isEmailNotConfirmed =
         errorMessage.toLowerCase().includes('email not confirmed') ||
         errorMessage.toLowerCase().includes('email not verified') ||
         errorMessage.toLowerCase().includes('confirm your email') ||
         errorMessage.toLowerCase().includes('verify your email') ||
         errorCode.toLowerCase().includes('email_not_confirmed') ||
         errorCode.toLowerCase().includes('email_not_verified');
-      
-      setError(errorMsg);
+
       setShowResendOption(isEmailNotConfirmed && formData.email);
-      
-      if (errorMsg.includes('email') || errorMsg.includes('password')) {
+
+      if (errorMsg.includes('email') || errorMsg.includes('password') || errorMsg.includes('Incorrect')) {
         setFieldErrors({
-          email: errorMsg.includes('email') ? errorMsg : null,
+          email: errorMsg,
           password: errorMsg.includes('password') ? errorMsg : null,
         });
+      } else {
+        setFieldErrors({ email: errorMsg });
       }
     } else {
       setShowResendOption(false);
     }
-    // If successful, the auth state will update automatically via the context
   };
 
   const handleForgotPassword = async () => {
-    setError(null);
-    setSuccess(null);
     setFieldErrors({});
 
-    // Validate email is provided
     if (!formData.email) {
       setFieldErrors({ email: t('emailRequiredForReset') });
       return;
     }
-
-    // Validate email format
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setFieldErrors({ email: t('validEmail') });
       return;
     }
 
     setLoadingReset(true);
-    setError(null);
-    setSuccess(null);
-    setFieldErrors({});
-
     const { error: resetError } = await resetPassword(formData.email);
     setLoadingReset(false);
 
     if (resetError) {
-      setError(resetError.message || t('failedToSendReset'));
+      setFieldErrors({ email: resetError.message || t('failedToSendReset') });
     } else {
-      setSuccess(t('resetEmailSent'));
+      setAuthView('forgot-sent');
     }
   };
 
   const handleResendVerification = async () => {
-    setError(null);
-    setSuccess(null);
     setFieldErrors({});
 
-    // Validate email is provided
     if (!formData.email) {
       setFieldErrors({ email: t('emailRequiredForResend') });
       return;
     }
-
-    // Validate email format
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setFieldErrors({ email: t('validEmail') });
       return;
     }
 
     setLoadingResend(true);
-    setError(null);
-    setSuccess(null);
-    setFieldErrors({});
-
     const { error: resendError } = await resendVerificationEmail(formData.email);
     setLoadingResend(false);
 
     if (resendError) {
-      setError(resendError.message || t('failedToSendVerification'));
+      setFieldErrors({ email: resendError.message || t('failedToSendVerification') });
     } else {
-      setSuccess(t('verificationEmailSentTo'));
       setShowResendOption(false);
+      setAuthView('forgot-sent');
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.wrapper}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <View style={[styles.container, embedded && styles.embeddedContainer]}>
-        {!embedded && (
-          <>
-            <Text style={styles.title}>{t('welcomeBack')}</Text>
-            <Text style={styles.subtitle}>{t('logInToAccount')}</Text>
-          </>
-        )}
-
-        <ErrorBanner
-          message={error}
-          onDismiss={() => setError(null)}
-        />
-
-        <SuccessBanner
-          message={success}
-          onDismiss={() => setSuccess(null)}
-        />
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={[
-              styles.input,
-              fieldErrors.email && styles.inputError,
-            ]}
-            placeholder="Email"
-            value={formData.email}
-            onChangeText={(text) => {
-              setFormData({ ...formData, email: text });
-              setFieldErrors((prev) => ({ ...prev, email: null }));
-              setError(null);
-              setSuccess(null);
-              setShowResendOption(false);
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-            fontSize={16}
-            accessible={true}
-            accessibilityLabel={t('emailPlaceholder')}
-            accessibilityHint={t('validEmail')}
-          />
-          {fieldErrors.email && (
-            <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-          )}
-        </View>
-
-        <View style={styles.inputContainer}>
-          <View style={styles.passwordRow}>
-            <TextInput
-              style={[
-                styles.input,
-                fieldErrors.password && styles.inputError,
-                styles.passwordInput,
-              ]}
-              placeholder={t('passwordPlaceholder')}
-              value={formData.password}
-              onChangeText={(text) => {
-                setFormData({ ...formData, password: text });
-                setFieldErrors((prev) => ({ ...prev, password: null }));
-              }}
-              secureTextEntry={!showPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleSignIn}
-              fontSize={16}
-              accessible={true}
-              accessibilityLabel={t('passwordPlaceholder')}
-              accessibilityHint={t('passwordPlaceholder')}
-            />
-            <ShowPasswordToggle
-              show={showPassword}
-              onToggle={() => setShowPassword(!showPassword)}
-            />
-          </View>
-          {fieldErrors.password && (
-            <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-          )}
-        </View>
-
-        {showResendOption && (
-          <View style={styles.resendContainer}>
-            <Text style={styles.resendMessage}>{t('resendVerificationMessage')}</Text>
-            <TouchableOpacity
-              style={styles.resendButton}
-              onPress={handleResendVerification}
-              disabled={loadingResend}
-              accessible={true}
-              accessibilityLabel={t('resendVerificationEmail')}
-              accessibilityRole="button"
-            >
-              <Text style={styles.resendButtonText}>
-                {loadingResend ? t('sending') : t('resendVerificationEmail')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={styles.forgotPasswordButton}
-          onPress={handleForgotPassword}
-          disabled={loadingReset}
-          accessible={true}
-          accessibilityLabel={t('forgotPassword')}
-          accessibilityRole="button"
-        >
-          <Text style={styles.forgotPasswordText}>
-            {loadingReset ? t('sending') : t('forgotPassword')}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSignIn}
-          disabled={loading}
-          accessible={true}
-          accessibilityLabel={t('logIn')}
-          accessibilityRole="button"
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>{t('logIn')}</Text>
-          )}
-        </TouchableOpacity>
-
-        {!embedded && (
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => navigation.navigate('SignUp')}
-            accessible={true}
-            accessibilityLabel={t('dontHaveAccountSignUp')}
-            accessibilityRole="button"
-          >
-            <Text style={styles.linkText}>{t('dontHaveAccountSignUp')}</Text>
-          </TouchableOpacity>
-        )}
+  const renderForgotSent = () => (
+    <View style={styles.block}>
+      <Text style={styles.title}>{t('checkYourInbox')}</Text>
+      <Text style={styles.subtitle}>{t('resetInstructionsSent')}</Text>
+      <View style={styles.emailBox}>
+        <Text style={styles.emailLabel}>{formData.email}</Text>
       </View>
-    </KeyboardAvoidingView>
+      <AuthPrimaryButton
+        label={t('backToLogin')}
+        onPress={() => {
+          setAuthView('login');
+          setFieldErrors({});
+        }}
+      />
+    </View>
   );
+
+  const renderForgot = () => (
+    <View style={styles.block}>
+      <Text style={styles.title}>{t('resetYourPassword')}</Text>
+      <Text style={styles.subtitle}>{t('resetPasswordInstructions')}</Text>
+
+      <AuthField
+        label={t('emailPlaceholder')}
+        value={formData.email}
+        onChangeText={(text) => {
+          setFormData({ ...formData, email: text });
+          setFieldErrors((prev) => ({ ...prev, email: null }));
+        }}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        error={fieldErrors.email}
+        returnKeyType="done"
+        onSubmitEditing={handleForgotPassword}
+      />
+
+      <AuthPrimaryButton
+        label={loadingReset ? t('sending') : t('sendResetLink')}
+        onPress={handleForgotPassword}
+        loading={loadingReset}
+        disabled={loadingReset}
+      />
+
+      <AuthTextLink label={t('backToLogin')} onPress={() => setAuthView('login')} subtle />
+    </View>
+  );
+
+  const renderLogin = () => (
+    <View style={styles.block}>
+      <Text style={styles.title}>{t('welcomeBack')}</Text>
+
+      <AuthField
+        label={t('emailPlaceholder')}
+        value={formData.email}
+        onChangeText={(text) => {
+          setFormData({ ...formData, email: text });
+          setFieldErrors((prev) => ({ ...prev, email: null }));
+          setShowResendOption(false);
+        }}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        error={fieldErrors.email}
+        returnKeyType="next"
+        autoComplete="email"
+      />
+
+      <AuthField
+        label={t('passwordPlaceholder')}
+        value={formData.password}
+        onChangeText={(text) => {
+          setFormData({ ...formData, password: text });
+          setFieldErrors((prev) => ({ ...prev, password: null }));
+        }}
+        secureTextEntry={!showPassword}
+        error={fieldErrors.password}
+        returnKeyType="done"
+        onSubmitEditing={handleSignIn}
+        autoComplete="password"
+        rightElement={
+          <ShowPasswordToggle show={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+        }
+      />
+
+      {showResendOption && (
+        <View style={styles.resendBox}>
+          <Text style={styles.resendMessage}>{t('resendVerificationMessage')}</Text>
+          <AuthTextLink
+            label={loadingResend ? t('sending') : t('resendVerificationEmail')}
+            onPress={handleResendVerification}
+            disabled={loadingResend}
+          />
+        </View>
+      )}
+
+      <AuthPrimaryButton label={t('logIn')} onPress={handleSignIn} loading={loading} disabled={loading} />
+
+      <AuthTextLink
+        label={loadingReset ? t('sending') : t('forgotPassword')}
+        onPress={() => setAuthView('forgot')}
+        subtle
+      />
+
+      {(onGoToSignUp || !embedded) && (
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>{t('newToAirdrop')}</Text>
+          <AuthTextLink
+            label={t('createAccount')}
+            onPress={() => (onGoToSignUp ? onGoToSignUp() : navigation.navigate('SignUp'))}
+          />
+        </View>
+      )}
+    </View>
+  );
+
+  const content =
+    authView === 'forgot-sent' ? renderForgotSent() : authView === 'forgot' ? renderForgot() : renderLogin();
+
+  if (embedded) {
+    return <View style={styles.embedded}>{content}</View>;
+  }
+
+  return <AuthLayout>{content}</AuthLayout>;
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
+  embedded: {
+    width: '100%',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  embeddedContainer: {
-    padding: 24,
-    justifyContent: 'flex-start',
+  block: {
+    width: '100%',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-    textAlign: 'center',
+    ...memberTypography.h1,
+    fontSize: 26,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
+    ...memberTypography.body,
+    marginBottom: 24,
+    color: memberColors.inkMuted,
+  },
+  emailBox: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  emailLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: memberColors.ink,
     textAlign: 'center',
   },
-  inputContainer: {
-    position: 'relative',
-    width: '100%',
-    marginBottom: 15,
-  },
-  passwordRow: {
-    position: 'relative',
-    width: '100%',
-  },
-  input: {
-    width: '100%',
-    padding: 15,
-    paddingRight: 45,
+  resendBox: {
+    backgroundColor: memberColors.limeSoft,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 4,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    ...(Platform.OS === 'web' && {
-      outlineStyle: 'none',
-      WebkitAppearance: 'none',
-    }),
-  },
-  passwordInput: {
-    // Additional styles for password inputs
-  },
-  inputError: {
-    borderColor: '#FF3B30',
-    borderWidth: 2,
-    backgroundColor: '#FFF5F5',
-  },
-  fieldError: {
-    color: '#FF3B30',
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  button: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#000',
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  linkButton: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#007AFF',
-    fontSize: 16,
-  },
-  forgotPasswordButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 10,
-    marginTop: -5,
-  },
-  forgotPasswordText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  resendContainer: {
-    marginBottom: 15,
-    padding: 15,
-    backgroundColor: '#FFF9E6',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: 'rgba(212, 249, 52, 0.35)',
   },
   resendMessage: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
+    fontSize: 13,
+    color: memberColors.inkSecondary,
     textAlign: 'center',
+    marginBottom: 4,
   },
-  resendButton: {
-    width: '100%',
-    padding: 12,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
+  footer: {
+    marginTop: 28,
     alignItems: 'center',
+    gap: 4,
   },
-  resendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  footerText: {
+    fontSize: 14,
+    color: memberColors.inkMuted,
   },
 });

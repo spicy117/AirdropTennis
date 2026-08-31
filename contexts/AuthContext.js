@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { getAuthRedirectUrl } from '../lib/appUrl';
 
 const AuthContext = createContext({});
 
@@ -501,9 +502,8 @@ export const AuthProvider = ({ children }) => {
       // Public signup is always student (coaches/admins are created in admin flows)
       const signupMeta = { ...userData, role: 'student' };
       const options = { data: signupMeta };
-      // Ensure verification link redirects to this app (web). Supabase uses Site URL if not set.
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
-        options.emailRedirectTo = window.location.origin;
+      if (Platform.OS === 'web') {
+        options.emailRedirectTo = getAuthRedirectUrl('/');
       }
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -648,9 +648,14 @@ export const AuthProvider = ({ children }) => {
 
   const resendVerificationEmail = async (email) => {
     try {
+      const options = {};
+      if (Platform.OS === 'web') {
+        options.emailRedirectTo = getAuthRedirectUrl('/');
+      }
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
+        options,
       });
       if (error) throw error;
       return { error: null };
@@ -662,12 +667,10 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = async (email) => {
     try {
       const options = {};
-      
-      // Set redirect URL for web platform
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        options.redirectTo = `${window.location.origin}/reset-password`;
+      if (Platform.OS === 'web') {
+        options.redirectTo = getAuthRedirectUrl('/reset-password');
       }
-      
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, options);
       if (error) throw error;
       return { error: null };

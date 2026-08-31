@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform, Text, useWindowDimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Platform, Text, useWindowDimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { memberColors, memberRadius } from '../theme/memberTheme';
+import { memberColors, memberRadius, memberWebTransition } from '../theme/memberTheme';
 
 /** Maps roles to allowed nav item ids. When loading/undefined, only profile is allowed. */
 const PERMISSIONS = {
@@ -60,6 +60,29 @@ export default function BottomNav({ activeScreen, onNavigate }) {
     >
       {menuItems.map((item) => {
         const isActive = activeScreen === item.id;
+        if (isStudent) {
+          return (
+            <Pressable
+              key={item.id}
+              style={({ pressed }) => [styles.navItem, pressed && memberStyles.navItemPressed]}
+              onPress={() => onNavigate(item.id)}
+              accessible={true}
+              accessibilityLabel={t(item.labelKey)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+            >
+              {isActive && <View style={memberStyles.activeIndicator} />}
+              <Ionicons
+                name={isActive ? item.activeIcon : item.icon}
+                size={22}
+                color={isActive ? memberColors.ink : memberColors.inkMuted}
+              />
+              <Text style={[memberStyles.label, isActive && memberStyles.labelActive]} numberOfLines={1}>
+                {t(item.labelKey)}
+              </Text>
+            </Pressable>
+          );
+        }
         return (
           <TouchableOpacity
             key={item.id}
@@ -70,23 +93,14 @@ export default function BottomNav({ activeScreen, onNavigate }) {
             accessibilityRole="button"
             accessibilityState={{ selected: isActive }}
           >
-            <View style={[isStudent && isActive && memberStyles.activePill]}>
-              <Ionicons
-                name={isActive ? item.activeIcon : item.icon}
-                size={22}
-                color={isActive ? (isStudent ? memberColors.ink : '#000') : (isStudent ? memberColors.inkMuted : '#8E8E93')}
-              />
+            <Ionicons
+              name={isActive ? item.activeIcon : item.icon}
+              size={22}
+              color={isActive ? '#000' : '#8E8E93'}
+            />
+            <View style={[styles.label, isActive && styles.labelActive]}>
+              <View style={[styles.indicator, isActive && styles.indicatorActive]} />
             </View>
-            {isStudent && (
-              <Text style={[memberStyles.label, isActive && memberStyles.labelActive]} numberOfLines={1}>
-                {t(item.labelKey)}
-              </Text>
-            )}
-            {!isStudent && (
-              <View style={[styles.label, isActive && styles.labelActive]}>
-                <View style={[styles.indicator, isActive && styles.indicatorActive]} />
-              </View>
-            )}
           </TouchableOpacity>
         );
       })}
@@ -144,20 +158,26 @@ const memberStyles = StyleSheet.create({
       zIndex: 100,
     }),
   },
-  activePill: {
-    backgroundColor: memberColors.limeSoft,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: memberRadius.pill,
+  navItemPressed: {
+    opacity: 0.85,
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: 0,
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: memberColors.lime,
   },
   label: {
     fontSize: 10,
     fontWeight: '500',
     color: memberColors.inkMuted,
     marginTop: 4,
+    ...memberWebTransition('color'),
   },
   labelActive: {
     color: memberColors.ink,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

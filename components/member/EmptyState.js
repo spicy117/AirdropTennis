@@ -8,7 +8,8 @@ export default function EmptyState({ icon = 'calendar-outline', title, subtitle,
   return (
     <View style={styles.wrap}>
       <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={28} color={memberColors.inkFaint} />
+        <View style={styles.iconRing} />
+        <Ionicons name={icon} size={28} color={memberColors.court} style={{ opacity: 0.45 }} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -29,10 +30,22 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: memberColors.bg,
+    backgroundColor: memberColors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: memberColors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    position: 'relative',
+  },
+  iconRing: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: memberColors.court,
+    opacity: 0.08,
   },
   title: {
     ...memberTypography.h3,

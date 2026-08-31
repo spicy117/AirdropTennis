@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import AuthLayout from '../components/auth/AuthLayout';
+import AuthPrimaryButton, { AuthTextLink } from '../components/auth/AuthPrimaryButton';
+import { memberColors, memberRadius, memberTypography } from '../theme/memberTheme';
 
 export default function EmailVerificationScreen({ route, navigation }) {
   const { resendVerificationEmail } = useAuth();
@@ -32,93 +28,85 @@ export default function EmailVerificationScreen({ route, navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Verify Your Email</Text>
-      <Text style={styles.message}>
-        We've sent a verification email to:
-      </Text>
-      <Text style={styles.email}>{email}</Text>
-      <Text style={styles.instructions}>
-        Please check your email and click the verification link to activate your account.
-      </Text>
+    <AuthLayout>
+      <View style={styles.block}>
+        <View style={styles.iconCircle}>
+          <Text style={styles.icon}>✉️</Text>
+        </View>
+        <Text style={styles.title}>Verify your email</Text>
+        <Text style={styles.message}>We've sent a verification email to:</Text>
+        {email ? (
+          <View style={styles.emailBox}>
+            <Text style={styles.email}>{email}</Text>
+          </View>
+        ) : null}
+        <Text style={styles.instructions}>
+          Please check your email and click the verification link to activate your account.
+        </Text>
 
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleResendEmail}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Resend Verification Email</Text>
-        )}
-      </TouchableOpacity>
+        <AuthPrimaryButton
+          label={loading ? 'Sending…' : 'Resend verification email'}
+          onPress={handleResendEmail}
+          loading={loading}
+          disabled={loading}
+        />
 
-      <TouchableOpacity
-        style={styles.linkButton}
-        onPress={() => navigation.navigate('LogIn')}
-      >
-        <Text style={styles.linkText}>Back to Log In</Text>
-      </TouchableOpacity>
-    </View>
+        <AuthTextLink label="Back to login" onPress={() => navigation.navigate('LogIn')} subtle />
+      </View>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 20,
+  block: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: memberColors.limeSoft,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
+  },
+  icon: {
+    fontSize: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
+    ...memberTypography.h1,
+    fontSize: 26,
+    marginBottom: 10,
     textAlign: 'center',
   },
   message: {
-    fontSize: 16,
-    color: '#666',
+    ...memberTypography.body,
     textAlign: 'center',
-    marginBottom: 10,
+    color: memberColors.inkMuted,
+    marginBottom: 12,
+  },
+  emailBox: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+    borderRadius: memberRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    width: '100%',
   },
   email: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#007AFF',
+    color: memberColors.ink,
     textAlign: 'center',
-    marginBottom: 20,
   },
   instructions: {
     fontSize: 14,
-    color: '#666',
+    color: memberColors.inkMuted,
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
     lineHeight: 20,
-  },
-  button: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  linkButton: {
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#007AFF',
-    fontSize: 16,
   },
 });

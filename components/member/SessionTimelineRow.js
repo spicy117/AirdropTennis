@@ -1,16 +1,24 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { memberColors, memberRadius } from '../../theme/memberTheme';
+import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
 
 export default function SessionTimelineRow({ booking, onPress, formatTime, tennisLesson = 'Tennis lesson', showDivider = true }) {
   const d = new Date(booking.start_time);
   const day = d.getDate();
-  const month = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase();
+  const month = d.toLocaleDateString('en-AU', { month: 'short' });
 
   return (
     <>
-      <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.75} accessibilityRole="button">
+      <Pressable
+        style={({ pressed, hovered }) => [
+          styles.row,
+          hovered && Platform.OS === 'web' && styles.rowHovered,
+          pressed && styles.rowPressed,
+        ]}
+        onPress={onPress}
+        accessibilityRole="button"
+      >
         <View style={styles.dateTile}>
           <Text style={styles.month}>{month}</Text>
           <Text style={styles.day}>{day}</Text>
@@ -26,7 +34,7 @@ export default function SessionTimelineRow({ booking, onPress, formatTime, tenni
           </View>
         )}
         <Ionicons name="chevron-forward" size={18} color={memberColors.inkFaint} />
-      </TouchableOpacity>
+      </Pressable>
       {showDivider && <View style={styles.divider} />}
     </>
   );
@@ -38,6 +46,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     gap: 14,
+    borderRadius: memberRadius.sm,
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
+    ...memberWebTransition('background-color'),
+  },
+  rowHovered: {
+    ...(Platform.OS === 'web' && { backgroundColor: memberColors.limeSoft }),
+  },
+  rowPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.995 }],
   },
   dateTile: {
     width: 52,
@@ -45,12 +64,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: memberRadius.md,
     backgroundColor: memberColors.bg,
+    borderWidth: 1,
+    borderColor: memberColors.border,
   },
   month: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
     color: memberColors.inkMuted,
+    textTransform: 'capitalize',
   },
   day: {
     fontSize: 22,

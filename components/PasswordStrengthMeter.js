@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { getStrengthColor } from '../utils/passwordValidation';
 import { useLanguage } from '../contexts/LanguageContext';
 import { t as tParam } from '../utils/translations';
+import { memberColors } from '../theme/memberTheme';
 
 export default function PasswordStrengthMeter({ strength, accessible = true }) {
   const { language } = useLanguage();
@@ -42,13 +43,12 @@ const styles = StyleSheet.create({
   track: {
     width: '100%',
     height: 4,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: memberColors.bgDeep,
     borderRadius: 2,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
     borderRadius: 2,
-    transition: 'width 0.3s ease, background-color 0.3s ease',
   },
 });

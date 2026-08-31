@@ -15,12 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { createTopUpCheckoutSession, redirectToCheckout, STRIPE_CHECKOUT_DISABLED } from '../lib/stripe';
+import { memberColors } from '../theme/memberTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isMobile = Platform.OS !== 'web' || SCREEN_WIDTH <= 480;
 const TOP_UP_AMOUNTS = [25, 50, 100, 200, 500];
 
-export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSuccess }) {
+export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSuccess, memberVariant = false }) {
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
   const [selectedAmount, setSelectedAmount] = useState(null);
@@ -107,6 +108,10 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
 
   const displayAmount = selectedAmount || (customAmount ? parseFloat(customAmount) : null);
 
+  const accent = memberVariant ? memberColors.court : '#0D9488';
+  const accentSoft = memberVariant ? memberColors.limeSoft : 'rgba(13, 148, 136, 0.1)';
+  const accentBorder = memberVariant ? 'rgba(212, 249, 52, 0.45)' : '#0D9488';
+
   return (
     <Modal
       visible={visible}
@@ -114,8 +119,8 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+      <View style={[styles.overlay, memberVariant && styles.overlayMember]}>
+        <View style={[styles.modalContainer, memberVariant && styles.modalContainerMember]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>{t('topUpWallet')}</Text>
@@ -133,14 +138,15 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
                   key={amount}
                   style={[
                     styles.amountButton,
-                    selectedAmount === amount && styles.amountButtonSelected,
+                    memberVariant && styles.amountButtonMember,
+                    selectedAmount === amount && [styles.amountButtonSelected, { borderColor: accentBorder, backgroundColor: accentSoft }],
                   ]}
                   onPress={() => handleAmountSelect(amount)}
                 >
                   <Text
                     style={[
                       styles.amountButtonText,
-                      selectedAmount === amount && styles.amountButtonTextSelected,
+                      selectedAmount === amount && [styles.amountButtonTextSelected, { color: accent }],
                     ]}
                   >
                     ${amount}
@@ -190,6 +196,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
             <TouchableOpacity
               style={[
                 styles.topUpButton,
+                memberVariant && styles.topUpButtonMember,
                 (!displayAmount || loading) && styles.buttonDisabled,
               ]}
               onPress={handleTopUp}
@@ -405,5 +412,20 @@ const styles = StyleSheet.create({
   securityNoteText: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  overlayMember: {
+    backgroundColor: 'rgba(20, 20, 20, 0.45)',
+  },
+  modalContainerMember: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+  },
+  amountButtonMember: {
+    borderColor: memberColors.border,
+    backgroundColor: memberColors.surface,
+  },
+  topUpButtonMember: {
+    backgroundColor: memberColors.ink,
   },
 });

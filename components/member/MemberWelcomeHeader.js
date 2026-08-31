@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { memberColors, memberTypography } from '../../theme/memberTheme';
+import { memberColors, memberTypography, memberWebTransition } from '../../theme/memberTheme';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -26,9 +26,14 @@ export default function MemberWelcomeHeader({
     <View style={styles.header}>
       <View style={styles.left}>
         {showMenu && onOpenSidebar && (
-          <TouchableOpacity style={styles.menuBtn} onPress={onOpenSidebar} accessibilityLabel="Open menu" accessibilityRole="button">
+          <Pressable
+            style={({ pressed }) => [styles.menuBtn, pressed && styles.btnPressed]}
+            onPress={onOpenSidebar}
+            accessibilityLabel="Open menu"
+            accessibilityRole="button"
+          >
             <Ionicons name="menu" size={22} color={memberColors.ink} />
-          </TouchableOpacity>
+          </Pressable>
         )}
         <View style={styles.textWrap}>
           <Text style={styles.greeting}>{getGreeting()},</Text>
@@ -37,10 +42,14 @@ export default function MemberWelcomeHeader({
         </View>
       </View>
       {onToggleLanguage && (
-        <TouchableOpacity style={styles.langBtn} onPress={onToggleLanguage} accessibilityRole="button">
+        <Pressable
+          style={({ pressed }) => [styles.langBtn, pressed && styles.btnPressed]}
+          onPress={onToggleLanguage}
+          accessibilityRole="button"
+        >
           <Ionicons name="language-outline" size={16} color={memberColors.inkMuted} />
           <Text style={styles.langText}>{language === 'en' ? langEnShort : langZhShort}</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   );
@@ -69,6 +78,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: memberColors.border,
     marginTop: 2,
+    ...memberWebTransition('background-color, transform'),
+  },
+  btnPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
   },
   textWrap: {
     flex: 1,
@@ -99,6 +113,7 @@ const styles = StyleSheet.create({
     backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
     borderColor: memberColors.border,
+    ...memberWebTransition('background-color, transform'),
   },
   langText: {
     fontSize: 12,

@@ -18,10 +18,56 @@
   }
 }
 
+/* Subtle court geometry watermark */
+.perf-court-watermark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.07;
+  overflow: hidden;
+}
+
+.perf-court-watermark::before {
+  content: '';
+  position: absolute;
+  inset: 12% 0 12% 20%;
+  border: 1px solid var(--member-court);
+  border-left: none;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.perf-court-watermark::after {
+  content: '';
+  position: absolute;
+  top: 38%;
+  left: 20%;
+  right: 0;
+  height: 1px;
+  background: var(--member-court);
+}
+
+@media (max-width: 640px) {
+  .perf-court-watermark {
+    width: 28%;
+    opacity: 0.04;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perf-radar-wrap * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* Activity Stats - responsive tiles */
 .perf-activity-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 32px;
 }
@@ -61,17 +107,6 @@
 
   .perf-activity-stat-card .perf-stat-label {
     font-size: 11px !important;
-  }
-}
-
-/* Slightly larger breakpoint for tablets - 2 cols then 1 */
-@media (max-width: 640px) and (min-width: 481px) {
-  .perf-activity-stats {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .perf-activity-stat-card:last-child {
-    grid-column: 1 / -1;
   }
 }
 

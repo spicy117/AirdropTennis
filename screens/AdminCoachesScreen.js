@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getAuthRedirectUrl } from '../lib/appUrl';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizePhone, isValidPhone } from '../utils/phone';
@@ -212,6 +213,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
                   email: emailLower,
                   password: coachPassword,
                   options: {
+                    emailRedirectTo: getAuthRedirectUrl('/'),
                     data: {
                       full_name: formData.fullName.trim(),
                       first_name: firstName,

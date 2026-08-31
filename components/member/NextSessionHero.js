@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { memberColors, memberRadius, memberShadow, memberTypography } from '../../theme/memberTheme';
+import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTransition } from '../../theme/memberTheme';
 import MemberButton from './MemberButton';
+import CourtWatermark from './CourtWatermark';
+import { HeroSkeleton } from './MemberSkeleton';
 
 export default function NextSessionHero({
   booking,
@@ -13,6 +15,9 @@ export default function NextSessionHero({
   formatTime,
   labels = {},
 }) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 640;
+
   const {
     nextOnCourt = 'Next on court',
     noBooking = 'Nothing booked yet',
@@ -24,75 +29,71 @@ export default function NextSessionHero({
   } = labels;
 
   if (loading) {
-    return (
-      <View style={[styles.hero, styles.heroLoading]}>
-        <ActivityIndicator color={memberColors.inkMuted} />
-      </View>
-    );
+    return <HeroSkeleton />;
   }
 
   if (!booking) {
     return (
       <View style={[styles.hero, styles.heroEmpty]}>
-        <View style={styles.courtLines} pointerEvents="none">
-          <View style={styles.courtLineH} />
-          <View style={styles.courtLineV} />
+        <CourtWatermark variant="hero" />
+        <View style={styles.heroBody}>
+          <Text style={styles.eyebrow}>{nextOnCourt}</Text>
+          <Text style={styles.emptyTitle}>{noBooking}</Text>
+          <Text style={styles.emptySub}>{noBookingSub}</Text>
+          <MemberButton label={bookNow} onPress={onBook} variant="lime" icon="arrow-forward" style={styles.cta} />
         </View>
-        <Text style={styles.eyebrow}>{nextOnCourt}</Text>
-        <Text style={styles.emptyTitle}>{noBooking}</Text>
-        <Text style={styles.emptySub}>{noBookingSub}</Text>
-        <MemberButton label={bookNow} onPress={onBook} variant="lime" icon="arrow-forward" style={styles.cta} />
       </View>
     );
   }
 
   const d = new Date(booking.start_time);
   const dayNum = d.getDate();
-  const dayName = d.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase();
-  const month = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase();
+  const dayName = d.toLocaleDateString('en-AU', { weekday: 'short' });
+  const month = d.toLocaleDateString('en-AU', { month: 'short' });
 
   return (
-    <TouchableOpacity
-      style={styles.hero}
+    <Pressable
+      style={({ pressed, hovered }) => [
+        styles.hero,
+        hovered && Platform.OS === 'web' && styles.heroHovered,
+        pressed && styles.heroPressed,
+      ]}
       onPress={onViewBooking}
-      activeOpacity={0.92}
       accessibilityRole="button"
       accessibilityLabel={`${booking.service_name || tennisLesson}, ${formatDate(booking.start_time)}`}
     >
-      <View style={styles.courtLines} pointerEvents="none">
-        <View style={styles.courtLineH} />
-        <View style={styles.courtLineV} />
-        <View style={[styles.limeOrb, { top: -20, right: -20 }]} />
-      </View>
+      <CourtWatermark variant="hero" />
 
-      <Text style={styles.eyebrow}>{nextOnCourt}</Text>
+      <View style={[styles.heroBody, isWide && styles.heroBodyWide]}>
+        <Text style={styles.eyebrow}>{nextOnCourt}</Text>
 
-      <View style={styles.heroRow}>
-        <View style={styles.dateBlock}>
-          <Text style={styles.dayName}>{dayName}</Text>
-          <Text style={styles.dayNum}>{dayNum}</Text>
-          <Text style={styles.month}>{month}</Text>
-        </View>
+        <View style={styles.heroRow}>
+          <View style={styles.dateBlock}>
+            <Text style={styles.dayName}>{dayName}</Text>
+            <Text style={styles.dayNum}>{dayNum}</Text>
+            <Text style={styles.month}>{month}</Text>
+          </View>
 
-        <View style={styles.sessionInfo}>
-          <Text style={styles.serviceName} numberOfLines={2}>
-            {booking.service_name || tennisLesson}
-          </Text>
-          <Text style={styles.time}>{formatTime(booking.start_time)}</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={memberColors.inkMuted} />
-            <Text style={styles.location} numberOfLines={1}>
-              {booking.locations?.name || tbd}
+          <View style={styles.sessionInfo}>
+            <Text style={styles.serviceName} numberOfLines={2}>
+              {booking.service_name || tennisLesson}
             </Text>
+            <Text style={styles.time}>{formatTime(booking.start_time)}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color={memberColors.inkMuted} />
+              <Text style={styles.location} numberOfLines={1}>
+                {booking.locations?.name || tbd}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.viewRow}>
-        <Text style={styles.viewText}>{viewBooking}</Text>
-        <Ionicons name="arrow-forward" size={16} color={memberColors.ink} />
+        <View style={styles.viewRow}>
+          <Text style={styles.viewText}>{viewBooking}</Text>
+          <Ionicons name="arrow-forward" size={16} color={memberColors.ink} />
+        </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -100,55 +101,42 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: memberColors.surfaceRaised,
     borderRadius: memberRadius.xl,
-    padding: 22,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: memberColors.border,
     ...memberShadow.hero,
     minHeight: 200,
+    position: 'relative',
+    ...memberWebTransition('box-shadow, transform, border-color'),
   },
-  heroLoading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
+  heroHovered: {
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 48px rgba(20, 20, 20, 0.11)',
+      borderColor: memberColors.borderStrong,
+    }),
+  },
+  heroPressed: {
+    transform: [{ scale: 0.995 }],
+    opacity: 0.97,
   },
   heroEmpty: {
+    padding: 22,
     minHeight: 220,
   },
-  courtLines: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.35,
+  heroBody: {
+    padding: 22,
+    zIndex: 1,
+    maxWidth: '100%',
   },
-  courtLineH: {
-    position: 'absolute',
-    top: '55%',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: memberColors.court,
-    opacity: 0.12,
-  },
-  courtLineV: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '38%',
-    width: 1,
-    backgroundColor: memberColors.court,
-    opacity: 0.1,
-  },
-  limeOrb: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: memberColors.limeMuted,
-    ...(Platform.OS === 'web' && { filter: 'blur(40px)' }),
+  heroBodyWide: {
+    maxWidth: '62%',
   },
   eyebrow: {
     ...memberTypography.label,
     marginBottom: 12,
     textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontSize: 11,
   },
   heroRow: {
     flexDirection: 'row',
@@ -162,11 +150,12 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   dayName: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
     color: memberColors.inkMuted,
     marginBottom: 2,
+    textTransform: 'capitalize',
   },
   dayNum: {
     fontSize: 44,
@@ -176,11 +165,12 @@ const styles = StyleSheet.create({
     lineHeight: 48,
   },
   month: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.2,
     color: memberColors.court,
     marginTop: 2,
+    textTransform: 'capitalize',
   },
   sessionInfo: {
     flex: 1,

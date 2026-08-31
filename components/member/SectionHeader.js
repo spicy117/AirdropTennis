@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { memberColors, memberTypography } from '../../theme/memberTheme';
+import { memberColors } from '../../theme/memberTheme';
 
 export default function SectionHeader({ title, actionLabel, onAction, count }) {
   return (
@@ -37,8 +37,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    ...memberTypography.h2,
     fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: memberColors.ink,
   },
   badge: {
     backgroundColor: memberColors.lime,

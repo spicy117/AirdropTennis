@@ -2,7 +2,7 @@
 // Handles signup confirmation, password reset, magic links, invites.
 //
 // Deploy: supabase functions deploy auth-send-email --no-verify-jwt
-// Secrets: RESEND_API_KEY, SEND_EMAIL_HOOK_SECRET, RESEND_FROM_EMAIL (optional)
+// Secrets: RESEND_API_KEY, SEND_EMAIL_HOOK_SECRET, RESEND_FROM_EMAIL (optional), APP_URL (optional)
 //
 // Dashboard: Authentication → Hooks → Send Email → HTTPS → this function URL
 
@@ -53,11 +53,46 @@ function displayName(user: HookUser): string {
   );
 }
 
+function isLocalhostUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return /localhost|127\.0\.0\.1/.test(url);
+  }
+}
+
+/** Production app URL — set APP_URL secret on the Edge Function. */
+const APP_URL = (Deno.env.get("APP_URL") || "https://app.airdroptennis.com").replace(
+  /\/$/,
+  ""
+);
+
+/**
+ * Supabase may pass localhost in redirect_to / site_url when the project Site URL
+ * is still set to a dev host. Rewrite those to the live app URL in outbound emails.
+ */
+function resolveRedirect(emailData: EmailData): string {
+  let redirect = emailData.redirect_to || emailData.site_url || APP_URL;
+
+  if (isLocalhostUrl(redirect)) {
+    try {
+      const parsed = new URL(redirect);
+      const path = `${parsed.pathname}${parsed.search}`;
+      redirect = path && path !== "/" ? `${APP_URL}${path}` : APP_URL;
+    } catch {
+      redirect = APP_URL;
+    }
+  }
+
+  return redirect;
+}
+
 function confirmationUrl(supabaseUrl: string, emailData: EmailData): string {
   const params = new URLSearchParams({
     token: emailData.token_hash,
     type: emailData.email_action_type,
-    redirect_to: emailData.redirect_to || emailData.site_url,
+    redirect_to: resolveRedirect(emailData),
   });
   return `${supabaseUrl.replace(/\/$/, "")}/auth/v1/verify?${params.toString()}`;
 }

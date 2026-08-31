@@ -89,9 +89,27 @@ export const memberShadow = {
 
 export const memberMotion = {
   fast: 140,
-  normal: 220,
+  normal: 180,
   slow: 300,
 };
+
+export const memberPress = {
+  scale: 0.98,
+  scaleSubtle: 0.99,
+};
+
+/** Web-only transition shorthand for hover/focus polish */
+export const memberWebTransition = (props = 'all') =>
+  Platform.select({
+    web: { transition: `${props} ${memberMotion.normal}ms ease` },
+    default: {},
+  });
+
+/** Respect OS reduced-motion preference (web) */
+export const prefersReducedMotion = () =>
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
 export const memberBreakpoints = {
   mobile: 480,
