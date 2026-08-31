@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizePhone, isValidPhone } from '../utils/phone';
 
 // Supabase configuration (should match lib/supabase.js)
 const SUPABASE_URL = 'https://rozxeqqwxpnfqbyvtvch.supabase.co';
@@ -27,6 +28,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    phone: '',
   });
 
   // Generate a random secure password
@@ -73,6 +75,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
           fullName: nameFromParts || 'N/A',
           firstName: coach.first_name,
           lastName: coach.last_name,
+          phone: coach.phone || null,
           createdAt: coach.created_at,
         };
       });
@@ -91,9 +94,15 @@ export default function AdminCoachesScreen({ onNavigate }) {
     console.log('🚀🚀🚀🚀🚀 BUTTON CLICKED - CREATE COACH 🚀🚀🚀🚀🚀');
     console.log('Form Data:', JSON.stringify(formData, null, 2));
     
-    if (!formData.fullName.trim() || !formData.email.trim()) {
+    if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim()) {
       console.log('❌ Validation failed: Empty fields');
-      Alert.alert('Validation Error', 'Please fill in all fields');
+      Alert.alert('Validation Error', 'Please fill in name, email, and mobile phone');
+      return;
+    }
+
+    const phoneE164 = normalizePhone(formData.phone);
+    if (!isValidPhone(formData.phone)) {
+      Alert.alert('Validation Error', 'Please enter a valid mobile number (e.g. 0412 345 678 or +61412345678)');
       return;
     }
 
@@ -142,6 +151,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
           .update({
             first_name: firstName,
             last_name: lastName,
+            phone: phoneE164,
             role: 'coach', // CRITICAL: Set role to 'coach', NOT 'admin'
           })
           .eq('id', userId);
@@ -170,12 +180,12 @@ export default function AdminCoachesScreen({ onNavigate }) {
         console.log('✅✅✅ [CREATE-COACH] SUCCESS - Profile updated to coach role!');
         Alert.alert(
           'Success',
-          `Coach profile updated successfully!\n\nEmail: ${emailLower}\nName: ${formData.fullName.trim()}\n\nRole has been set to "coach" (NOT admin).`,
+          `Coach profile updated successfully!\n\nEmail: ${emailLower}\nName: ${formData.fullName.trim()}\nPhone: ${phoneE164}\n\nRole has been set to "coach" (NOT admin).`,
           [
             {
               text: 'OK',
               onPress: () => {
-                setFormData({ fullName: '', email: '' });
+                setFormData({ fullName: '', email: '', phone: '' });
                 loadCoaches();
               },
             },
@@ -206,6 +216,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
                       full_name: formData.fullName.trim(),
                       first_name: firstName,
                       last_name: lastName,
+                      phone: phoneE164,
                       role: 'coach',
                     },
                   },
@@ -236,6 +247,7 @@ export default function AdminCoachesScreen({ onNavigate }) {
                   .update({
                     first_name: firstName,
                     last_name: lastName,
+                    phone: phoneE164,
                     role: 'coach', // CRITICAL: Set role to 'coach', NOT 'admin'
                   })
                   .eq('id', userId);
@@ -264,12 +276,12 @@ export default function AdminCoachesScreen({ onNavigate }) {
 
                 Alert.alert(
                   'Success!',
-                  `Coach account created!\n\nEmail: ${emailLower}\nPassword: ${coachPassword}\n\n⚠️ IMPORTANT: Share this password with the coach. They may need to check their email for confirmation.`,
+                  `Coach account created!\n\nEmail: ${emailLower}\nPhone: ${phoneE164}\nPassword: ${coachPassword}\n\n⚠️ IMPORTANT: Share this password with the coach. They may need to check their email for confirmation.`,
                   [
                     {
                       text: 'OK',
                       onPress: () => {
-                        setFormData({ fullName: '', email: '' });
+                        setFormData({ fullName: '', email: '', phone: '' });
                         loadCoaches();
                       },
                     },
@@ -358,13 +370,21 @@ export default function AdminCoachesScreen({ onNavigate }) {
             editable={!submitting}
           />
         </View>
+        <View style={styles.formRow}>
+          <Text style={styles.label}>Mobile Phone</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 0412 345 678"
+            value={formData.phone}
+            onChangeText={(text) => setFormData({ ...formData, phone: text })}
+            keyboardType="phone-pad"
+            editable={!submitting}
+          />
+          <Text style={styles.hintText}>Used for booking assignment SMS. Saved as E.164 (e.g. +61412345678).</Text>
+        </View>
         <TouchableOpacity
           style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={() => {
-            console.error('🔴🔴🔴 BUTTON CLICKED DIRECTLY 🔴🔴🔴');
-            window.alert('Button clicked! Check console.');
-            handleSubmit();
-          }}
+          onPress={handleSubmit}
           disabled={submitting}
         >
           {submitting ? (
@@ -407,6 +427,14 @@ export default function AdminCoachesScreen({ onNavigate }) {
               <View style={styles.coachInfo}>
                 <Text style={styles.coachName}>{coach.fullName}</Text>
                 <Text style={styles.coachEmail}>{coach.email}</Text>
+                {coach.phone ? (
+                  <View style={styles.phoneRow}>
+                    <Ionicons name="call-outline" size={14} color="#8E8E93" />
+                    <Text style={styles.coachPhone}>{coach.phone}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.missingPhone}>No phone — SMS disabled</Text>
+                )}
               </View>
               <View style={styles.coachBadge}>
                 <Ionicons name="shield-checkmark" size={20} color="#007AFF" />
@@ -598,6 +626,26 @@ const styles = StyleSheet.create({
   coachEmail: {
     fontSize: 14,
     color: '#8E8E93',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  coachPhone: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  missingPhone: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 6,
   },
   coachBadge: {
     flexDirection: 'row',
