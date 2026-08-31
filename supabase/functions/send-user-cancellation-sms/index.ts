@@ -2,7 +2,7 @@
 // Called from the app after inserting into user_cancellation_history.
 // - Admin receives: "A booking has been cancelled by the user. [Time] at [Location]. [Student name]."
 // - Coach receives: same message (if coach was assigned and has phone in profiles).
-// Requires: ADMIN_PHONE, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE.
+// Requires: ADMIN_PHONE, TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, TWILLIO_PHONE.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,13 +85,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioPhone = Deno.env.get("TWILIO_PHONE");
+    const twilioSid = Deno.env.get("TWILLIO_ACCOUNT_SID");
+    const twilioToken = Deno.env.get("TWILLIO_AUTH_TOKEN");
+    const twilioPhone = Deno.env.get("TWILLIO_PHONE");
     const adminPhone = Deno.env.get("ADMIN_PHONE");
 
     if (!twilioSid || !twilioToken || !twilioPhone) {
-      console.error("Missing env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE");
+      console.error("Missing env: TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, or TWILLIO_PHONE");
       return new Response(
         JSON.stringify({ ok: false, error: "SMS not configured" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }

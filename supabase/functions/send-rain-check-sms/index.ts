@@ -1,7 +1,7 @@
 // Supabase Edge Function: send SMS to students when a rain check is submitted.
 // Called from the app after cancelling bookings and refunding; one SMS per student.
 // Message: "Due to rain, your upcoming tennis lesson at {location}, {time} has been cancelled..."
-// Requires: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE.
+// Requires: TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, TWILLIO_PHONE.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,11 +52,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioPhone = Deno.env.get("TWILIO_PHONE");
+    const twilioSid = Deno.env.get("TWILLIO_ACCOUNT_SID");
+    const twilioToken = Deno.env.get("TWILLIO_AUTH_TOKEN");
+    const twilioPhone = Deno.env.get("TWILLIO_PHONE");
     if (!twilioSid || !twilioToken || !twilioPhone) {
-      console.error("Missing env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE");
+      console.error("Missing env: TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, or TWILLIO_PHONE");
       return new Response(
         JSON.stringify({ ok: false, error: "SMS not configured" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }

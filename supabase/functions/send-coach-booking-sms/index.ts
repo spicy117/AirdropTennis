@@ -2,7 +2,7 @@
 // Triggered by a Database Webhook on `bookings` INSERT (with coach_id) or UPDATE (when coach_id is set).
 // - Coach receives: "You've been assigned: [student] at [location] on [when]."
 // - Student receives: "Booking confirmed."
-// Requires: Twilio env secrets TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE.
+// Requires: Twilio env secrets TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, TWILLIO_PHONE.
 // Coach and student must have `phone` set in `profiles` (E.164) to receive SMS.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -117,12 +117,12 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioPhone = Deno.env.get("TWILIO_PHONE");
+    const twilioSid = Deno.env.get("TWILLIO_ACCOUNT_SID");
+    const twilioToken = Deno.env.get("TWILLIO_AUTH_TOKEN");
+    const twilioPhone = Deno.env.get("TWILLIO_PHONE");
 
     if (!twilioSid || !twilioToken || !twilioPhone) {
-      console.error("Missing env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE");
+      console.error("Missing env: TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, or TWILLIO_PHONE");
       return new Response(
         JSON.stringify({ ok: false, error: "SMS not configured" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }

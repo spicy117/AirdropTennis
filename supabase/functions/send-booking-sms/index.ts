@@ -1,6 +1,6 @@
 // Supabase Edge Function: send SMS to admin when a student creates a booking.
 // Triggered by a Database Webhook on `bookings` INSERT.
-// Requires: Twilio account, env secrets ADMIN_PHONE, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE.
+// Requires: Twilio account, env secrets ADMIN_PHONE, TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, TWILLIO_PHONE.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -69,12 +69,12 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminPhone = Deno.env.get("ADMIN_PHONE");
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioPhone = Deno.env.get("TWILIO_PHONE");
+    const twilioSid = Deno.env.get("TWILLIO_ACCOUNT_SID");
+    const twilioToken = Deno.env.get("TWILLIO_AUTH_TOKEN");
+    const twilioPhone = Deno.env.get("TWILLIO_PHONE");
 
     if (!adminPhone || !twilioSid || !twilioToken || !twilioPhone) {
-      console.error("Missing env: ADMIN_PHONE, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE");
+      console.error("Missing env: ADMIN_PHONE, TWILLIO_ACCOUNT_SID, TWILLIO_AUTH_TOKEN, or TWILLIO_PHONE");
       return new Response(
         JSON.stringify({ ok: false, error: "SMS not configured" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }

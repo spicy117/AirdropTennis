@@ -31,9 +31,9 @@ The Edge Function needs these at runtime. Set them in Supabase:
 | Secret name              | Description                          | Example        |
 |--------------------------|--------------------------------------|----------------|
 | `ADMIN_PHONE`            | Admin mobile (receive SMS), E.164    | `+61412345678` |
-| `TWILIO_ACCOUNT_SID`      | Twilio Account SID                   | `AC...`        |
-| `TWILIO_AUTH_TOKEN`       | Twilio Auth Token                    | (from Console) |
-| `TWILIO_PHONE`            | Twilio “From” number, E.164          | `+61xxxxxxxxx` |
+| `TWILLIO_ACCOUNT_SID`      | Twilio Account SID                   | `AC...`        |
+| `TWILLIO_AUTH_TOKEN`       | Twilio Auth Token                    | (from Console) |
+| `TWILLIO_PHONE`            | Twilio “From” number, E.164          | `+61xxxxxxxxx` |
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are usually set by Supabase; the function uses them to read `profiles` and `locations`.
 
@@ -59,6 +59,12 @@ After deploy, note the function URL, e.g.:
 ---
 
 ## Step 4: Database Webhook (Trigger on New Booking)
+
+**Dashboard path (if available):** **Integrations** → **Database Webhooks**  
+(Direct link: `https://supabase.com/dashboard/project/YOUR_PROJECT_REF/integrations/hooks`)
+
+If that integration says “not currently available”, skip the UI and run the SQL in  
+`supabase/migrations/014_sms_booking_triggers.sql` in **SQL Editor** instead. That creates the same triggers the webhooks would have.
 
 1. In Supabase: **Database** → **Webhooks** (or **Database** → **Replication** / **Webhooks** depending on UI).
 2. **Create a new webhook** (or “Add webhook”).
@@ -101,7 +107,7 @@ The Edge Function uses `record` to fetch student and location and then sends the
 
 ## Troubleshooting
 
-- **No SMS:** Check Edge Function logs for 4xx/5xx or Twilio errors. Confirm `ADMIN_PHONE`, `TWILIO_PHONE`, and Twilio credentials in Edge Function secrets.
+- **No SMS:** Check Edge Function logs for 4xx/5xx or Twilio errors. Confirm `ADMIN_PHONE`, `TWILLIO_PHONE`, and Twilio credentials in Edge Function secrets.
 - **Twilio 21211 / invalid “To”:** Use E.164 for `ADMIN_PHONE` (e.g. `+61412345678`).
 - **Webhook not firing:** Confirm webhook is on table `bookings`, event **Insert**, and URL is the exact Edge Function URL.
 - **401 from Edge Function:** If your webhook sends a Bearer token, ensure it matches the key the function expects, or deploy with `--no-verify-jwt` and rely on Supabase’s webhook auth.
@@ -127,7 +133,7 @@ When a booking is **assigned to a coach** (either on insert with `coach_id` or w
 
    URL: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-coach-booking-sms`
 
-2. **Create a Database Webhook**:
+2. **Create a Database Webhook** (or run `014_sms_booking_triggers.sql` if Integrations is unavailable):
    - **Table:** `bookings`
    - **Events:** **Insert** and **Update** (so both “new booking with coach” and “coach assigned later” are covered).
    - **URL:** `https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-coach-booking-sms`
@@ -149,7 +155,7 @@ When a coach submits a **rain check** (cancels selected bookings and refunds stu
 
 ### Deploy the rain check function
 
-Uses the same Twilio secrets as above (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE`).
+Uses the same Twilio secrets as above (`TWILLIO_ACCOUNT_SID`, `TWILLIO_AUTH_TOKEN`, `TWILLIO_PHONE`).
 
 ```bash
 supabase functions deploy send-rain-check-sms --no-verify-jwt
@@ -228,7 +234,7 @@ Run the migration to create the table:
   3. **404 when cancelling:** The function isn't deployed. Run the deploy command above.
   4. **ADMIN_PHONE:** Must be set in Supabase → Edge Functions → Secrets. Use E.164 format (e.g. `+61412345678`).
   5. **Coach phone:** The assigned coach needs `profiles.phone` in E.164 format. Check the `profiles` table for the coach's row.
-  6. **Twilio secrets:** Same as other SMS functions – `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE` must be set.
+  6. **Twilio secrets:** Same as other SMS functions – `TWILLIO_ACCOUNT_SID`, `TWILLIO_AUTH_TOKEN`, `TWILLIO_PHONE` must be set.
 - **Browser console:** After cancelling, check the console for `User cancellation SMS failed:` or `no messages sent` – these indicate what went wrong.
 
 ---
