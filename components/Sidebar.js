@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
+import { memberColors, memberRadius } from '../theme/memberTheme';
 
 // SOURCE OF TRUTH: Navigation uses ONLY the role from the profiles table. Do NOT use auth.user or user_metadata for nav.
 
@@ -47,7 +48,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
       NON_ADMIN_NAV_ITEMS.filter((item) => {
         if (userRole === 'coach') return ['coach-dashboard', 'admin-performance', 'profile'].includes(item.id);
         if (userRole === 'admin') return false; // admins see only the admin block below
-        return ['dashboard', 'profile', 'history', 'performance'].includes(item.id); // students
+        return ['dashboard', 'bookings', 'history', 'performance', 'profile'].includes(item.id); // students
       }),
     [userRole]
   );
@@ -90,12 +91,13 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
     t('user');
 
   const roleLabel = t(userRole === 'coach' ? 'coach' : userRole === 'admin' ? 'admin' : 'student');
+  const isMemberNav = userRole !== 'admin' && userRole !== 'coach';
 
   return (
-    <View style={[styles.container, isMobile && styles.mobileContainer]}>
+    <View style={[styles.container, isMobile && styles.mobileContainer, isMemberNav && memberStyles.container]}>
       {!hideHeader && (
-        <View style={styles.header}>
-          <Text style={styles.logo}>🎾 Airdrop Tennis</Text>
+        <View style={[styles.header, isMemberNav && memberStyles.header]}>
+          <Text style={[styles.logo, isMemberNav && memberStyles.logo]}>🎾 Airdrop Tennis</Text>
         </View>
       )}
 
@@ -105,7 +107,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
           return (
             <TouchableOpacity
               key={item.id}
-              style={[styles.menuItem, isActive && styles.menuItemActive]}
+              style={[styles.menuItem, isActive && styles.menuItemActive, isMemberNav && memberStyles.menuItem, isMemberNav && isActive && memberStyles.menuItemActive]}
               onPress={() => onNavigate(item.id)}
               accessible={true}
               accessibilityLabel={t(item.labelKey)}
@@ -114,10 +116,11 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
             >
               <Ionicons
                 name={isActive ? item.activeIcon : item.icon}
-                size={24}
-                color={isActive ? '#000' : '#8E8E93'}
+                size={22}
+                color={isActive ? (isMemberNav ? memberColors.ink : '#000') : (isMemberNav ? memberColors.inkMuted : '#8E8E93')}
               />
-              <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{t(item.labelKey)}</Text>
+              <Text style={[styles.menuText, isActive && styles.menuTextActive, isMemberNav && memberStyles.menuText, isMemberNav && isActive && memberStyles.menuTextActive]}>{t(item.labelKey)}</Text>
+              {isMemberNav && isActive && <View style={memberStyles.activeDot} />}
             </TouchableOpacity>
           );
         })}
@@ -163,7 +166,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, isMemberNav && memberStyles.footer]}>
         <TouchableOpacity
           style={styles.userInfo}
           onPress={() => onNavigate('profile')}
@@ -171,7 +174,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
           accessibilityLabel="Go to profile"
           accessibilityRole="button"
         >
-          <View style={styles.avatar}>
+          <View style={[styles.avatar, isMemberNav && memberStyles.avatar]}>
             <Ionicons name="person" size={20} color="#8E8E93" />
           </View>
           <View style={styles.userDetails}>
@@ -327,5 +330,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
+  },
+});
+
+const memberStyles = StyleSheet.create({
+  container: {
+    width: 260,
+    backgroundColor: memberColors.surface,
+    borderRightColor: memberColors.border,
+  },
+  header: {
+    borderBottomColor: memberColors.border,
+    paddingVertical: 22,
+  },
+  logo: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    color: memberColors.ink,
+  },
+  menuItem: {
+    marginHorizontal: 12,
+    borderRadius: memberRadius.md,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    position: 'relative',
+  },
+  menuItemActive: {
+    backgroundColor: memberColors.limeSoft,
+    borderLeftWidth: 0,
+  },
+  menuText: {
+    fontSize: 15,
+    color: memberColors.inkMuted,
+    marginLeft: 12,
+  },
+  menuTextActive: {
+    color: memberColors.ink,
+    fontWeight: '600',
+  },
+  activeDot: {
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    marginTop: -3,
+    width: 3,
+    height: 6,
+    borderRadius: 2,
+    backgroundColor: memberColors.lime,
+  },
+  footer: {
+    borderTopColor: memberColors.border,
+    backgroundColor: memberColors.bg,
+  },
+  avatar: {
+    backgroundColor: memberColors.limeSoft,
   },
 });

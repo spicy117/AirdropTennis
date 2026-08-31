@@ -15,8 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { playerData, getStreak } from '../utils/playerData';
 import { supabase } from '../lib/supabase';
 
-const OPTIC_YELLOW = '#E3FF00';
-const NAVY = '#0F172A';
+const OPTIC_YELLOW = '#D4F934';
+const NAVY = '#141414';
 const GRID_LIGHT = '#E2E8F0';
 const FONT_STACK = "'Inter', 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const MONO_FONT = "'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', 'Monaco', monospace";
@@ -217,7 +217,7 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
       <div
         style={{
           minHeight: '100vh',
-          backgroundColor: '#F9FAFB',
+          backgroundColor: '#F6F4EF',
           fontFamily: FONT_STACK,
           display: 'flex',
           alignItems: 'center',
@@ -233,7 +233,7 @@ export default function PerformancePage({ onBack }: PerformancePageProps) {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#F8FAFC',
+        backgroundColor: '#F6F4EF',
         fontFamily: FONT_STACK,
       }}
     >

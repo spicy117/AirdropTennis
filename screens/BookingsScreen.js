@@ -16,6 +16,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getTranslation, t as tWithParams } from '../utils/translations';
 import BookingEditModal from '../components/BookingEditModal';
+import MemberPageBackground from '../components/member/MemberPageBackground';
+import { memberColors } from '../theme/memberTheme';
 
 // Service color configuration
 const SERVICE_COLORS = {
@@ -288,6 +290,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
   };
 
   return (
+    <MemberPageBackground>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
@@ -384,13 +387,14 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
         }}
       />
     </ScrollView>
+    </MemberPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 20,

@@ -16,6 +16,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 import { utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
+import MemberPageBackground from '../components/member/MemberPageBackground';
+import { memberColors } from '../theme/memberTheme';
 
 // Service color configuration
 const SERVICE_COLORS = {
@@ -344,6 +346,7 @@ export default function StudentHistoryScreen(props) {
   }
 
   return (
+    <MemberPageBackground>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -452,13 +455,14 @@ export default function StudentHistoryScreen(props) {
         </View>
       )}
     </ScrollView>
+    </MemberPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 20,

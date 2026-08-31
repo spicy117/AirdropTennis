@@ -5,51 +5,41 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
+import MemberPageBackground from '../components/member/MemberPageBackground';
+import { memberColors, memberRadius, memberTypography } from '../theme/memberTheme';
 
 export default function ProfileScreen({ onSignOut, onNavigate }) {
   const { user, userRole, refreshUserRole } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
-  const [currentRole, setCurrentRole] = useState(null); // Direct role from database
+  const [currentRole, setCurrentRole] = useState(null);
 
-  // CRITICAL: Fetch role DIRECTLY from database to bypass any caching
   useEffect(() => {
     const fetchRoleDirectly = async () => {
       if (user?.id) {
         try {
-          console.log('🔍 [PROFILE] Fetching role directly from database...');
           const { data: profile, error } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', user.id)
             .single();
-          
           if (!error && profile?.role) {
-            console.log('✅ [PROFILE] Direct role from DB:', profile.role);
             setCurrentRole(profile.role);
           } else {
-            console.error('❌ [PROFILE] Error fetching role:', error);
-            setCurrentRole(userRole); // Fallback to context role
+            setCurrentRole(userRole);
           }
-        } catch (error) {
-          console.error('❌ [PROFILE] Error:', error);
-          setCurrentRole(userRole); // Fallback
+        } catch {
+          setCurrentRole(userRole);
         }
       }
     };
-    
     fetchRoleDirectly();
-    // Refresh periodically
     const interval = setInterval(fetchRoleDirectly, 5000);
     return () => clearInterval(interval);
   }, [user?.id, userRole]);
 
-  // Force refresh role from database when profile screen loads
   useEffect(() => {
-    if (user) {
-      console.log('🔄 [PROFILE] Refreshing role...');
-      refreshUserRole();
-    }
+    if (user) refreshUserRole();
   }, [user?.id]);
 
   const displayName =
@@ -60,37 +50,38 @@ export default function ProfileScreen({ onSignOut, onNavigate }) {
     user?.email?.split('@')[0] ||
     t('student');
 
-  // Get role display text - CRITICAL: Use currentRole from database (source of truth)
+  const effectiveRole = currentRole || userRole;
+  const isAdmin = effectiveRole === 'admin';
+  const isMember = !isAdmin && effectiveRole !== 'coach';
+
   const getRoleDisplay = () => {
-    const effectiveRole = currentRole || userRole;
-    
-    // DEBUG: Log role information
-    console.log('🔍 [PROFILE] Role check:', {
-      userRole, // From context
-      currentRole, // From database
-      effectiveRole, // What we're using
-      userMetadataRole: user?.user_metadata?.role,
-    });
-    
     if (effectiveRole === 'coach') return t('coach');
     if (effectiveRole === 'admin') return t('admin');
     return t('student');
   };
 
-  const isAdmin = (currentRole === 'admin' || userRole === 'admin');
-
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View style={styles.avatarLarge}>
-          <Ionicons name="person" size={48} color="#8E8E93" />
+  const content = (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <View style={[styles.header, isMember && memberStyles.header]}>
+        <View style={[styles.avatarLarge, isMember && memberStyles.avatar]}>
+          <Text style={memberStyles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
         </View>
-        <Text style={styles.name}>{displayName}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{getRoleDisplay()}</Text>
+        <Text style={[styles.name, isMember && memberStyles.name]}>{displayName}</Text>
+        <Text style={[styles.email, isMember && memberStyles.email]}>{user?.email}</Text>
+        <View style={[styles.roleBadge, isMember && memberStyles.roleBadge]}>
+          <Text style={[styles.roleText, isMember && memberStyles.roleText]}>{getRoleDisplay()}</Text>
         </View>
       </View>
+
+      {isMember && (
+        <View style={memberStyles.section}>
+          <Text style={memberStyles.sectionTitle}>Account</Text>
+          <View style={memberStyles.row}>
+            <Ionicons name="mail-outline" size={18} color={memberColors.inkMuted} />
+            <Text style={memberStyles.rowText}>{user?.email}</Text>
+          </View>
+        </View>
+      )}
 
       {isAdmin && onNavigate && (
         <TouchableOpacity
@@ -104,17 +95,23 @@ export default function ProfileScreen({ onSignOut, onNavigate }) {
       )}
 
       <TouchableOpacity
-        style={styles.signOutButton}
+        style={[styles.signOutButton, isMember && memberStyles.signOut]}
         onPress={onSignOut}
         accessible={true}
         accessibilityLabel={t('signOut')}
         accessibilityRole="button"
       >
-        <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-        <Text style={styles.signOutText}>{t('signOut')}</Text>
+        <Ionicons name="log-out-outline" size={20} color={isMember ? memberColors.danger : '#FF3B30'} />
+        <Text style={[styles.signOutText, isMember && memberStyles.signOutText]}>{t('signOut')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
+
+  if (isMember) {
+    return <MemberPageBackground>{content}</MemberPageBackground>;
+  }
+
+  return <View style={styles.container}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -122,8 +119,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
@@ -198,5 +199,82 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FF3B30',
     marginLeft: 8,
+  },
+});
+
+const memberStyles = StyleSheet.create({
+  header: {
+    paddingTop: 8,
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: memberColors.limeSoft,
+    borderWidth: 2,
+    borderColor: memberColors.lime,
+  },
+  avatarInitial: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: memberColors.ink,
+  },
+  name: {
+    ...memberTypography.h1,
+    fontSize: 26,
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: 15,
+    color: memberColors.inkMuted,
+    marginBottom: 12,
+  },
+  roleBadge: {
+    backgroundColor: memberColors.court,
+    borderRadius: memberRadius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  roleText: {
+    color: memberColors.white,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  section: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderRadius: memberRadius.lg,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: memberColors.inkMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rowText: {
+    fontSize: 15,
+    color: memberColors.ink,
+    flex: 1,
+  },
+  signOut: {
+    borderColor: memberColors.dangerSoft,
+    backgroundColor: memberColors.surfaceRaised,
+    alignSelf: 'stretch',
+    marginTop: 8,
+  },
+  signOutText: {
+    color: memberColors.danger,
   },
 });

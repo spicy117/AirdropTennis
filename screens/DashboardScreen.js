@@ -21,6 +21,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getWalletBalance } from '../lib/stripe';
 import WalletTopUpModal from '../components/WalletTopUpModal';
 import BookingEditModal from '../components/BookingEditModal';
+import MemberPageBackground from '../components/member/MemberPageBackground';
+import MemberWelcomeHeader from '../components/member/MemberWelcomeHeader';
+import StreakIndicator from '../components/member/StreakIndicator';
+import NextSessionHero from '../components/member/NextSessionHero';
+import CreditBalanceCard from '../components/member/CreditBalanceCard';
+import MemberServiceCard from '../components/member/MemberServiceCard';
+import ServiceCarousel from '../components/member/ServiceCarousel';
+import SectionHeader from '../components/member/SectionHeader';
+import SessionTimelineRow from '../components/member/SessionTimelineRow';
+import EmptyState from '../components/member/EmptyState';
+import { memberColors } from '../theme/memberTheme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && SCREEN_WIDTH > 768;
@@ -40,6 +51,13 @@ const SEASON_PASS_BENEFITS = [
 const SERVICE_NAME_KEYS = { 'stroke-clinic': 'serviceStrokeClinic', 'boot-camp': 'serviceBootCamp', 'private-lessons': 'servicePrivateLessons', 'utr-points-play': 'serviceUtrPoints' };
 const SERVICE_DESC_KEYS = { 'stroke-clinic': 'serviceStrokeClinicDesc', 'boot-camp': 'serviceBootCampDesc', 'private-lessons': 'servicePrivateLessonsDesc', 'utr-points-play': 'serviceUtrPointsDesc' };
 const TAG_KEYS = { Popular: 'tagPopular', Value: 'tagValue', Premium: 'tagPremium' };
+
+const MEMBER_SERVICE_ACCENTS = {
+  'stroke-clinic': { accent: '#1E3D32', accentBg: 'rgba(30, 61, 50, 0.1)' },
+  'boot-camp': { accent: '#B45309', accentBg: 'rgba(180, 83, 9, 0.1)' },
+  'private-lessons': { accent: '#1D4ED8', accentBg: 'rgba(29, 78, 216, 0.08)' },
+  'utr-points-play': { accent: '#6D28D9', accentBg: 'rgba(109, 40, 217, 0.08)' },
+};
 
 // Service configurations
 const SERVICES = [
@@ -1570,255 +1588,174 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     setShowServiceModal(true);
   };
 
-  return (
-    <View style={styles.screen}>
-      {/* Subtle gradient background */}
-      <View style={styles.bgGradient}>
-        <View style={[styles.bgOrb, styles.bgOrb1]} />
-        <View style={[styles.bgOrb, styles.bgOrb2]} />
-      </View>
+  const localizedServices = SERVICES.map((service) => ({
+    ...service,
+    ...MEMBER_SERVICE_ACCENTS[service.id],
+    name: t(SERVICE_NAME_KEYS[service.id] || service.name),
+    shortDesc: t(SERVICE_DESC_KEYS[service.id] || service.shortDesc),
+    tag: service.tag ? t(TAG_KEYS[service.tag]) : null,
+  }));
 
+  const welcomeSubtitle = nextBooking ? 'Your next session is coming up.' : 'Ready to get back on court?';
+
+  return (
+    <MemberPageBackground>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (isMobile ? 88 : 24) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={[styles.header, isNarrowHeader && styles.headerNarrow]}>
-          <View style={[styles.headerLeft, isNarrowHeader && styles.headerLeftNarrow]}>
-            {!isDesktop && onOpenSidebar && (
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={onOpenSidebar}
-                accessible={true}
-                accessibilityLabel="Open menu"
-                accessibilityRole="button"
-              >
-                <Ionicons name="menu" size={24} color="#0F172A" />
-              </TouchableOpacity>
-            )}
-            <View style={[styles.headerTextWrap, isNarrowHeader && styles.headerTextWrapNarrow]}>
-              <Text style={styles.greeting} numberOfLines={1} ellipsizeMode="tail">{t('welcome')}</Text>
-              <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{userName}</Text>
+        <MemberWelcomeHeader
+          userName={userName}
+          subtitle={isStudent ? welcomeSubtitle : undefined}
+          showMenu={!isDesktop && !!onOpenSidebar}
+          onOpenSidebar={onOpenSidebar}
+          language={language}
+          onToggleLanguage={isStudent ? () => updateLanguage(language === 'en' ? 'zh-CN' : 'en') : undefined}
+          langEnShort={t('langEnShort')}
+          langZhShort={t('langZhShort')}
+        />
+
+        {isStudent && onGoToPerformance && (
+          <StreakIndicator
+            weeks={streakCount}
+            onPress={onGoToPerformance}
+            labelEmpty="Start your streak"
+          />
+        )}
+
+        {isStudent ? (
+          <View style={[styles.heroRow, servicesUse2x2 && styles.heroRowStacked]}>
+            <View style={servicesUse2x2 ? styles.heroMainFull : styles.heroMain}>
+              <NextSessionHero
+              booking={nextBooking}
+              loading={loadingBooking}
+              onBook={onBookLesson}
+              onViewBooking={() => {
+                if (nextBooking) {
+                  setSelectedBooking(nextBooking);
+                  setEditModalVisible(true);
+                }
+              }}
+              formatDate={formatDate}
+              formatTime={formatTime}
+              labels={{
+                nextOnCourt: 'Next on court',
+                noBooking: t('noLessonsYet'),
+                noBookingSub: t('bookFirstLesson'),
+                bookNow: t('bookNow'),
+                viewBooking: 'View booking',
+                tennisLesson: t('tennisLesson'),
+                tbd: t('tbd'),
+              }}
+            />
+            </View>
+            <View style={servicesUse2x2 ? styles.heroSideFull : styles.heroSide}>
+            <CreditBalanceCard
+              balance={creditBalance}
+              loading={loadingBalance}
+              onTopUp={() => setShowTopUpModal(true)}
+              labels={{ availableCredit: t('creditBalance'), topUp: t('topUp') }}
+            />
             </View>
           </View>
-          {isStudent && (
-            <View style={[styles.headerRight, isNarrowHeader && styles.headerRightNarrow]}>
-              {onGoToBookings && (
-                <TouchableOpacity
-                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
-                  onPress={onGoToBookings}
-                  accessible={true}
-                  accessibilityLabel={t('upcomingLessonsButton')}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="calendar-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
-                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('upcomingLessonsButton')}</Text>}
-                </TouchableOpacity>
-              )}
-              {onGoToPerformance && (
-                <TouchableOpacity
-                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
-                  onPress={onGoToPerformance}
-                  accessible={true}
-                  accessibilityLabel={t('navPerformance')}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="stats-chart-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
-                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('navPerformance')}</Text>}
-                </TouchableOpacity>
-              )}
-              {onGoToHistory && (
-                <TouchableOpacity
-                  style={[styles.historyButton, isNarrowHeader && styles.historyButtonIconOnly]}
-                  onPress={onGoToHistory}
-                  accessible={true}
-                  accessibilityLabel={t('viewSessionHistory')}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="time-outline" size={isNarrowHeader ? 20 : 14} color="#64748B" />
-                  {!isNarrowHeader && <Text style={styles.historyButtonText}>{t('history')}</Text>}
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.langToggle, isNarrowHeader && styles.langToggleNarrow]}
-                onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
-              >
-                <Ionicons name="language-outline" size={isNarrowHeader ? 18 : 14} color="#64748B" />
-                <Text style={[styles.langText, isNarrowHeader && styles.langTextNarrow]}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
-              </TouchableOpacity>
+        ) : (
+          <View style={styles.statsRow}>
+            <StatCard
+              icon="wallet"
+              iconColor="#10B981"
+              iconBg="rgba(16, 185, 129, 0.12)"
+              label={t('creditBalance')}
+              value={loadingBalance ? '...' : `$${creditBalance.toFixed(2)}`}
+              action={t('topUp')}
+              actionColor="#10B981"
+              onAction={() => setShowTopUpModal(true)}
+            />
+            <StatCard
+              icon="calendar"
+              iconColor="#3B82F6"
+              iconBg="rgba(59, 130, 246, 0.12)"
+              label={t('nextBooking')}
+              value={nextBooking ? formatDate(nextBooking.start_time) : t('none')}
+              subValue={nextBooking ? `${formatTime(nextBooking.start_time)} • ${nextBooking.locations?.name || t('tbd')}` : null}
+              action={!nextBooking ? t('bookNow') : null}
+              actionColor="#3B82F6"
+              onAction={onBookLesson}
+              loading={loadingBooking}
+            />
+          </View>
+        )}
+
+        <View style={styles.servicesSection}>
+          <SectionHeader title={t('selectAService')} />
+          {servicesUse2x2 ? (
+            <ServiceCarousel
+              services={localizedServices}
+              onPress={(s) => handleServicePress(SERVICES.find((x) => x.id === s.id)?.name || s.name)}
+              onMoreInfo={(s) => handleMoreInfo(SERVICES.find((x) => x.id === s.id) || s)}
+              infoLabel={t('info')}
+            />
+          ) : (
+            <View style={styles.servicesShelf}>
+              {localizedServices.map((service) => (
+                <View key={service.id} style={styles.serviceShelfItem}>
+                  <MemberServiceCard
+                  service={service}
+                  onPress={() => handleServicePress(SERVICES.find((x) => x.id === service.id)?.name || service.name)}
+                  onMoreInfo={() => handleMoreInfo(SERVICES.find((x) => x.id === service.id))}
+                  infoLabel={t('info')}
+                />
+                </View>
+              ))}
             </View>
           )}
         </View>
 
-        {/* Season Pass Hero - Hidden for now, will be re-enabled later */}
-        {/* <SeasonPassHero onLearnMore={() => setShowSeasonPassModal(true)} /> */}
-
-        {/* Streak pill - compact, tappable to Performance */}
-        {isStudent && onGoToPerformance && (
-          <TouchableOpacity
-            style={styles.streakPill}
-            onPress={onGoToPerformance}
-            activeOpacity={0.7}
-            accessible={true}
-            accessibilityLabel={`${streakCount} week streak. View performance.`}
-            accessibilityRole="button"
-          >
-            <Text style={{ fontSize: 13, marginRight: 4, lineHeight: 16 }}>🔥</Text>
-            <Text style={styles.streakPillText}>{streakCount} week{streakCount !== 1 ? 's' : ''}</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <StatCard
-            icon="wallet"
-            iconColor="#10B981"
-            iconBg="rgba(16, 185, 129, 0.12)"
-            label={t('creditBalance')}
-            value={loadingBalance ? '...' : `$${creditBalance.toFixed(2)}`}
-            action={t('topUp')}
-            actionColor="#10B981"
-            onAction={() => setShowTopUpModal(true)}
-          />
-          <StatCard
-            icon="calendar"
-            iconColor="#3B82F6"
-            iconBg="rgba(59, 130, 246, 0.12)"
-            label={t('nextBooking')}
-            value={nextBooking ? formatDate(nextBooking.start_time) : t('none')}
-            subValue={nextBooking ? `${formatTime(nextBooking.start_time)} • ${nextBooking.locations?.name || t('tbd')}` : null}
-            action={!nextBooking ? t('bookNow') : null}
-            actionColor="#3B82F6"
-            onAction={onBookLesson}
-            loading={loadingBooking}
-          />
-        </View>
-
-        {/* Services Section - 2x2 grid when viewport <= 768px (mobile/tablet) */}
-        <View style={styles.servicesSection}>
-          <Text style={styles.sectionHeader}>{t('selectAService')}</Text>
-          <View style={[
-            styles.servicesGrid,
-            servicesUse2x2 && { flexDirection: 'column', flexWrap: 'nowrap', justifyContent: 'flex-start', gap: 0 },
-          ]}>
-            {servicesUse2x2 ? (
-              [0, 1].map((row) => (
-                <View key={row} style={styles.servicesRow}>
-                  {SERVICES.slice(row * 2, row * 2 + 2).map((service) => (
-                    <ServiceCard
-                      key={service.id}
-                      service={service}
-                      onPress={() => handleServicePress(service.name)}
-                      onMoreInfo={handleMoreInfo}
-                      useFlexLayout
-                    />
-                  ))}
-                </View>
-              ))
-            ) : (
-              SERVICES.map((service) => (
-                <ServiceCard
-                  key={service.id}
-                  service={{ ...service, name: t(SERVICE_NAME_KEYS[service.id] || service.name), shortDesc: t(SERVICE_DESC_KEYS[service.id] || service.shortDesc), tag: service.tag ? t(TAG_KEYS[service.tag]) : null }}
-                  onPress={() => handleServicePress(service.name)}
-                  onMoreInfo={handleMoreInfo}
-                  infoLabel={t('info')}
-                />
-              ))
-            )}
-          </View>
-        </View>
-
-        {/* Upcoming Lessons */}
         <View style={styles.upcomingSection}>
-          <View style={styles.upcomingHeader}>
-            <View style={styles.upcomingHeaderLeft}>
-              <Text style={styles.sectionHeader}>{t('upcomingLessons')}</Text>
-              {upcomingBookings.length > 0 && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{upcomingBookings.length}</Text>
-                </View>
-              )}
-            </View>
-            {isStudent && onGoToHistory && (
-              <TouchableOpacity
-                style={styles.historyLink}
-                onPress={onGoToHistory}
-                accessible={true}
-                accessibilityLabel={t('viewSessionHistory')}
-                accessibilityRole="button"
-              >
-                <Ionicons name="time-outline" size={14} color="#3B82F6" />
-                <Text style={styles.historyLinkText}>{t('history')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <SectionHeader
+            title={t('upcomingLessons')}
+            count={upcomingBookings.length}
+            actionLabel={isStudent && onGoToHistory ? t('history') : undefined}
+            onAction={onGoToHistory}
+          />
 
           {loadingBooking ? (
-            <ActivityIndicator size="large" color="#3B82F6" style={{ paddingVertical: 40 }} />
+            <ActivityIndicator size="large" color={memberColors.court} style={{ paddingVertical: 40 }} />
           ) : upcomingBookings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="calendar-outline" size={32} color="#CBD5E1" />
-              </View>
-              <Text style={styles.emptyTitle}>{t('noLessonsYet')}</Text>
-              <Text style={styles.emptySubtitle}>{t('bookFirstLesson')}</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={onBookLesson}>
-                <Text style={styles.emptyBtnText}>{t('bookNow')}</Text>
-              </TouchableOpacity>
-            </View>
+            <EmptyState
+              icon="calendar-outline"
+              title={t('noLessonsYet')}
+              subtitle={t('bookFirstLesson')}
+              actionLabel={t('bookNow')}
+              onAction={onBookLesson}
+            />
           ) : (
-            <>
-              <View style={styles.bookingsList}>
-                {upcomingBookings.slice(0, 4).map((booking, i) => (
-                  <TouchableOpacity
-                    key={booking.id}
-                    style={[styles.bookingItem, i > 0 && { marginTop: isMobile ? 8 : 10 }]}
-                    onPress={() => {
-                      setSelectedBooking(booking);
-                      setEditModalVisible(true);
-                    }}
-                    activeOpacity={0.7}
-                    accessible={true}
-                    accessibilityLabel={`Edit booking: ${booking.service_name || 'Tennis Lesson'} on ${formatTime(booking.start_time)}`}
-                    accessibilityRole="button"
-                  >
-                    {booking.hasPendingRainCheck && (
-                      <View style={styles.rainCheckTag}>
-                        <Ionicons name="rainy" size={12} color="#007AFF" />
-                        <Text style={styles.rainCheckTagText}>Rain Check Pending</Text>
-                      </View>
-                    )}
-                    <View style={styles.bookingDate}>
-                      <Text style={styles.bookingDay}>{new Date(booking.start_time).getDate()}</Text>
-                      <Text style={styles.bookingMonth}>
-                        {new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short' })}
-                      </Text>
-                    </View>
-                    <View style={styles.bookingInfo}>
-                      <Text style={styles.bookingTitle}>{booking.service_name || t('tennisLesson')}</Text>
-                      <Text style={styles.bookingMeta}>
-                        {formatTime(booking.start_time)} • {booking.locations?.name || 'TBD'}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color="#CBD5E1" />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {isStudent && onGoToBookings && (
+            <View style={styles.timeline}>
+              {upcomingBookings.slice(0, 4).map((booking, i) => (
+                <SessionTimelineRow
+                  key={booking.id}
+                  booking={booking}
+                  formatTime={formatTime}
+                  tennisLesson={t('tennisLesson')}
+                  showDivider={i < Math.min(upcomingBookings.length, 4) - 1}
+                  onPress={() => {
+                    setSelectedBooking(booking);
+                    setEditModalVisible(true);
+                  }}
+                />
+              ))}
+              {isStudent && onGoToBookings && upcomingBookings.length > 0 && (
                 <TouchableOpacity
                   style={styles.seeAllBookingsButton}
                   onPress={onGoToBookings}
-                  accessible={true}
-                  accessibilityLabel={t('seeAllBookings')}
                   accessibilityRole="button"
+                  accessibilityLabel={t('seeAllBookings')}
                 >
                   <Text style={styles.seeAllBookingsText}>{t('seeAllBookings')}</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#3B82F6" />
+                  <Ionicons name="arrow-forward" size={14} color={memberColors.ink} />
                 </TouchableOpacity>
               )}
-            </>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -1854,7 +1791,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
         booking={selectedBooking}
         onBookingCancelled={loadBookings}
       />
-    </View>
+    </MemberPageBackground>
   );
 }
 
@@ -1899,13 +1836,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: isMobile ? 14 : 16,
-    maxWidth: 1000,
+    padding: isMobile ? 16 : 20,
+    maxWidth: 1100,
     ...(Platform.OS === 'web' && isDesktop && {
       marginHorizontal: 'auto',
       width: '100%',
       padding: 32,
+      paddingTop: 28,
     }),
+  },
+  heroRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 32,
+    alignItems: 'stretch',
+  },
+  heroRowStacked: {
+    flexDirection: 'column',
+  },
+  heroMain: {
+    flex: 2,
+  },
+  heroMainFull: {
+    width: '100%',
+  },
+  heroSide: {
+    flex: 1,
+    maxWidth: 240,
+  },
+  heroSideFull: {
+    width: '100%',
+  },
+  servicesShelf: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  serviceShelfItem: {
+    flex: 1,
+    minWidth: 220,
+    maxWidth: '48%',
+  },
+  timeline: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: memberColors.border,
   },
 
   // Header
@@ -2101,13 +2078,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     marginTop: isMobile ? 12 : 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: memberColors.border,
   },
   seeAllBookingsText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: memberColors.ink,
   },
   countBadge: {
     backgroundColor: '#0F172A',
