@@ -85,6 +85,6 @@ export async function loadStudentCreditHistory(studentId) {
 
   return {
     items,
-    error: errors.length > 0 ? errors.join(' ') : null,
+    error: items.length === 0 && errors.length > 0 ? errors.join(' ') : null,
   };
 }
