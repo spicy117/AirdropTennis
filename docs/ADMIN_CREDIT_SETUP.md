@@ -11,13 +11,17 @@ Manual credit changes use the **same balance** as member Top Up and booking dedu
 
 ## Required SQL (one time)
 
-Supabase project **`rozxeqqwxpnfqbyvtvch`** → **SQL Editor** → run the full file:
+Supabase project **`rozxeqqwxpnfqbyvtvch`** → **SQL Editor**:
 
-`supabase/migrations/015_admin_wallet_ledger.sql`
+1. If `wallet_transactions` already exists but adjustment fails with **column "created_by" does not exist**, run first:  
+   `supabase/migrations/017_wallet_transactions_schema_fix.sql`  
+   (This is the full fix — you can stop after step 1 if it succeeds.)
 
-If you already ran an older copy of 015, also run:
+2. Otherwise run the full file:  
+   `supabase/migrations/015_admin_wallet_ledger.sql`
 
-`supabase/migrations/016_admin_wallet_insert_policy.sql`
+3. If you already ran an older 015, also run:  
+   `supabase/migrations/016_admin_wallet_insert_policy.sql`
 
 This creates:
 

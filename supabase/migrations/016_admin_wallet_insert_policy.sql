@@ -1,5 +1,10 @@
 -- Patch for projects that ran an earlier 015 without wallet_transactions INSERT policy.
--- Safe to re-run. Also safe if full 015 was applied later.
+-- Safe to re-run. If you see "column created_by does not exist", run 017 first.
+
+ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.profiles(id);
+ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS source text;
+ALTER TABLE public.wallet_transactions
+  ALTER COLUMN source SET DEFAULT 'manual_admin_adjustment';
 
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean

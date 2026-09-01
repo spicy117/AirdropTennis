@@ -1,4 +1,24 @@
--- Admin wallet ledger + secure manual credit adjustments. Safe to re-run.
+-- Fix wallet_transactions when table was created without all columns (partial 015 run).
+-- Safe to re-run. Run this BEFORE 016 if you hit "column created_by does not exist".
+
+ALTER TABLE public.wallet_transactions
+  ADD COLUMN IF NOT EXISTS note text;
+
+ALTER TABLE public.wallet_transactions
+  ADD COLUMN IF NOT EXISTS source text;
+
+ALTER TABLE public.wallet_transactions
+  ALTER COLUMN source SET DEFAULT 'manual_admin_adjustment';
+
+UPDATE public.wallet_transactions
+SET source = 'manual_admin_adjustment'
+WHERE source IS NULL;
+
+ALTER TABLE public.wallet_transactions
+  ALTER COLUMN source SET NOT NULL;
+
+ALTER TABLE public.wallet_transactions
+  ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.profiles(id);
 
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
@@ -14,55 +34,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
-CREATE TABLE IF NOT EXISTS public.wallet_transactions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  delta numeric NOT NULL,
-  balance_before numeric NOT NULL,
-  balance_after numeric NOT NULL,
-  direction text NOT NULL CHECK (direction IN ('add', 'remove')),
-  reason text NOT NULL,
-  note text,
-  source text NOT NULL DEFAULT 'manual_admin_adjustment',
-  created_by uuid REFERENCES public.profiles(id),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS wallet_transactions_user_id_created_at_idx
-  ON public.wallet_transactions (user_id, created_at DESC);
-
--- Partial installs: CREATE TABLE IF NOT EXISTS skips missing columns on an existing table.
-ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS note text;
-ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS source text;
-ALTER TABLE public.wallet_transactions
-  ALTER COLUMN source SET DEFAULT 'manual_admin_adjustment';
-UPDATE public.wallet_transactions SET source = 'manual_admin_adjustment' WHERE source IS NULL;
-ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.profiles(id);
-
-ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "wallet_transactions_admin_select" ON public.wallet_transactions;
-CREATE POLICY "wallet_transactions_admin_select"
-  ON public.wallet_transactions
-  FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles admin_p
-      WHERE admin_p.id = auth.uid()
-        AND admin_p.role = 'admin'
-    )
-    AND EXISTS (
-      SELECT 1 FROM public.profiles target_p
-      WHERE target_p.id = wallet_transactions.user_id
-        AND (
-          target_p.academy_id IS NULL
-          OR target_p.academy_id = public.user_academy_id()
-        )
-    )
-  );
-
--- Allow audit inserts from admin_adjust_wallet when RLS applies to SECURITY DEFINER callers.
 DROP POLICY IF EXISTS "wallet_transactions_admin_insert" ON public.wallet_transactions;
 CREATE POLICY "wallet_transactions_admin_insert"
   ON public.wallet_transactions
