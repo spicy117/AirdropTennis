@@ -518,19 +518,27 @@ const SkeletonChip = () => {
   );
 };
 
-export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter = null }) {
+export default function BookingDiscoveryScreen({
+  onNext,
+  onBack,
+  serviceFilter = null,
+  initialDate = null,
+  initialLocationId = null,
+  initialTime24 = null,
+}) {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
   const locale = getLocale(language);
   const weekdayLabels = getWeekdayLabels(language);
   // Initialize selectedDate as Sydney local date string
-  const [selectedDate, setSelectedDate] = useState(getSydneyToday());
+  const [selectedDate, setSelectedDate] = useState(initialDate || getSydneyToday());
   const [availabilities, setAvailabilities] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState([]); // Array of { time, locationId, serviceName }
-  const [selectedLocationId, setSelectedLocationId] = useState(null); // null = all locations
+  const [selectedLocationId, setSelectedLocationId] = useState(initialLocationId ?? null); // null = all locations
+  const pendingAutoSelectRef = useRef(initialTime24);
   const [viewMode, setViewMode] = useState('weekly'); // 'weekly' or 'monthly'
   // Use Sydney local time for calendar month/year
   const nowForCalendar = new Date();
@@ -766,6 +774,12 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
   useEffect(() => {
     loadLocations();
   }, []);
+
+  useEffect(() => {
+    if (initialDate) setSelectedDate(initialDate);
+    if (initialLocationId != null) setSelectedLocationId(initialLocationId);
+    if (initialTime24) pendingAutoSelectRef.current = initialTime24;
+  }, [initialDate, initialLocationId, initialTime24]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -1265,6 +1279,18 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
     }
   };
 
+  useEffect(() => {
+    const time24 = pendingAutoSelectRef.current;
+    if (!time24 || loading || availabilities.length === 0) return;
+    for (const group of groupedAvailabilities) {
+      const slot = group.slots.find((s) => s.time24 === time24);
+      if (slot) {
+        handleSlotClick(slot);
+        pendingAutoSelectRef.current = null;
+        break;
+      }
+    }
+  }, [loading, availabilities]);
 
   // Find a slot by time24 format
   const findSlotByTime = (time24, locationId) => {

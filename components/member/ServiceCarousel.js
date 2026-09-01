@@ -5,7 +5,7 @@ import MemberServiceCard from './MemberServiceCard';
 export default function ServiceCarousel({ services, onPress, onMoreInfo, infoLabel }) {
   const { width } = useWindowDimensions();
   const gap = 12;
-  const cardWidth = Math.min(280, Math.max(240, width * 0.76));
+  const cardWidth = Math.min(280, Math.max(240, width * 0.82));
   const snapInterval = cardWidth + gap;
 
   return (

@@ -5,7 +5,7 @@ import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTr
 import CourtWatermark from './CourtWatermark';
 import MemberSkeleton from './MemberSkeleton';
 
-export default function CreditBalanceCard({ balance, loading, onTopUp, labels = {} }) {
+export default function CreditBalanceCard({ balance, loading, onTopUp, labels = {}, compact = false }) {
   const {
     creditBalance = 'Credit balance',
     availableForBookings = 'Available for bookings',
@@ -13,10 +13,10 @@ export default function CreditBalanceCard({ balance, loading, onTopUp, labels = 
   } = labels;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, compact && styles.cardCompact]}>
       <CourtWatermark variant="ambient" />
 
-      <View style={styles.inner}>
+      <View style={[styles.inner, compact && styles.innerCompact]}>
         <View style={styles.headerRow}>
           <View style={styles.limeMark} />
           <Text style={styles.label}>{creditBalance}</Text>
@@ -60,11 +60,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  cardCompact: {
+    minHeight: undefined,
+  },
   inner: {
     padding: 22,
     flex: 1,
     justifyContent: 'space-between',
     zIndex: 1,
+  },
+  innerCompact: {
+    padding: 16,
   },
   headerRow: {
     flexDirection: 'row',

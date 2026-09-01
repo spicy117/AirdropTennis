@@ -36,7 +36,7 @@ const getServiceColor = (serviceName) => {
 
 const MOBILE_BREAKPOINT = 480;
 
-export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome }) {
+export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome, onBrowseAvailableSessions }) {
   const { width } = useWindowDimensions?.() ?? { width: 400 };
   const isMobile = width < MOBILE_BREAKPOINT;
 
@@ -356,13 +356,15 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
           <Text style={styles.emptyText}>{t('readyToHitCourt')}</Text>
           <TouchableOpacity
             style={styles.emptyButton}
-            onPress={onBookLesson}
+            onPress={onBrowseAvailableSessions || onBookLesson}
             accessible={true}
-            accessibilityLabel={t('bookLesson')}
+            accessibilityLabel={onBrowseAvailableSessions ? t('browseAvailableSessions') : t('bookLesson')}
             accessibilityRole="button"
           >
             <Ionicons name="add-circle" size={20} color="#fff" />
-            <Text style={styles.emptyButtonText}>{t('bookLesson')}</Text>
+            <Text style={styles.emptyButtonText}>
+              {onBrowseAvailableSessions ? t('browseAvailableSessions') : t('bookLesson')}
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (

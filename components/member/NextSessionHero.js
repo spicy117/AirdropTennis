@@ -5,7 +5,7 @@ import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTr
 import MemberButton from './MemberButton';
 import CourtWatermark from './CourtWatermark';
 import { HeroSkeleton } from './MemberSkeleton';
-import { formatDayNumber, formatMonthShort, formatWeekdayShort } from '../../utils/locale';
+import { formatHeroDateParts } from '../../utils/locale';
 import { translateServiceName } from '../../utils/serviceTranslations';
 import { getTranslation } from '../../utils/translations';
 
@@ -51,9 +51,7 @@ export default function NextSessionHero({
   }
 
   const d = new Date(booking.start_time);
-  const dayNum = formatDayNumber(d);
-  const dayName = formatWeekdayShort(d, language);
-  const month = formatMonthShort(d, language);
+  const dateParts = formatHeroDateParts(d, language);
   const t = (key) => getTranslation(language, key);
   const serviceLabel = translateServiceName(
     booking.service_name,
@@ -79,9 +77,18 @@ export default function NextSessionHero({
 
         <View style={styles.heroRow}>
           <View style={styles.dateBlock}>
-            <Text style={styles.dayName}>{dayName}</Text>
-            <Text style={styles.dayNum}>{dayNum}</Text>
-            <Text style={styles.month}>{month}</Text>
+            {dateParts.layout === 'zh' ? (
+              <>
+                <Text style={styles.dayNumZh}>{dateParts.primary}</Text>
+                <Text style={styles.dayName}>{dateParts.secondary}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.dayName}>{dateParts.tertiary}</Text>
+                <Text style={styles.dayNum}>{dateParts.primary}</Text>
+                <Text style={styles.month}>{dateParts.secondary}</Text>
+              </>
+            )}
           </View>
 
           <View style={styles.sessionInfo}>
@@ -162,9 +169,9 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.2,
     color: memberColors.inkMuted,
     marginBottom: 2,
+    textAlign: 'center',
   },
   dayNum: {
     fontSize: 44,
@@ -172,6 +179,14 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     color: memberColors.ink,
     lineHeight: 48,
+  },
+  dayNumZh: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0,
+    color: memberColors.ink,
+    lineHeight: 28,
+    textAlign: 'center',
   },
   month: {
     fontSize: 13,

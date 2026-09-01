@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { memberColors } from '../../theme/memberTheme';
+import { memberColors, memberTextBase } from '../../theme/memberTheme';
 import CourtWatermark from './CourtWatermark';
 
 export default function MemberPageBackground({ children, style }) {
@@ -21,6 +21,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: memberColors.bg,
+    ...memberTextBase,
   },
   bg: {
     ...StyleSheet.absoluteFillObject,

@@ -118,5 +118,16 @@ export const memberBreakpoints = {
   wide: 1280,
 };
 
+/** Web font stack with CJK fallbacks — Chinese-first readability */
+export const memberFontFamily = Platform.select({
+  web: "'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, -apple-system, sans-serif",
+  default: undefined,
+});
+
+export const memberTextBase = Platform.select({
+  web: memberFontFamily ? { fontFamily: memberFontFamily } : {},
+  default: {},
+});
+
 export const isMemberStudent = (role) =>
   role === 'student' || role == null || (role !== 'admin' && role !== 'coach');

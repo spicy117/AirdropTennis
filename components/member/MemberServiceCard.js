@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       boxShadow: '0 12px 32px rgba(20, 20, 20, 0.1)',
       borderColor: memberColors.borderStrong,
+      transform: [{ translateY: -3 }],
     }),
   },
   cardPressed: {

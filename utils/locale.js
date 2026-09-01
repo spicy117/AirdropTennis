@@ -99,3 +99,32 @@ export function formatRelativeBookingDay(dateInput, language, t) {
   if (diffDays === 1) return t('tomorrow');
   return t('inDays').replace('{{count}}', String(diffDays));
 }
+
+/** Section anchor for schedule lists — locale-aware long date */
+export function formatDateGroupHeader(dateStr, language) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString(getLocale(language), {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+/** Hero date block parts — Chinese uses month/day/weekday order */
+export function formatHeroDateParts(dateInput, language) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const locale = getLocale(language);
+  if (language === 'zh-CN') {
+    const month = date.toLocaleDateString(locale, { month: 'long' });
+    const day = date.getDate();
+    const weekday = date.toLocaleDateString(locale, { weekday: 'long' });
+    return { primary: `${month}${day}日`, secondary: weekday, layout: 'zh' };
+  }
+  return {
+    primary: String(formatDayNumber(date)),
+    secondary: formatMonthShort(date, language),
+    tertiary: formatWeekdayShort(date, language),
+    layout: 'en',
+  };
+}

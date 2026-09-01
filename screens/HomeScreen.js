@@ -25,6 +25,7 @@ import DashboardScreen from './DashboardScreen';
 import BookingsScreen from './BookingsScreen';
 import ProfileScreen from './ProfileScreen';
 import BookingDiscoveryScreen from './BookingDiscoveryScreen';
+import AvailableSessionsScreen from './AvailableSessionsScreen';
 import ServicesScreen from './ServicesScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
 import AdminStudentsScreen from './AdminStudentsScreen';
@@ -70,6 +71,12 @@ export default function HomeScreen() {
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
   const [serviceFilter, setServiceFilter] = useState(null);
+  const [bookingDiscoveryContext, setBookingDiscoveryContext] = useState({
+    initialDate: null,
+    initialLocationId: null,
+    initialTime24: null,
+  });
+  const [bookingReturnScreen, setBookingReturnScreen] = useState('dashboard');
   const [sidebarVisible, setSidebarVisible] = useState(false);
   
   // Booking result modal state
@@ -469,10 +476,29 @@ export default function HomeScreen() {
   };
 
   const handleBookLesson = () => {
-    // Navigate to booking discovery screen and clear any service filter
-    // so all availabilities are shown (not filtered by a specific service)
     setServiceFilter(null);
+    setBookingDiscoveryContext({ initialDate: null, initialLocationId: null, initialTime24: null });
+    setBookingReturnScreen('dashboard');
     setActiveScreen('booking-discovery');
+  };
+
+  const handleBrowseAvailableSessions = () => {
+    setActiveScreen('available-sessions');
+  };
+
+  const handleBookAvailableSession = ({ dateStr, serviceName, locationId, time24 }) => {
+    setServiceFilter(serviceName);
+    setBookingDiscoveryContext({
+      initialDate: dateStr,
+      initialLocationId: locationId || null,
+      initialTime24: time24 || null,
+    });
+    setBookingReturnScreen('available-sessions');
+    setActiveScreen('booking-discovery');
+  };
+
+  const clearBookingDiscoveryContext = () => {
+    setBookingDiscoveryContext({ initialDate: null, initialLocationId: null, initialTime24: null });
   };
 
   const handleBookingNext = async (selectedSlots, summary, selectedDate = null) => {
@@ -888,6 +914,7 @@ export default function HomeScreen() {
         onBookLesson={handleBookLesson}
         onSelectService={(serviceName) => {
           setServiceFilter(serviceName);
+          setBookingReturnScreen('dashboard');
           setActiveScreen('booking-discovery');
         }}
         refreshTrigger={dashboardRefreshKey}
@@ -895,6 +922,7 @@ export default function HomeScreen() {
         onGoToHistory={() => setActiveScreen('history')}
         onGoToBookings={() => setActiveScreen('bookings')}
         onGoToPerformance={() => setActiveScreen('performance')}
+        onBrowseAvailableSessions={handleBrowseAvailableSessions}
       />
     );
 
@@ -915,12 +943,25 @@ export default function HomeScreen() {
             onBookLesson={handleBookLesson}
             onSelectService={(serviceName) => {
               setServiceFilter(serviceName);
+              setBookingReturnScreen('dashboard');
               setActiveScreen('booking-discovery');
             }}
             refreshTrigger={dashboardRefreshKey}
+            onOpenSidebar={handleOpenSidebar}
             onGoToHistory={() => setActiveScreen('history')}
             onGoToBookings={() => setActiveScreen('bookings')}
             onGoToPerformance={() => setActiveScreen('performance')}
+            onBrowseAvailableSessions={handleBrowseAvailableSessions}
+          />
+        );
+      case 'available-sessions':
+        if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return (
+          <AvailableSessionsScreen
+            onBack={() => setActiveScreen('dashboard')}
+            onBookSession={handleBookAvailableSession}
           />
         );
       case 'bookings':
@@ -932,6 +973,7 @@ export default function HomeScreen() {
             onBookLesson={handleBookLesson}
             refreshTrigger={dashboardRefreshKey}
             onGoHome={() => setActiveScreen('dashboard')}
+            onBrowseAvailableSessions={handleBrowseAvailableSessions}
           />
         );
       case 'history':
@@ -960,10 +1002,14 @@ export default function HomeScreen() {
           <BookingDiscoveryScreen
             onNext={handleBookingNext}
             onBack={() => {
-              setActiveScreen('dashboard');
-              setServiceFilter(null); // Clear filter when going back
+              setActiveScreen(bookingReturnScreen);
+              setServiceFilter(null);
+              clearBookingDiscoveryContext();
             }}
             serviceFilter={serviceFilter}
+            initialDate={bookingDiscoveryContext.initialDate}
+            initialLocationId={bookingDiscoveryContext.initialLocationId}
+            initialTime24={bookingDiscoveryContext.initialTime24}
           />
         );
       // Admin screens - STRICT: Only admins can access these
@@ -1044,6 +1090,7 @@ export default function HomeScreen() {
               onBookLesson={handleBookLesson}
               onSelectService={(serviceName) => {
                 setServiceFilter(serviceName);
+                setBookingReturnScreen('dashboard');
                 setActiveScreen('booking-discovery');
               }}
               refreshTrigger={dashboardRefreshKey}
@@ -1051,6 +1098,7 @@ export default function HomeScreen() {
               onGoToHistory={() => setActiveScreen('history')}
               onGoToBookings={() => setActiveScreen('bookings')}
               onGoToPerformance={() => setActiveScreen('performance')}
+              onBrowseAvailableSessions={handleBrowseAvailableSessions}
             />
           );
         }
@@ -1060,12 +1108,14 @@ export default function HomeScreen() {
             onBookLesson={handleBookLesson}
             onSelectService={(serviceName) => {
               setServiceFilter(serviceName);
+              setBookingReturnScreen('dashboard');
               setActiveScreen('booking-discovery');
             }}
             refreshTrigger={dashboardRefreshKey}
             onGoToHistory={() => setActiveScreen('history')}
             onGoToBookings={() => setActiveScreen('bookings')}
             onGoToPerformance={() => setActiveScreen('performance')}
+            onBrowseAvailableSessions={handleBrowseAvailableSessions}
           />
         );
     }

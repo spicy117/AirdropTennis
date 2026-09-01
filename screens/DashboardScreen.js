@@ -32,9 +32,11 @@ import SectionHeader from '../components/member/SectionHeader';
 import SessionTimelineRow from '../components/member/SessionTimelineRow';
 import EmptyState from '../components/member/EmptyState';
 import MemberSkeleton from '../components/member/MemberSkeleton';
+import AvailableSessionsButton from '../components/member/AvailableSessionsButton';
 import { memberColors } from '../theme/memberTheme';
-import { formatDateShort, formatTime as formatLocaleTime, formatDurationFromHours } from '../utils/locale';
+import { formatDateShort, formatTime as formatLocaleTime, formatDurationFromHours, formatDateGroupHeader } from '../utils/locale';
 import { getServiceDurationHours } from '../utils/serviceTranslations';
+import { utcToSydneyDate } from '../utils/timezone';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && SCREEN_WIDTH > 768;
@@ -1414,7 +1416,7 @@ const statStyles = StyleSheet.create({
 // ============================================
 // Main Dashboard Screen
 // ============================================
-export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory, onGoToBookings, onGoToPerformance }) {
+export default function DashboardScreen({ onBookLesson, onSelectService, refreshTrigger, onOpenSidebar, onGoToHistory, onGoToBookings, onGoToPerformance, onBrowseAvailableSessions }) {
   const insets = useSafeAreaInsets();
   const { user, userRole } = useAuth();
   const { language, updateLanguage } = useLanguage();
@@ -1596,6 +1598,16 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
 
   const welcomeSubtitle = nextBooking ? t('nextSessionComingUp') : t('readyToGetBackOnCourt');
 
+  const groupedUpcoming = React.useMemo(() => {
+    const map = new Map();
+    upcomingBookings.slice(0, 6).forEach((booking) => {
+      const dateStr = utcToSydneyDate(booking.start_time);
+      if (!map.has(dateStr)) map.set(dateStr, []);
+      map.get(dateStr).push(booking);
+    });
+    return Array.from(map.entries());
+  }, [upcomingBookings]);
+
   return (
     <MemberPageBackground>
       <ScrollView
@@ -1655,6 +1667,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               balance={creditBalance}
               loading={loadingBalance}
               onTopUp={() => setShowTopUpModal(true)}
+              compact={servicesUse2x2}
               labels={{
                 creditBalance: t('creditBalance'),
                 availableForBookings: t('availableForBookings'),
@@ -1690,8 +1703,22 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           </View>
         )}
 
+        {isStudent && onBrowseAvailableSessions && (
+          <View style={styles.browseRow}>
+            <AvailableSessionsButton
+              label={t('browseAvailableSessions')}
+              onPress={onBrowseAvailableSessions}
+              variant={servicesUse2x2 ? 'primary' : 'secondary'}
+            />
+          </View>
+        )}
+
         <View style={styles.servicesSection}>
-          <SectionHeader title={t('selectAService')} />
+          <SectionHeader
+            title={t('selectAService')}
+            actionLabel={onBrowseAvailableSessions ? t('viewAllAvailable') : undefined}
+            onAction={onBrowseAvailableSessions}
+          />
           {servicesUse2x2 ? (
             <ServiceCarousel
               services={localizedServices}
@@ -1733,25 +1760,30 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               icon="calendar-outline"
               title={t('noLessonsYet')}
               subtitle={t('bookFirstLesson')}
-              actionLabel={t('bookNow')}
-              onAction={onBookLesson}
+              actionLabel={onBrowseAvailableSessions ? t('browseAvailableSessions') : t('bookNow')}
+              onAction={onBrowseAvailableSessions || onBookLesson}
             />
           ) : (
             <View style={styles.timeline}>
-              {upcomingBookings.slice(0, 4).map((booking, i) => (
-                <SessionTimelineRow
-                  key={booking.id}
-                  booking={booking}
-                  formatTime={formatTime}
-                  language={language}
-                  tennisLesson={t('tennisLesson')}
-                  tbd={t('tbd')}
-                  showDivider={i < Math.min(upcomingBookings.length, 4) - 1}
-                  onPress={() => {
-                    setSelectedBooking(booking);
-                    setEditModalVisible(true);
-                  }}
-                />
+              {groupedUpcoming.map(([dateStr, dayBookings]) => (
+                <View key={dateStr} style={styles.upcomingDateGroup}>
+                  <Text style={styles.upcomingDateLabel}>{formatDateGroupHeader(dateStr, language)}</Text>
+                  {dayBookings.map((booking, i) => (
+                    <SessionTimelineRow
+                      key={booking.id}
+                      booking={booking}
+                      formatTime={formatTime}
+                      language={language}
+                      tennisLesson={t('tennisLesson')}
+                      tbd={t('tbd')}
+                      showDivider={i < dayBookings.length - 1}
+                      onPress={() => {
+                        setSelectedBooking(booking);
+                        setEditModalVisible(true);
+                      }}
+                    />
+                  ))}
+                </View>
               ))}
               {isStudent && onGoToBookings && upcomingBookings.length > 0 && (
                 <TouchableOpacity
@@ -1877,6 +1909,10 @@ const styles = StyleSheet.create({
   heroSideFull: {
     width: '100%',
   },
+  browseRow: {
+    marginBottom: 24,
+    marginTop: -8,
+  },
   servicesShelf: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1888,11 +1924,19 @@ const styles = StyleSheet.create({
     maxWidth: '48%',
   },
   timeline: {
-    backgroundColor: memberColors.surfaceRaised,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: memberColors.border,
+    paddingHorizontal: 0,
+  },
+  upcomingDateGroup: {
+    marginBottom: 20,
+  },
+  upcomingDateLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: memberColors.court,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: memberColors.border,
   },
 
   // Header
