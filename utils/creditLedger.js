@@ -130,7 +130,7 @@ export function mapStripeTopup(row) {
   const amount = roundWalletAmount(Number(row.amount) || 0);
   const sessionType = String(row.type || 'topup').toLowerCase();
   if (amount <= 0) return null;
-  // Wallet credit only for top-ups; booking sessions are recorded with amount 0 or type booking.
+  // Wallet credit only for top-ups; booking checkout sessions use type=booking.
   if (sessionType === 'booking') return null;
 
   return {
@@ -150,6 +150,48 @@ export function mapStripeTopup(row) {
     reference: shortenReference(row.session_id),
     referenceFull: row.session_id,
     locationName: null,
+    status: 'success',
+  };
+}
+
+/** Stripe card checkout for a lesson — wallet balance is not debited. */
+export function isStripePaidBooking(booking, stripeBookingSessions) {
+  const bookingAt = new Date(booking.created_at || 0).getTime();
+  if (!bookingAt) return false;
+
+  return stripeBookingSessions.some((session) => {
+    const sessionAt = new Date(session.created_at).getTime();
+    // Bookings are inserted immediately after the Stripe session is recorded.
+    return bookingAt >= sessionAt && bookingAt - sessionAt < 20 * 60 * 1000;
+  });
+}
+
+/** Map wallet-paid booking row as credit deduction. */
+export function mapBookingDeduction(row) {
+  const cost = roundWalletAmount(Number(row.credit_cost) || 0);
+  if (cost <= 0) return null;
+
+  const locationName =
+    row.locations?.name || row.location_name || null;
+  const serviceName = row.service_name || 'Lesson booking';
+
+  return {
+    id: `booking-${row.id}`,
+    occurredAt: row.created_at || row.start_time,
+    delta: -cost,
+    balanceAfter: null,
+    type: 'booking_deduction',
+    category: 'bookings',
+    title: serviceName,
+    subtitle: locationName,
+    typeLabel: getLedgerTypeLabel('booking_deduction'),
+    adminName: null,
+    reason: null,
+    note: null,
+    paymentMethod: 'Credit balance',
+    reference: null,
+    locationName,
+    lessonTime: row.start_time || null,
     status: 'success',
   };
 }
@@ -185,11 +227,12 @@ export function mapCancellationRefund(row, source) {
 
 /**
  * Merge ledger sources into one chronological list (newest first).
- * Does not include booking deductions — no reliable wallet audit trail exists.
+ * Booking deductions use active bookings minus Stripe card checkouts.
  */
 export function mergeCreditLedger({
   walletTransactions = [],
   stripeSessions = [],
+  bookings = [],
   userCancellations = [],
   rainChecks = [],
   adminMap = {},
@@ -200,8 +243,17 @@ export function mergeCreditLedger({
 
   const manualItems = manualRows.map((row) => mapManualAdjustment(row, adminMap));
 
+  const stripeBookingSessions = stripeSessions.filter(
+    (row) => String(row.type || '').toLowerCase() === 'booking'
+  );
+
   const stripeItems = stripeSessions
     .map(mapStripeTopup)
+    .filter(Boolean);
+
+  const bookingItems = bookings
+    .filter((row) => !isStripePaidBooking(row, stripeBookingSessions))
+    .map(mapBookingDeduction)
     .filter(Boolean);
 
   const refundItems = [
@@ -213,7 +265,7 @@ export function mergeCreditLedger({
       .map((row) => mapCancellationRefund(row, 'rain_check')),
   ].filter(Boolean);
 
-  return [...manualItems, ...stripeItems, ...refundItems].sort(
+  return [...manualItems, ...stripeItems, ...bookingItems, ...refundItems].sort(
     (a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)
   );
 }

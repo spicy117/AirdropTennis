@@ -76,6 +76,9 @@ function LedgerRow({ item, expanded, onToggle }) {
           {item.reason ? <DetailLine label="Reason" value={item.reason} /> : null}
           {item.note ? <DetailLine label="Note" value={item.note} adminOnly /> : null}
           {item.paymentMethod ? <DetailLine label="Payment method" value={item.paymentMethod} /> : null}
+          {item.lessonTime ? (
+            <DetailLine label="Lesson time" value={formatLedgerDateTime(item.lessonTime)} />
+          ) : null}
           {item.locationName ? <DetailLine label="Location" value={item.locationName} /> : null}
           {item.reference ? (
             <DetailLine label="Reference" value={item.reference} />

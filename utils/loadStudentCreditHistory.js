@@ -35,7 +35,7 @@ function describeLoadError(label, error) {
  * @returns {Promise<{ items: object[], error: string|null }>}
  */
 export async function loadStudentCreditHistory(studentId) {
-  const [txRes, stripeRes, cancelRes, rainRes, adminRes] = await Promise.all([
+  const [txRes, stripeRes, bookingsRes, cancelRes, rainRes, adminRes] = await Promise.all([
     supabase
       .from('wallet_transactions')
       .select('id, delta, direction, balance_after, reason, note, source, created_at, created_by')
@@ -46,7 +46,13 @@ export async function loadStudentCreditHistory(studentId) {
       .from('stripe_processed_sessions')
       .select('session_id, user_id, amount, type, created_at')
       .eq('user_id', studentId)
-      .gt('amount', 0)
+      .order('created_at', { ascending: false })
+      .limit(FETCH_LIMIT),
+    supabase
+      .from('bookings')
+      .select('id, credit_cost, service_name, start_time, created_at, locations(name)')
+      .eq('user_id', studentId)
+      .gt('credit_cost', 0)
       .order('created_at', { ascending: false })
       .limit(FETCH_LIMIT),
     supabase
@@ -69,6 +75,7 @@ export async function loadStudentCreditHistory(studentId) {
   const errors = [
     describeLoadError('Manual adjustments', txRes.error),
     describeLoadError('Online deposits', stripeRes.error),
+    describeLoadError('Bookings', bookingsRes.error),
     describeLoadError('Cancellations', cancelRes.error),
     describeLoadError('Rain checks', rainRes.error),
   ].filter(Boolean);
@@ -78,6 +85,7 @@ export async function loadStudentCreditHistory(studentId) {
   const items = mergeCreditLedger({
     walletTransactions: txRes.error ? [] : txRes.data || [],
     stripeSessions: stripeRes.error ? [] : stripeRes.data || [],
+    bookings: bookingsRes.error ? [] : bookingsRes.data || [],
     userCancellations: cancelRes.error ? [] : cancelRes.data || [],
     rainChecks: rainRes.error ? [] : rainRes.data || [],
     adminMap,
