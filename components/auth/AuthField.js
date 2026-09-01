@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { memberColors, memberTypography, memberWebTransition } from '../../theme/memberTheme';
+
+/** iOS Safari auto-zooms inputs below 16px computed font-size. */
+const MOBILE_WEB_INPUT_FONT_SIZE = 16;
+const DESKTOP_INPUT_FONT_SIZE = 15;
 
 export default function AuthField({
   label,
@@ -12,6 +16,9 @@ export default function AuthField({
   ...inputProps
 }) {
   const [focused, setFocused] = useState(false);
+  const { width } = useWindowDimensions();
+  const inputFontSize =
+    Platform.OS === 'web' && width <= 768 ? MOBILE_WEB_INPUT_FONT_SIZE : DESKTOP_INPUT_FONT_SIZE;
 
   return (
     <View style={[styles.wrap, containerStyle]}>
@@ -28,7 +35,12 @@ export default function AuthField({
         ]}
       >
         <TextInput
-          style={[styles.input, rightElement && styles.inputWithRight, inputStyle]}
+          style={[
+            styles.input,
+            { fontSize: inputFontSize },
+            rightElement && styles.inputWithRight,
+            inputStyle,
+          ]}
           placeholderTextColor={memberColors.inkFaint}
           onFocus={(e) => {
             setFocused(true);
@@ -87,7 +99,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
     color: memberColors.ink,
     minHeight: 44,
     ...(Platform.OS === 'web' && {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,12 @@ import {
   verifyPaymentAndAddFunds,
   STRIPE_CHECKOUT_DISABLED,
 } from '../lib/stripe';
+import {
+  consumePostAuthScrollReset,
+  resetElementScroll,
+  resetScrollAfterAuth,
+  resetWebScrollPosition,
+} from '../utils/mobileWebScroll';
 
 // Test mode flag - when true, skips Stripe checkout and immediately creates booking
 const IS_TEST_MODE = false; // Set to false to enable Stripe checkout
@@ -78,6 +84,7 @@ export default function HomeScreen() {
   });
   const [bookingReturnScreen, setBookingReturnScreen] = useState('dashboard');
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const mainContentRef = useRef(null);
   
   // Booking result modal state
   const [bookingModal, setBookingModal] = useState({
@@ -117,6 +124,18 @@ export default function HomeScreen() {
       return current;
     });
   }, [userRole, roleLoading, user?.id]);
+
+  // After sign-in, guarantee Home starts at scroll 0 before paint (mobile Safari).
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !user) return;
+    if (!consumePostAuthScrollReset()) return;
+    resetScrollAfterAuth();
+    resetElementScroll(mainContentRef.current);
+    requestAnimationFrame(() => {
+      resetElementScroll(mainContentRef.current);
+      resetWebScrollPosition();
+    });
+  }, [user?.id]);
 
   // Coaches cannot access admin-only screens
   useEffect(() => {
@@ -1228,7 +1247,7 @@ export default function HomeScreen() {
       )}
 
       {/* Main Content */}
-      <View style={styles.mainContent}>
+      <View ref={mainContentRef} style={styles.mainContent}>
         {renderScreen()}
       </View>
 

@@ -13,6 +13,14 @@ import SignUpScreen from './screens/SignUpScreen';
 import EmailVerificationScreen from './screens/EmailVerificationScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import HomeScreen from './screens/HomeScreen';
+import {
+  consumePostAuthScrollReset,
+  ensureViewportMeta,
+  resetElementScroll,
+  resetScrollAfterAuth,
+  resetWebScrollPosition,
+  shouldResetPostAuthScroll,
+} from './utils/mobileWebScroll';
 
 // Note: Supabase will automatically process auth tokens from URL hash via detectSessionInUrl
 // We'll clean up the URL after Supabase processes it (see AppNavigator useEffect)
@@ -71,10 +79,15 @@ function AppNavigator() {
     const timer = setTimeout(() => {
       try {
         const currentRoute = navigationRef.current?.getCurrentRoute();
-        if (currentRoute?.name !== 'Home') {
+        const navigatingToHome = currentRoute?.name !== 'Home';
+        if (navigatingToHome) {
           navigationRef.current?.navigate('Home');
         }
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          if (navigatingToHome || shouldResetPostAuthScroll()) {
+            resetScrollAfterAuth();
+            resetWebScrollPosition();
+          }
           if (userRole === 'coach') {
             window.history.replaceState(null, '', '/coach/dashboard');
           } else if (userRole === 'admin') {
@@ -319,9 +332,17 @@ function AppNavigator() {
   } : undefined;
 
   return (
-    <NavigationContainer 
-      ref={navigationRef} 
+    <NavigationContainer
+      ref={navigationRef}
       linking={linking}
+      onStateChange={() => {
+        if (Platform.OS !== 'web') return;
+        const route = navigationRef.current?.getCurrentRoute();
+        if (route?.name === 'Home' && shouldResetPostAuthScroll()) {
+          resetScrollAfterAuth();
+          resetWebScrollPosition();
+        }
+      }}
     >
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
@@ -341,6 +362,7 @@ export default function App() {
   // Set tab favicon on web so browser tabs show tennis ball instead of default
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    ensureViewportMeta();
     const src = Image.resolveAssetSource?.(tennisBallIcon);
     const href = src?.uri ?? (typeof tennisBallIcon === 'number' ? null : tennisBallIcon);
     if (!href) return;

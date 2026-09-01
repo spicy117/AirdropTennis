@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getAuthRedirectUrl } from '../lib/appUrl';
+import {
+  markPostAuthScrollReset,
+  prepareForPostAuthNavigation,
+} from '../utils/mobileWebScroll';
 
 const AuthContext = createContext({});
 
@@ -626,6 +630,9 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) throw error;
+
+      await prepareForPostAuthNavigation();
+      markPostAuthScrollReset();
 
       setUserRole(null);
       await checkUserRole(data.user);
