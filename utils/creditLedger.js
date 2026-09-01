@@ -104,6 +104,7 @@ export function mapManualAdjustment(row, adminMap) {
   }
 
   const balanceAfter = row.balance_after != null ? Number(row.balance_after) : null;
+  const note = row.note?.trim() || null;
 
   return {
     id: `tx-${row.id}`,
@@ -114,10 +115,10 @@ export function mapManualAdjustment(row, adminMap) {
     category: 'admin',
     title: manualAdjustmentTitle(row),
     subtitle: null,
-    typeLabel: getLedgerTypeLabel('manual_admin_adjustment'),
+    typeLabel: note || getLedgerTypeLabel('manual_admin_adjustment'),
     adminName: resolveAdminName(row.created_by, adminMap),
     reason: row.reason || null,
-    note: row.note || null,
+    note,
     paymentMethod: null,
     reference: null,
     locationName: null,
