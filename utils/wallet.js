@@ -23,6 +23,9 @@ export function mapWalletRpcError(error) {
   const hint = String(error?.hint || '').toLowerCase();
   const combined = `${msg} ${hint}`;
 
+  if (msg.includes('wallet_transactions_schema_unsupported')) {
+    return 'Credit could not be updated. No changes were made.';
+  }
   if (msg.includes('rpc_not_deployed') || combined.includes('migration 018')) {
     return 'Credit adjustment is not set up on the server. Run migration 018 in Supabase SQL Editor, then deploy the admin-adjust-wallet Edge Function.';
   }

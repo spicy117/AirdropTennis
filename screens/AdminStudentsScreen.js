@@ -82,7 +82,7 @@ export default function StudentsScreen({ onNavigate }) {
       const [txRes, bookingsRes, adminRes] = await Promise.all([
         supabase
           .from('wallet_transactions')
-          .select('id, delta, balance_after, reason, note, source, created_at, created_by')
+          .select('id, delta, amount, direction, balance_after, reason, note, source, created_at, created_by')
           .eq('user_id', studentId)
           .order('created_at', { ascending: false })
           .limit(30),
@@ -102,10 +102,16 @@ export default function StudentsScreen({ onNavigate }) {
         adminMap[p.id] = name;
       });
 
-      const manualItems = (txRes.error ? [] : txRes.data || []).map((row) => ({
+      const manualItems = (txRes.error ? [] : txRes.data || []).map((row) => {
+        let delta = Number(row.delta);
+        if (!Number.isFinite(delta) && row.amount != null) {
+          const amt = Math.abs(Number(row.amount) || 0);
+          delta = row.direction === 'remove' ? -amt : amt;
+        }
+        return {
         id: `tx-${row.id}`,
         occurredAt: row.created_at,
-        delta: Number(row.delta),
+        delta,
         balanceAfter: Number(row.balance_after),
         reason: row.reason,
         subtitle:
@@ -113,7 +119,8 @@ export default function StudentsScreen({ onNavigate }) {
             ? `Added by ${adminMap[row.created_by] || 'Admin'}`
             : row.source,
         note: row.note,
-      }));
+      };
+      });
 
       const bookingItems = (bookingsRes.error ? [] : bookingsRes.data || []).map((row) => ({
         id: `booking-${row.id}`,

@@ -8,9 +8,11 @@ Supabase project **`rozxeqqwxpnfqbyvtvch`**:
 
 ### 1. SQL Editor
 
-Run **one** file:
+Run **one** file (use **019** if you already ran 018):
 
-`supabase/migrations/018_admin_wallet_complete.sql`
+`supabase/migrations/019_wallet_transactions_amount_column.sql`
+
+Or for a fresh setup: `supabase/migrations/018_admin_wallet_complete.sql`
 
 This creates/repairs `wallet_transactions`, `is_admin()`, and `admin_adjust_wallet`, then reloads the API schema cache.
 

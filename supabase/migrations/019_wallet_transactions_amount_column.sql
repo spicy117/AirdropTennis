@@ -1,35 +1,7 @@
--- Complete admin wallet adjustment setup. Safe to re-run.
--- Run this ONE file in Supabase SQL Editor if manual credit adjustment fails.
+-- Fix legacy wallet_transactions tables that require `amount` (NOT NULL) instead of/in addition to `delta`.
+-- Safe to re-run. Run in Supabase SQL Editor if credit adjustment fails with:
+--   null value in column "amount" of relation "wallet_transactions"
 
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
-  );
-$$;
-
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
-
-CREATE TABLE IF NOT EXISTS public.wallet_transactions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  delta numeric NOT NULL,
-  balance_before numeric NOT NULL,
-  balance_after numeric NOT NULL,
-  direction text NOT NULL,
-  reason text NOT NULL,
-  note text,
-  source text NOT NULL DEFAULT 'manual_admin_adjustment',
-  created_by uuid REFERENCES public.profiles(id),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
--- Repair partial / legacy tables (CREATE TABLE IF NOT EXISTS skips missing columns).
 ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS amount numeric;
 ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS delta numeric;
 ALTER TABLE public.wallet_transactions ADD COLUMN IF NOT EXISTS balance_before numeric;
@@ -45,55 +17,15 @@ ALTER TABLE public.wallet_transactions
   ALTER COLUMN source SET DEFAULT 'manual_admin_adjustment';
 
 UPDATE public.wallet_transactions
-SET source = 'manual_admin_adjustment'
-WHERE source IS NULL;
+SET delta = CASE
+  WHEN direction = 'remove' THEN -abs(COALESCE(amount, 0))
+  ELSE abs(COALESCE(amount, 0))
+END
+WHERE delta IS NULL AND amount IS NOT NULL;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'wallet_transactions_direction_check'
-  ) THEN
-    ALTER TABLE public.wallet_transactions
-      ADD CONSTRAINT wallet_transactions_direction_check
-      CHECK (direction IN ('add', 'remove'));
-  END IF;
-EXCEPTION
-  WHEN others THEN NULL;
-END $$;
-
-CREATE INDEX IF NOT EXISTS wallet_transactions_user_id_created_at_idx
-  ON public.wallet_transactions (user_id, created_at DESC);
-
-ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "wallet_transactions_admin_select" ON public.wallet_transactions;
-CREATE POLICY "wallet_transactions_admin_select"
-  ON public.wallet_transactions
-  FOR SELECT
-  TO authenticated
-  USING (
-    public.is_admin()
-    AND EXISTS (
-      SELECT 1 FROM public.profiles target_p
-      WHERE target_p.id = wallet_transactions.user_id
-        AND (
-          target_p.academy_id IS NULL
-          OR target_p.academy_id = public.user_academy_id()
-        )
-    )
-  );
-
-DROP POLICY IF EXISTS "wallet_transactions_admin_insert" ON public.wallet_transactions;
-CREATE POLICY "wallet_transactions_admin_insert"
-  ON public.wallet_transactions
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    public.is_admin()
-    AND created_by = auth.uid()
-    AND source = 'manual_admin_adjustment'
-  );
+UPDATE public.wallet_transactions
+SET amount = abs(COALESCE(delta, 0))
+WHERE amount IS NULL AND delta IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.admin_adjust_wallet(
   p_user_id uuid,
@@ -249,7 +181,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.admin_adjust_wallet(uuid, numeric, text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_adjust_wallet(uuid, numeric, text, text, text) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
