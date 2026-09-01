@@ -177,6 +177,8 @@ export default {
   filterNextWeek: '下周',
   filterPeriod: '日期范围',
   filterLocation: '场地',
+  selectService: '服务',
+  selectServiceToBook: '请选择服务以查看可预约时段',
   filterAllLocations: '全部场地',
   book: '预约',
   durationOneHour: '1 小时',

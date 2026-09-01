@@ -20,9 +20,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { getLocale, getWeekdayLabels, formatDurationFromHours, formatDateGroupHeader, formatMonthYear } from '../utils/locale';
+import { getWeekdayLabels, formatDurationFromHours, formatDateGroupHeader, formatMonthYear } from '../utils/locale';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
 import { memberColors } from '../theme/memberTheme';
+import { BOOKABLE_SERVICE_OPTIONS, toDbServiceName } from '../utils/serviceTranslations';
 
 // Conditionally import MapView for native platforms
 let MapView, Marker, UrlTile;
@@ -35,22 +36,24 @@ if (Platform.OS !== 'web') {
 
 const { width } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && width > 768;
-const DATE_CARD_WIDTH = 70;
-const DATE_CARD_GAP = 12;
 
 // Service duration rules (in hours)
 const SERVICE_DURATION_RULES = {
   'Boot Camp': 3, // Fixed at 3 hours
   'Stroke Clinic': 1, // Fixed at 1 hour
   'UTR Points Play': 2, // Fixed at 2 hours
+  'UTR Points': 2,
   'Private Lessons': 1, // Fixed at 1 hour (same as Stroke Clinic)
+  'Private Lesson': 1,
 };
 
 // Service badge color styles (pastel, modern, sleek)
 const SERVICE_STYLES = {
   'Boot Camp': { bg: '#FEF9E7', text: '#B45309', border: '#F5D78E' },
   'Private Lessons': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Private Lesson': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
   'UTR Points Play': { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
+  'UTR Points': { bg: '#F5F3FF', text: '#6D28D9', border: '#DDD6FE' },
   'Stroke Clinic': { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
 };
 
@@ -534,7 +537,6 @@ export default function BookingDiscoveryScreen({
   const isMobileLayout = windowWidth <= 768;
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
-  const locale = getLocale(language);
   const weekdayLabels = getWeekdayLabels(language);
   // Initialize selectedDate as Sydney local date string
   const [selectedDate, setSelectedDate] = useState(initialDate || getSydneyToday());
@@ -543,18 +545,13 @@ export default function BookingDiscoveryScreen({
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState([]); // Array of { time, locationId, serviceName }
   const [selectedLocationId, setSelectedLocationId] = useState(initialLocationId ?? null); // null = all locations
+  const [activeServiceFilter, setActiveServiceFilter] = useState(() => toDbServiceName(serviceFilter));
+  const effectiveServiceFilter = activeServiceFilter;
   const pendingAutoSelectRef = useRef(initialTime24);
-  const [viewMode, setViewMode] = useState('weekly'); // 'weekly' or 'monthly'
   // Use Sydney local time for calendar month/year
   const nowForCalendar = new Date();
   const [calendarMonth, setCalendarMonth] = useState(nowForCalendar.getMonth());
   const [calendarYear, setCalendarYear] = useState(nowForCalendar.getFullYear());
-  const [dateCards, setDateCards] = useState([]);
-  const [visibleDateRange, setVisibleDateRange] = useState({ start: 0, end: 14 });
-  const dateScrollViewRef = useRef(null);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const [showPrevArrow, setShowPrevArrow] = useState(false);
-  const [showNextArrow, setShowNextArrow] = useState(true);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [availabilityHeatmap, setAvailabilityHeatmap] = useState({}); // { dateStr: boolean }
   const [heatmapLoading, setHeatmapLoading] = useState(false);
@@ -573,93 +570,6 @@ export default function BookingDiscoveryScreen({
   const handleLocationPress = (locationData) => {
     setSelectedMapLocation(locationData);
     setMapModalVisible(true);
-  };
-
-  // Generate date cards for a range (lazy loading) - using Sydney local time
-  const generateDateCards = (startOffset, count = 14) => {
-    const dates = [];
-    const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
-    const startDate = new Date(todayYear, todayMonth - 1, todayDay + startOffset, 0, 0, 0, 0);
-    
-    for (let i = 0; i < count; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      
-      // Smart labeling - use Sydney local dates for comparison
-      const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
-      const tomorrowDate = new Date(todayYear, todayMonth - 1, todayDay + 1, 0, 0, 0, 0);
-      const tomorrowYear = tomorrowDate.getFullYear();
-      const tomorrowMonth = String(tomorrowDate.getMonth() + 1).padStart(2, '0');
-      const tomorrowDay = String(tomorrowDate.getDate()).padStart(2, '0');
-      const tomorrowStr = `${tomorrowYear}-${tomorrowMonth}-${tomorrowDay}`;
-      
-      let label = '';
-      if (dateStr === todayStr) {
-        label = t('today');
-      } else if (dateStr === tomorrowStr) {
-        label = t('tomorrow');
-      } else {
-        label = date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
-      }
-
-      dates.push({
-        dateStr,
-        dayName: date.toLocaleDateString(locale, { weekday: 'short' }),
-        day: date.getDate(),
-        month: date.toLocaleDateString(locale, { month: 'short' }),
-        label,
-        isToday: dateStr === todayStr,
-        isTomorrow: dateStr === tomorrowStr,
-        offset: startOffset + i,
-      });
-    }
-    return dates;
-  };
-
-  // Initialize date cards
-  useEffect(() => {
-    const initialCards = generateDateCards(0, 28); // Load 4 weeks initially
-    setDateCards(initialCards);
-    setVisibleDateRange({ start: 0, end: 28 });
-  }, []);
-
-  // Get current date range label
-  const getDateRangeLabel = () => {
-    if (viewMode === 'monthly') {
-      return formatMonthYear(new Date(calendarYear, calendarMonth), language);
-    }
-    
-    // For weekly view, find the visible range
-    if (dateCards.length === 0) return t('thisWeek');
-    
-    const firstVisible = dateCards[0];
-    const lastVisible = dateCards[dateCards.length - 1];
-    
-    if (!firstVisible || !lastVisible) return t('thisWeek');
-    
-    // Create today date from todayStr (Sydney local time)
-    // Use todayStr from component scope, fallback to getSydneyToday() if not available
-    const currentTodayStr = todayStr || getSydneyToday();
-    const [todayYear, todayMonth, todayDay] = currentTodayStr.split('-').map(Number);
-    const today = new Date(todayYear, todayMonth - 1, todayDay, 0, 0, 0, 0);
-    
-    const firstDate = new Date(today);
-    firstDate.setDate(today.getDate() + firstVisible.offset);
-    const lastDate = new Date(today);
-    lastDate.setDate(today.getDate() + lastVisible.offset);
-    
-    const firstMonth = firstDate.toLocaleDateString('en-US', { month: 'short' });
-    const lastMonth = lastDate.toLocaleDateString('en-US', { month: 'short' });
-    
-    if (firstMonth === lastMonth) {
-      return `${firstMonth} ${firstDate.getDate()} - ${lastDate.getDate()}`;
-    } else {
-      return `${firstMonth} ${firstDate.getDate()} - ${lastMonth} ${lastDate.getDate()}`;
-    }
   };
 
   // Generate monthly calendar grid - using Sydney local time
@@ -739,7 +649,7 @@ export default function BookingDiscoveryScreen({
   const handleMonthDateClick = (dateStr) => {
     if (!dateStr) return;
     setSelectedDate(dateStr);
-    if (isMobileLayout && viewMode === 'monthly') {
+    if (isMobileLayout) {
       setMonthlyCalendarExpanded(false);
       const reduceMotion =
         Platform.OS === 'web' &&
@@ -754,27 +664,6 @@ export default function BookingDiscoveryScreen({
         }, 120);
       });
     }
-  };
-
-  const handleViewModeChange = (newMode) => {
-    if (newMode === 'monthly') {
-      setMonthlyCalendarExpanded(true);
-    }
-    // useNativeDriver is not supported on web
-    const useNativeDriver = Platform.OS !== 'web';
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver,
-      }),
-    ]).start();
-    setViewMode(newMode);
   };
 
   // Sync calendar month/year when selected date changes - using Sydney local time
@@ -797,86 +686,37 @@ export default function BookingDiscoveryScreen({
   }, []);
 
   useEffect(() => {
+    setActiveServiceFilter(toDbServiceName(serviceFilter));
+  }, [serviceFilter]);
+
+  useEffect(() => {
     if (initialDate) setSelectedDate(initialDate);
     if (initialLocationId != null) setSelectedLocationId(initialLocationId);
     if (initialTime24) pendingAutoSelectRef.current = initialTime24;
   }, [initialDate, initialLocationId, initialTime24]);
 
   useEffect(() => {
-    if (selectedDate) {
+    if (selectedDate && effectiveServiceFilter) {
       loadAvailabilities();
+    } else if (!effectiveServiceFilter) {
+      setAvailabilities([]);
+      setLoading(false);
     }
-  }, [selectedDate, selectedLocationId, serviceFilter]);
+  }, [selectedDate, selectedLocationId, effectiveServiceFilter]);
 
-  // Clear cache when location filter changes
+  // Clear cache when filters change
   useEffect(() => {
     heatmapCacheRef.current = {};
-  }, [selectedLocationId]);
+  }, [selectedLocationId, effectiveServiceFilter]);
 
-  // Load availability heatmap for visible date range
+  // Load availability heatmap for the visible month
   useEffect(() => {
-    if (viewMode === 'weekly' && dateCards.length > 0) {
-      loadAvailabilityHeatmap();
-    } else if (viewMode === 'monthly') {
+    if (effectiveServiceFilter) {
       loadMonthlyHeatmap();
+    } else {
+      setAvailabilityHeatmap({});
     }
-  }, [dateCards, selectedLocationId, serviceFilter, viewMode, calendarMonth, calendarYear]);
-
-  // Scroll to selected date when it changes
-  useEffect(() => {
-    if (dateScrollViewRef.current && selectedDate && viewMode === 'weekly') {
-      const index = dateCards.findIndex((card) => card.dateStr === selectedDate);
-      if (index >= 0) {
-        setTimeout(() => {
-          dateScrollViewRef.current?.scrollTo({
-            x: index * (DATE_CARD_WIDTH + DATE_CARD_GAP) - (width / 2) + (DATE_CARD_WIDTH / 2),
-            animated: true,
-          });
-        }, 100);
-      }
-    }
-  }, [selectedDate, dateCards, viewMode]);
-
-  // Handle scroll for lazy loading and arrow visibility
-  const handleScroll = (event) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const scrollX = contentOffset.x;
-    const maxScroll = contentSize.width - layoutMeasurement.width;
-    
-    // Show/hide arrows
-    setShowPrevArrow(scrollX > 50);
-    setShowNextArrow(scrollX < maxScroll - 50);
-    
-    // Lazy load more dates when near the end
-    const scrollPercentage = scrollX / maxScroll;
-    if (scrollPercentage > 0.7 && dateCards.length < 100) {
-      // Load more dates
-      const newStart = dateCards.length;
-      const newCards = generateDateCards(newStart, 14);
-      setDateCards((prev) => [...prev, ...newCards]);
-      setVisibleDateRange({ start: visibleDateRange.start, end: newStart + 14 });
-      // Heatmap will reload automatically via useEffect when dateCards changes
-    }
-  };
-
-  const handleScrollPrev = () => {
-    if (dateScrollViewRef.current) {
-      dateScrollViewRef.current.scrollTo({
-        x: Math.max(0, (dateScrollViewRef.current._scrollMetrics?.contentOffset?.x || 0) - (width * 0.8)),
-        animated: true,
-      });
-    }
-  };
-
-  const handleScrollNext = () => {
-    if (dateScrollViewRef.current) {
-      const currentScroll = dateScrollViewRef.current._scrollMetrics?.contentOffset?.x || 0;
-      dateScrollViewRef.current.scrollTo({
-        x: currentScroll + (width * 0.8),
-        animated: true,
-      });
-    }
-  };
+  }, [selectedLocationId, effectiveServiceFilter, calendarMonth, calendarYear]);
 
   const loadLocations = async () => {
     try {
@@ -918,9 +758,9 @@ export default function BookingDiscoveryScreen({
         query = query.eq('location_id', selectedLocationId);
       }
 
-      // Apply service filter if provided
-      if (serviceFilter) {
-        query = query.eq('service_name', serviceFilter);
+      // Apply service filter
+      if (effectiveServiceFilter) {
+        query = query.eq('service_name', effectiveServiceFilter);
       }
 
       const { data, error } = await query;
@@ -935,77 +775,7 @@ export default function BookingDiscoveryScreen({
     }
   };
 
-  // Load availability heatmap for weekly view
-  const loadAvailabilityHeatmap = async () => {
-    if (dateCards.length === 0) return;
-
-    try {
-      setHeatmapLoading(true);
-
-      // Get date range from visible cards
-      const firstDate = dateCards[0].dateStr;
-      const lastDate = dateCards[dateCards.length - 1].dateStr;
-      
-      // Check cache
-      const cacheKey = `${firstDate}-${lastDate}-${selectedLocationId || 'all'}-${serviceFilter || 'all'}`;
-      if (heatmapCacheRef.current[cacheKey]) {
-        setAvailabilityHeatmap(heatmapCacheRef.current[cacheKey]);
-        setHeatmapLoading(false);
-        return;
-      }
-
-      // Convert Sydney local date strings to UTC for database query
-      const startOfRange = sydneyDateToUTCStart(firstDate);
-      const endOfRange = sydneyDateToUTCEnd(lastDate);
-
-      let query = supabase
-        .from('availabilities')
-        .select('start_time, location_id')
-        .eq('is_booked', false)
-        .gte('start_time', startOfRange.toISOString())
-        .lte('start_time', endOfRange.toISOString());
-
-      // Apply location filter if selected
-      if (selectedLocationId) {
-        query = query.eq('location_id', selectedLocationId);
-      }
-
-      // Apply service filter if provided
-      if (serviceFilter) {
-        query = query.eq('service_name', serviceFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Build heatmap: { dateStr: hasAvailability }
-      const heatmap = {};
-      dateCards.forEach((card) => {
-        heatmap[card.dateStr] = false; // Default to no availability
-      });
-
-      if (data && data.length > 0) {
-        data.forEach((av) => {
-          // Convert UTC date from database to Sydney local date for matching
-          const dateStr = utcToSydneyDate(av.start_time);
-          if (heatmap.hasOwnProperty(dateStr)) {
-            heatmap[dateStr] = true;
-          }
-        });
-      }
-
-      // Cache the result
-      heatmapCacheRef.current[cacheKey] = heatmap;
-      setAvailabilityHeatmap(heatmap);
-    } catch (error) {
-      console.error('Error loading availability heatmap:', error);
-    } finally {
-      setHeatmapLoading(false);
-    }
-  };
-
-  // Load availability heatmap for monthly view
+  // Load availability heatmap for monthly calendar
   const loadMonthlyHeatmap = async () => {
     try {
       setHeatmapLoading(true);
@@ -1022,7 +792,7 @@ export default function BookingDiscoveryScreen({
       const firstDayUTC = sydneyDateToUTCStart(firstDayStr);
       const lastDayUTC = sydneyDateToUTCEnd(lastDayStr);
       
-      const cacheKey = `${calendarYear}-${calendarMonth}-${selectedLocationId || 'all'}-${serviceFilter || 'all'}`;
+      const cacheKey = `${calendarYear}-${calendarMonth}-${selectedLocationId || 'all'}-${effectiveServiceFilter || 'all'}`;
       if (heatmapCacheRef.current[cacheKey]) {
         setAvailabilityHeatmap(heatmapCacheRef.current[cacheKey]);
         setHeatmapLoading(false);
@@ -1041,9 +811,9 @@ export default function BookingDiscoveryScreen({
         query = query.eq('location_id', selectedLocationId);
       }
 
-      // Apply service filter if provided
-      if (serviceFilter) {
-        query = query.eq('service_name', serviceFilter);
+      // Apply service filter
+      if (effectiveServiceFilter) {
+        query = query.eq('service_name', effectiveServiceFilter);
       }
 
       const { data, error } = await query;
@@ -1411,22 +1181,8 @@ export default function BookingDiscoveryScreen({
     return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
   };
 
-  const handleBackToToday = () => {
-    setSelectedDate(todayStr);
-    // Scroll to today
-    if (dateScrollViewRef.current) {
-      setTimeout(() => {
-        dateScrollViewRef.current?.scrollTo({
-          x: 0,
-          animated: true,
-        });
-      }, 100);
-    }
-  };
-
   const summary = calculateSummary();
   const canProceed = hasValidSelection(); // At least 1 hour (2 consecutive 30-min slots)
-  const isMobileMonthly = viewMode === 'monthly' && isMobileLayout;
   const selectedDateSessionCount = groupedAvailabilities.reduce((sum, g) => sum + g.slots.length, 0);
 
   const findNextAvailableDate = (fromDateStr) =>
@@ -1526,6 +1282,15 @@ export default function BookingDiscoveryScreen({
   };
 
   const renderAvailabilityContent = (compactRows = false) => {
+    if (!effectiveServiceFilter) {
+      return (
+        <View style={styles.emptyStateCompact}>
+          <Ionicons name="grid-outline" size={40} color="#C7C7CC" />
+          <Text style={styles.emptyTitleCompact}>{t('selectServiceToBook')}</Text>
+        </View>
+      );
+    }
+
     if (loading) {
       return (
         <View style={styles.skeletonContainer}>
@@ -1622,11 +1387,10 @@ export default function BookingDiscoveryScreen({
   };
 
   const renderMonthlyCalendar = () => (
-    <Animated.View
+    <View
       style={[
         styles.monthlyView,
         isMobileLayout && styles.monthlyViewCompact,
-        { opacity: fadeAnim },
       ]}
     >
       <View style={[styles.monthNav, isMobileLayout && styles.monthNavCompact]}>
@@ -1686,11 +1450,11 @@ export default function BookingDiscoveryScreen({
           );
         })}
       </View>
-    </Animated.View>
+    </View>
   );
 
   const renderMonthlyDateHeader = () => (
-    <View style={[styles.monthlyDateHeader, isMobileMonthly && styles.monthlyDateHeaderMobile]}>
+    <View style={[styles.monthlyDateHeader, isMobileLayout && styles.monthlyDateHeaderMobile]}>
       <View style={styles.monthlyDateHeaderText}>
         <Text style={styles.monthlyDateTitle}>{formatDateGroupHeader(selectedDate, language)}</Text>
         {!loading && selectedDateSessionCount > 0 && (
@@ -1701,7 +1465,7 @@ export default function BookingDiscoveryScreen({
           </Text>
         )}
       </View>
-      {isMobileMonthly && !monthlyCalendarExpanded && (
+      {isMobileLayout && !monthlyCalendarExpanded && (
         <TouchableOpacity
           style={styles.changeDateBtn}
           onPress={() => {
@@ -1733,6 +1497,33 @@ export default function BookingDiscoveryScreen({
 
   const renderActionsRow = () => (
     <View style={[styles.actionsRow, isMobileLayout && styles.actionsRowMobile]}>
+      <View style={[styles.filterContainer, isMobileLayout && styles.filterContainerMobile]}>
+        <Text style={isMobileLayout ? styles.locationFieldLabel : styles.dropdownLabel}>
+          {t('selectService')}
+        </Text>
+        <View style={styles.serviceChipRow}>
+          {BOOKABLE_SERVICE_OPTIONS.map((opt) => {
+            const isActive = effectiveServiceFilter === opt.dbName;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.serviceChip, isActive && styles.serviceChipActive]}
+                onPress={() => {
+                  setActiveServiceFilter(opt.dbName);
+                  setSelectedSlots([]);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.serviceChipText, isActive && styles.serviceChipTextActive]}>
+                  {t(opt.labelKey)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       {locations.length > 0 && (
         <View style={[styles.filterContainer, isMobileLayout && styles.filterContainerMobile]}>
           {locations.length < 4 ? (
@@ -1828,108 +1619,10 @@ export default function BookingDiscoveryScreen({
           )}
         </View>
       )}
-
-      <View style={[styles.viewSwitcher, isMobileLayout && styles.viewSwitcherMobile]}>
-        <TouchableOpacity
-          style={[styles.viewSwitchButton, isMobileLayout && styles.viewSwitchButtonMobile, viewMode === 'weekly' && styles.viewSwitchButtonActive]}
-          onPress={() => handleViewModeChange('weekly')}
-        >
-          <Text style={[styles.viewSwitchText, viewMode === 'weekly' && styles.viewSwitchTextActive]}>
-            {t('weekly')}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.viewSwitchButton, isMobileLayout && styles.viewSwitchButtonMobile, viewMode === 'monthly' && styles.viewSwitchButtonActive]}
-          onPress={() => handleViewModeChange('monthly')}
-        >
-          <Text style={[styles.viewSwitchText, viewMode === 'monthly' && styles.viewSwitchTextActive]}>
-            {t('monthly')}
-          </Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 
-  const renderWeeklyView = () => (
-    <Animated.View style={{ opacity: fadeAnim }}>
-      <View style={styles.dateRangeHeader}>
-        <Text style={styles.dateRangeLabel}>{getDateRangeLabel()}</Text>
-        {selectedDate !== todayStr && (
-          <TouchableOpacity style={styles.backToTodayButton} onPress={handleBackToToday}>
-            <Ionicons name="calendar-outline" size={14} color="#007AFF" />
-            <Text style={styles.backToTodayText}>{t('today')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={[styles.datePickerContainer, isMobileLayout && styles.datePickerContainerMobile]}>
-        {Platform.OS === 'web' && !isMobileLayout && showPrevArrow && (
-          <TouchableOpacity style={styles.datePickerArrow} onPress={handleScrollPrev}>
-            <Ionicons name="chevron-back" size={24} color="#000" />
-          </TouchableOpacity>
-        )}
-
-        <ScrollView
-          ref={dateScrollViewRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.datePicker, isMobileLayout && styles.datePickerMobile]}
-          contentContainerStyle={styles.datePickerContent}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          snapToInterval={DATE_CARD_WIDTH + DATE_CARD_GAP}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          nestedScrollEnabled
-          {...(Platform.OS === 'web' && {
-            scrollSnapType: 'x mandatory',
-          })}
-        >
-          {dateCards.map((dateCard, index) => {
-            const isSelected = dateCard.dateStr === selectedDate;
-            const hasAvailability = availabilityHeatmap[dateCard.dateStr] === true;
-            const hasNoAvailability = availabilityHeatmap[dateCard.dateStr] === false && !heatmapLoading;
-
-            return (
-              <TouchableOpacity
-                key={`${dateCard.dateStr}-${index}`}
-                style={[
-                  styles.dateCard,
-                  hasAvailability && !isSelected && styles.dateCardAvailable,
-                  hasNoAvailability && !isSelected && styles.dateCardUnavailable,
-                  isSelected && styles.dateCardSelected,
-                  Platform.OS === 'web' && { scrollSnapAlign: 'center' },
-                ]}
-                onPress={() => setSelectedDate(dateCard.dateStr)}
-              >
-                <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected]}>
-                  {dateCard.label}
-                </Text>
-                <Text style={[styles.dateDay, isSelected && styles.dateDaySelected]}>
-                  {dateCard.day}
-                </Text>
-                <Text style={[styles.dateMonth, isSelected && styles.dateMonthSelected]}>
-                  {dateCard.month}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {Platform.OS === 'web' && !isMobileLayout && showNextArrow && (
-          <TouchableOpacity
-            style={[styles.datePickerArrow, { left: 'auto', right: 10 }]}
-            onPress={handleScrollNext}
-          >
-            <Ionicons name="chevron-forward" size={24} color="#000" />
-          </TouchableOpacity>
-        )}
-      </View>
-    </Animated.View>
-  );
-
-  const mobileStickyHeaderIndex =
-    viewMode === 'monthly' ? (monthlyCalendarExpanded ? 2 : 1) : undefined;
+  const mobileStickyHeaderIndex = monthlyCalendarExpanded ? 2 : 1;
 
   // Derived locations list with valid coordinates
   const locationsWithCoords = locations.filter(
@@ -2155,39 +1848,35 @@ export default function BookingDiscoveryScreen({
           nestedScrollEnabled
         >
           {renderActionsRow()}
-          {viewMode === 'weekly' && renderWeeklyView()}
-          {viewMode === 'monthly' && monthlyCalendarExpanded && renderMonthlyCalendar()}
-          {viewMode === 'monthly' && (
-            <View
-              style={styles.monthlyDateHeaderStickyWrap}
-              onLayout={(e) => {
-                sessionsSectionY.current = e.nativeEvent.layout.y;
-              }}
-            >
-              {renderMonthlyDateHeader()}
-            </View>
-          )}
+          {monthlyCalendarExpanded && renderMonthlyCalendar()}
           <View
-            style={[
-              styles.monthlySessionsSection,
-              viewMode === 'weekly' && styles.weeklySessionsSection,
-            ]}
+            style={styles.monthlyDateHeaderStickyWrap}
+            onLayout={(e) => {
+              sessionsSectionY.current = e.nativeEvent.layout.y;
+            }}
           >
-            {renderAvailabilityContent(viewMode === 'monthly')}
+            {renderMonthlyDateHeader()}
+          </View>
+          <View style={styles.monthlySessionsSection}>
+            {renderAvailabilityContent(isMobileLayout)}
           </View>
         </ScrollView>
       ) : (
         <>
           {renderActionsRow()}
-          {viewMode === 'weekly' && renderWeeklyView()}
-          {viewMode === 'monthly' && renderMonthlyCalendar()}
+          {renderMonthlyCalendar()}
           <ScrollView
             style={styles.content}
             contentContainerStyle={[styles.contentContainer, { paddingBottom: scrollBottomPadding }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {renderAvailabilityContent(false)}
+            <View style={styles.monthlyDateHeaderStickyWrap}>
+              {renderMonthlyDateHeader()}
+            </View>
+            <View style={styles.monthlySessionsSection}>
+              {renderAvailabilityContent(false)}
+            </View>
           </ScrollView>
         </>
       )}
@@ -2361,6 +2050,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: memberColors.inkMuted,
     marginBottom: 6,
+  },
+  serviceChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  serviceChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  serviceChipActive: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  serviceChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  serviceChipTextActive: {
+    color: '#fff',
+    fontWeight: '600',
   },
   filterContainer: {
     flex: 1,
@@ -2661,14 +2376,14 @@ const styles = StyleSheet.create({
   datePickerContent: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    gap: DATE_CARD_GAP,
+    gap: 12,
     ...(Platform.OS === 'web' && {
       display: 'flex',
       flexDirection: 'row',
     }),
   },
   dateCard: {
-    width: DATE_CARD_WIDTH,
+    width: 70,
     minHeight: Platform.OS === 'web' ? 100 : 88, // 44px * 2 for mobile
     borderRadius: 12,
     backgroundColor: '#fff',

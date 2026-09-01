@@ -177,6 +177,8 @@ export default {
   filterNextWeek: 'Next week',
   filterPeriod: 'Date range',
   filterLocation: 'Location',
+  selectService: 'Service',
+  selectServiceToBook: 'Select a service to view available sessions',
   filterAllLocations: 'All locations',
   book: 'Book',
   durationOneHour: '1 hour',

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation, t as tWithParams } from '../utils/translations';
+import { toDbServiceName } from '../utils/serviceTranslations';
 import { formatDurationFromHours } from '../utils/locale';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
@@ -25,7 +26,6 @@ import DashboardScreen from './DashboardScreen';
 import BookingsScreen from './BookingsScreen';
 import ProfileScreen from './ProfileScreen';
 import BookingDiscoveryScreen from './BookingDiscoveryScreen';
-import AvailableSessionsScreen from './AvailableSessionsScreen';
 import ServicesScreen from './ServicesScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
 import AdminStudentsScreen from './AdminStudentsScreen';
@@ -502,17 +502,9 @@ export default function HomeScreen() {
   };
 
   const handleBrowseAvailableSessions = () => {
-    setActiveScreen('available-sessions');
-  };
-
-  const handleBookAvailableSession = ({ dateStr, serviceName, locationId, time24 }) => {
-    setServiceFilter(serviceName);
-    setBookingDiscoveryContext({
-      initialDate: dateStr,
-      initialLocationId: locationId || null,
-      initialTime24: time24 || null,
-    });
-    setBookingReturnScreen('available-sessions');
+    setServiceFilter(null);
+    setBookingDiscoveryContext({ initialDate: null, initialLocationId: null, initialTime24: null });
+    setBookingReturnScreen('dashboard');
     setActiveScreen('booking-discovery');
   };
 
@@ -902,7 +894,7 @@ export default function HomeScreen() {
     // Store the service filter to pass to BookingDiscoveryScreen
     setActiveScreen('booking-discovery');
     // Store service filter in state to pass to BookingDiscoveryScreen
-    setServiceFilter(serviceName);
+    setServiceFilter(toDbServiceName(serviceName));
   };
 
   const handleNavigate = (screen) => {
@@ -932,7 +924,7 @@ export default function HomeScreen() {
         key={dashboardRefreshKey}
         onBookLesson={handleBookLesson}
         onSelectService={(serviceName) => {
-          setServiceFilter(serviceName);
+          setServiceFilter(toDbServiceName(serviceName));
           setBookingReturnScreen('dashboard');
           setActiveScreen('booking-discovery');
         }}
@@ -961,7 +953,7 @@ export default function HomeScreen() {
             key={dashboardRefreshKey}
             onBookLesson={handleBookLesson}
             onSelectService={(serviceName) => {
-              setServiceFilter(serviceName);
+              setServiceFilter(toDbServiceName(serviceName));
               setBookingReturnScreen('dashboard');
               setActiveScreen('booking-discovery');
             }}
@@ -978,9 +970,17 @@ export default function HomeScreen() {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
         return (
-          <AvailableSessionsScreen
-            onBack={() => setActiveScreen('dashboard')}
-            onBookSession={handleBookAvailableSession}
+          <BookingDiscoveryScreen
+            onNext={handleBookingNext}
+            onBack={() => {
+              setActiveScreen('dashboard');
+              setServiceFilter(null);
+              clearBookingDiscoveryContext();
+            }}
+            serviceFilter={serviceFilter}
+            initialDate={bookingDiscoveryContext.initialDate}
+            initialLocationId={bookingDiscoveryContext.initialLocationId}
+            initialTime24={bookingDiscoveryContext.initialTime24}
           />
         );
       case 'bookings':
@@ -1108,7 +1108,7 @@ export default function HomeScreen() {
               key={dashboardRefreshKey}
               onBookLesson={handleBookLesson}
               onSelectService={(serviceName) => {
-                setServiceFilter(serviceName);
+                setServiceFilter(toDbServiceName(serviceName));
                 setBookingReturnScreen('dashboard');
                 setActiveScreen('booking-discovery');
               }}
@@ -1126,7 +1126,7 @@ export default function HomeScreen() {
             key={dashboardRefreshKey}
             onBookLesson={handleBookLesson}
             onSelectService={(serviceName) => {
-              setServiceFilter(serviceName);
+              setServiceFilter(toDbServiceName(serviceName));
               setBookingReturnScreen('dashboard');
               setActiveScreen('booking-discovery');
             }}
