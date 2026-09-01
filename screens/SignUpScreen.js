@@ -263,7 +263,12 @@ export default function SignUpScreen({ navigation, embedded = false, onGoToLogin
         secureTextEntry={!showPassword}
         error={fieldErrors.password}
         rightElement={
-          <ShowPasswordToggle show={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+          <ShowPasswordToggle
+            show={showPassword}
+            onToggle={() => setShowPassword(!showPassword)}
+            showLabel={t('showPassword')}
+            hideLabel={t('hidePassword')}
+          />
         }
       />
 
@@ -292,6 +297,8 @@ export default function SignUpScreen({ navigation, embedded = false, onGoToLogin
           <ShowPasswordToggle
             show={showConfirmPassword}
             onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
+            showLabel={t('showPassword')}
+            hideLabel={t('hidePassword')}
           />
         }
       />

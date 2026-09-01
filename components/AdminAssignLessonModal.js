@@ -9,7 +9,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
-  FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -222,10 +222,98 @@ function Section({ step, title, children }) {
   );
 }
 
+function formatMoney(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return '$0.00';
+  return `$${n.toFixed(2)}`;
+}
+
+function StudentSearchCombobox({
+  students,
+  filteredStudents,
+  studentSearch,
+  onSearchChange,
+  selectedStudentId,
+  selectedStudent,
+  onSelect,
+  onChangeStudent,
+  fieldError,
+  placeholder,
+  selectedLabel,
+  changeLabel,
+}) {
+  const [focused, setFocused] = useState(false);
+  const showDropdown =
+    !selectedStudentId && focused && studentSearch.trim().length > 0 && filteredStudents.length > 0;
+  const dropdownItems = filteredStudents.slice(0, 20);
+
+  if (selectedStudent) {
+    return (
+      <View style={styles.selectedStudentCard}>
+        <View style={styles.selectedStudentInfo}>
+          <Text style={styles.selectedStudentHeading}>{selectedLabel}</Text>
+          <Text style={styles.selectedStudentName}>{selectedStudent.label}</Text>
+          {selectedStudent.email ? (
+            <Text style={styles.selectedStudentEmail}>{selectedStudent.email}</Text>
+          ) : null}
+        </View>
+        <TouchableOpacity style={styles.changeStudentBtn} onPress={onChangeStudent} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.changeStudentText}>{changeLabel}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.comboboxWrap}>
+      <TextInput
+        style={[styles.input, styles.inputCompact, fieldError && styles.inputErrorBorder]}
+        placeholder={placeholder}
+        value={studentSearch}
+        onChangeText={(v) => {
+          onSearchChange(v);
+          setFocused(true);
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        placeholderTextColor="#94A3B8"
+      />
+      {showDropdown && (
+        <View style={styles.dropdown}>
+          <ScrollView style={styles.dropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+            {dropdownItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  onSelect(item);
+                  setFocused(false);
+                }}
+              >
+                <Text style={styles.dropdownItemName} numberOfLines={1}>
+                  {item.label}
+                </Text>
+                {item.email ? (
+                  <Text style={styles.dropdownItemEmail} numberOfLines={1}>
+                    {item.email}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      <FieldError message={fieldError} />
+    </View>
+  );
+}
+
 export default function AdminAssignLessonModal({ visible, onClose, onAssigned }) {
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
   const scrollRef = useRef(null);
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebDesktop = Platform.OS === 'web' && windowWidth >= 768;
 
   const [students, setStudents] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -257,6 +345,7 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
   const [excludedBulkDates, setExcludedBulkDates] = useState(new Set());
   const [openCalendar, setOpenCalendar] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(null);
 
   const selectedService = ASSIGN_SERVICES.find((s) => s.id === selectedServiceId);
 
@@ -285,12 +374,47 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
     excludedBulkDates,
   ]);
 
+  const parsedCostNum = useMemo(() => {
+    const n = parseFloat(String(cost).replace(/,/g, '.'));
+    return Number.isNaN(n) || n < 0 ? 0 : n;
+  }, [cost]);
+
+  const lessonCount = mode === 'bulk' ? bulkPreview.slots.length : 1;
+  const totalCost = parsedCostNum * lessonCount;
+
   useEffect(() => {
     if (visible) {
       loadStudents();
       loadLocations();
       resetForm(false);
     }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !selectedStudentId) {
+      setWalletBalance(null);
+      return;
+    }
+    let cancelled = false;
+    getWalletBalance(selectedStudentId)
+      .then((balance) => {
+        if (!cancelled) setWalletBalance(balance);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletBalance(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, selectedStudentId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !visible) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [visible]);
 
   const resetForm = (keepMode = true) => {
@@ -599,10 +723,26 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
     setExcludedBulkDates((prev) => new Set([...prev, dateStr]));
   };
 
+  const handleSelectStudent = (item) => {
+    setSelectedStudentId(item.id);
+    setStudentSearch('');
+    clearFieldError('student');
+  };
+
+  const handleChangeStudent = () => {
+    setSelectedStudentId(null);
+    setStudentSearch('');
+  };
+
   const submitLabel =
     mode === 'bulk'
       ? bulkPreview.slots.length > 0
-        ? `Assign ${bulkPreview.slots.length} lesson${bulkPreview.slots.length !== 1 ? 's' : ''}`
+        ? parsedCostNum > 0
+          ? t('assignLessonBulkSubmitWithTotal')
+              .replace('{{count}}', String(bulkPreview.slots.length))
+              .replace('{{total}}', formatMoney(totalCost))
+          : t('assignLessonBulkSubmitCount')
+              .replace('{{count}}', String(bulkPreview.slots.length))
         : t('assignLessonBulkSubmit') || 'Assign lessons'
       : t('assignLessonSubmit') || 'Assign lesson';
 
@@ -610,8 +750,8 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+      <View style={[styles.overlay, isWebDesktop && styles.overlayDesktop]}>
+        <View style={[styles.sheet, isWebDesktop && styles.sheetDesktop]}>
           {result ? (
             <View style={styles.resultOverlay}>
               <View
@@ -716,13 +856,10 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
               </View>
             </View>
           ) : (
-            <>
+            <View style={styles.body}>
               <View style={styles.header}>
-                <View>
+                <View style={styles.headerText}>
                   <Text style={styles.title}>{t('assignLessonTitle') || 'Assign a lesson'}</Text>
-                  <Text style={styles.subtitle}>
-                    {t('assignLessonSubtitle') || 'Create a booking for a student'}
-                  </Text>
                 </View>
                 <TouchableOpacity onPress={handleClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                   <Ionicons name="close" size={24} color="#64748B" />
@@ -734,6 +871,7 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
               >
                 {validationSummary || error ? (
                   <View style={styles.validationBanner}>
@@ -775,45 +913,20 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                 </View>
 
                 <Section step={1} title={t('assignLessonStudent') || 'Student'}>
-                  <TextInput
-                    style={[styles.input, fieldErrors.student && styles.inputErrorBorder]}
+                  <StudentSearchCombobox
+                    students={students}
+                    filteredStudents={filteredStudents}
+                    studentSearch={studentSearch}
+                    onSearchChange={setStudentSearch}
+                    selectedStudentId={selectedStudentId}
+                    selectedStudent={selectedStudent}
+                    onSelect={handleSelectStudent}
+                    onChangeStudent={handleChangeStudent}
+                    fieldError={fieldErrors.student}
                     placeholder={t('assignLessonSearchStudent') || 'Search by name or email...'}
-                    value={studentSearch}
-                    onChangeText={setStudentSearch}
-                    placeholderTextColor="#94A3B8"
+                    selectedLabel={t('assignLessonSelectedStudent') || 'Selected student'}
+                    changeLabel={t('assignLessonChange') || 'Change'}
                   />
-                  <View style={styles.listWrap}>
-                    <FlatList
-                      data={filteredStudents.slice(0, 8)}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[styles.option, selectedStudentId === item.id && styles.optionSelected]}
-                          onPress={() => {
-                            setSelectedStudentId(item.id);
-                            clearFieldError('student');
-                          }}
-                        >
-                          <Text style={styles.optionText} numberOfLines={1}>
-                            {item.label}
-                          </Text>
-                          {item.email ? (
-                            <Text style={styles.optionSub} numberOfLines={1}>
-                              {item.email}
-                            </Text>
-                          ) : null}
-                        </TouchableOpacity>
-                      )}
-                      scrollEnabled={false}
-                    />
-                  </View>
-                  {selectedStudent && (
-                    <View style={styles.selectedChip}>
-                      <Ionicons name="person" size={14} color="#0D9488" />
-                      <Text style={styles.selectedChipText}>{selectedStudent.label}</Text>
-                    </View>
-                  )}
-                  <FieldError message={fieldErrors.student} />
                 </Section>
 
                 <Section step={2} title={t('assignLessonService') || 'Session'}>
@@ -998,9 +1111,11 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                 </Section>
 
                 <Section step={5} title={t('assignLessonReview') || 'Review & assign'}>
-                  <Text style={styles.fieldLabel}>{t('assignLessonCost') || 'Cost (charged from student)'}</Text>
+                  <Text style={styles.fieldLabel}>
+                    {t('assignLessonPricePerLesson') || 'Price per lesson'}
+                  </Text>
                   <TextInput
-                    style={[styles.input, fieldErrors.cost && styles.inputErrorBorder]}
+                    style={[styles.input, styles.inputCompact, fieldErrors.cost && styles.inputErrorBorder]}
                     placeholder="0"
                     value={cost}
                     onChangeText={(v) => {
@@ -1017,62 +1132,152 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
 
                   {(selectedStudent || selectedService || selectedLocation) && (
                     <View style={styles.reviewBox}>
-                      <Text style={styles.reviewTitle}>Review</Text>
+                      <Text style={styles.reviewTitle}>{t('assignLessonReviewHeading') || 'Review'}</Text>
                       {selectedStudent ? (
                         <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>Student</Text>
+                          <Text style={styles.reviewLabel}>{t('assignLessonStudent') || 'Student'}</Text>
                           <Text style={styles.reviewValue}>{selectedStudent.label}</Text>
                         </View>
                       ) : null}
                       {selectedService ? (
-                        <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>Session</Text>
-                          <Text style={styles.reviewValue}>{selectedService.name}</Text>
-                        </View>
+                        <>
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>{t('assignLessonService') || 'Session'}</Text>
+                            <Text style={styles.reviewValue}>{selectedService.name}</Text>
+                          </View>
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>{t('assignLessonDuration') || 'Duration'}</Text>
+                            <Text style={styles.reviewValue}>
+                              {selectedService.durationHours} hour{selectedService.durationHours !== 1 ? 's' : ''}
+                            </Text>
+                          </View>
+                        </>
                       ) : null}
                       {mode === 'single' && dateStr && timeStr ? (
                         <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>When</Text>
+                          <Text style={styles.reviewLabel}>{t('assignLessonDateTime') || 'Date & time'}</Text>
                           <Text style={styles.reviewValue}>{formatDateTimeLabel(dateStr, timeStr)}</Text>
                         </View>
                       ) : null}
                       {mode === 'bulk' && bulkStartTime ? (
                         <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>Time</Text>
+                          <Text style={styles.reviewLabel}>{t('assignLessonTime') || 'Time'}</Text>
                           <Text style={styles.reviewValue}>{bulkStartTime}</Text>
                         </View>
                       ) : null}
                       {mode === 'bulk' && bulkPreview.uniqueDates.length > 0 ? (
                         <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>Dates</Text>
+                          <Text style={styles.reviewLabel}>{t('assignLessonDate') || 'Dates'}</Text>
                           <Text style={styles.reviewValue}>{bulkPreview.uniqueDates.length} selected</Text>
                         </View>
                       ) : null}
                       {selectedLocation ? (
                         <View style={styles.reviewRow}>
-                          <Text style={styles.reviewLabel}>Where</Text>
+                          <Text style={styles.reviewLabel}>{t('assignLessonLocation') || 'Location'}</Text>
                           <Text style={styles.reviewValue}>{selectedLocation.name}</Text>
                         </View>
                       ) : null}
+
+                      <View style={styles.costReviewBlock}>
+                        <Text style={styles.costReviewHeading}>
+                          {t('assignLessonCostHeading') || 'Cost'}
+                        </Text>
+                        {mode === 'single' ? (
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>
+                              {t('assignLessonLessonCost') || 'Lesson cost'}
+                            </Text>
+                            <Text style={styles.reviewValueBold}>
+                              {parsedCostNum > 0 ? formatMoney(parsedCostNum) : t('assignLessonNoCharge') || 'No charge'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <>
+                            <View style={styles.reviewRow}>
+                              <Text style={styles.reviewLabel}>
+                                {t('assignLessonPricePerLesson') || 'Price per lesson'}
+                              </Text>
+                              <Text style={styles.reviewValue}>
+                                {parsedCostNum > 0 ? formatMoney(parsedCostNum) : t('assignLessonNoCharge') || 'No charge'}
+                              </Text>
+                            </View>
+                            <View style={styles.reviewRow}>
+                              <Text style={styles.reviewLabel}>{t('assignLessonLessons') || 'Lessons'}</Text>
+                              <Text style={styles.reviewValue}>{lessonCount}</Text>
+                            </View>
+                            <View style={styles.costDivider} />
+                            <View style={styles.reviewRow}>
+                              <Text style={styles.reviewLabelTotal}>{t('assignLessonTotal') || 'Total'}</Text>
+                              <Text style={styles.reviewValueBold}>
+                                {parsedCostNum > 0 ? formatMoney(totalCost) : t('assignLessonNoCharge') || 'No charge'}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+                      </View>
+
+                      {parsedCostNum > 0 && walletBalance !== null && selectedStudentId ? (
+                        <View style={styles.creditBlock}>
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>
+                              {t('assignLessonCurrentCredit') || 'Current credit'}
+                            </Text>
+                            <Text style={styles.reviewValue}>{formatMoney(walletBalance)}</Text>
+                          </View>
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>
+                              {mode === 'bulk'
+                                ? t('assignLessonTotalLessonCost') || 'Total lesson cost'
+                                : t('assignLessonLessonCost') || 'Lesson cost'}
+                            </Text>
+                            <Text style={styles.reviewValue}>
+                              {formatMoney(mode === 'bulk' ? totalCost : parsedCostNum)}
+                            </Text>
+                          </View>
+                          <View style={styles.reviewRow}>
+                            <Text style={styles.reviewLabel}>
+                              {t('assignLessonRemainingCredit') || 'Remaining credit'}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.reviewValueBold,
+                                walletBalance - (mode === 'bulk' ? totalCost : parsedCostNum) < 0 &&
+                                  styles.reviewValueError,
+                              ]}
+                            >
+                              {formatMoney(walletBalance - (mode === 'bulk' ? totalCost : parsedCostNum))}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : parsedCostNum === 0 && selectedStudentId ? (
+                        <Text style={styles.noChargeNote}>
+                          {t('assignLessonNoWalletCharge') || 'No wallet charge — credit will not be deducted.'}
+                        </Text>
+                      ) : null}
                     </View>
                   )}
-
-                  <TouchableOpacity
-                    style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-                    onPress={handleSubmit}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <View style={styles.submittingRow}>
-                        <ActivityIndicator color="#FFF" size="small" />
-                        <Text style={styles.submitBtnText}>{t('assignLessonSubmitting') || 'Assigning...'}</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.submitBtnText}>{submitLabel}</Text>
-                    )}
-                  </TouchableOpacity>
                 </Section>
               </ScrollView>
+
+              <View style={styles.footer}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={handleClose} disabled={submitting}>
+                  <Text style={styles.cancelBtnText}>{t('cancel') || 'Cancel'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.footerSubmitBtn, submitting && styles.submitBtnDisabled]}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <View style={styles.submittingRow}>
+                      <ActivityIndicator color="#FFF" size="small" />
+                      <Text style={styles.submitBtnText}>{t('assignLessonSubmitting') || 'Assigning...'}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.submitBtnText}>{submitLabel}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               <CalendarModal
                 visible={openCalendar === 'singleDate'}
@@ -1108,7 +1313,7 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                 }}
                 minDate={bulkStartDate}
               />
-            </>
+            </View>
           )}
         </View>
       </View>
@@ -1122,47 +1327,101 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
+  overlayDesktop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
   sheet: {
     backgroundColor: '#FFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '92%',
     width: '100%',
-    maxWidth: 720,
+    maxWidth: 880,
     alignSelf: 'center',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? { maxHeight: 'calc(100dvh - 32px)' }
+      : { maxHeight: '92%' }),
+  },
+  sheetDesktop: {
+    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 40px rgba(15, 23, 42, 0.18)',
+    }),
+  },
+  body: {
+    flex: 1,
+    flexDirection: 'column',
+    minHeight: 0,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    flexShrink: 0,
   },
+  headerText: { flex: 1, paddingRight: 12 },
   title: {
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
+  scroll: {
+    flex: 1,
+    minHeight: 0,
   },
-  scroll: { maxHeight: 520 },
-  scrollContent: { padding: 20, paddingBottom: 36 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFF',
+    flexShrink: 0,
+  },
+  cancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFF',
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  cancelBtnText: { color: '#334155', fontSize: 15, fontWeight: '600' },
+  footerSubmitBtn: {
+    flex: 1,
+    backgroundColor: '#0D9488',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   section: {
-    marginBottom: 8,
-    paddingBottom: 16,
+    marginBottom: 4,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
@@ -1170,9 +1429,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#475569',
-    marginBottom: 6,
+    marginBottom: 5,
   },
-  fieldLabelSpaced: { marginTop: 12 },
+  fieldLabelSpaced: { marginTop: 10 },
   input: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -1181,6 +1440,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: '#0F172A',
+  },
+  inputCompact: {
+    paddingVertical: 9,
+    fontSize: 15,
   },
   inputErrorBorder: {
     borderColor: '#DC2626',
@@ -1208,18 +1471,63 @@ const styles = StyleSheet.create({
   },
   optionText: { fontSize: 15, color: '#0F172A', fontWeight: '500' },
   optionSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  selectedChip: {
+  comboboxWrap: { position: 'relative', zIndex: 20 },
+  dropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    maxHeight: 280,
+    zIndex: 30,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+    }),
+  },
+  dropdownScroll: { maxHeight: 280 },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownItemName: { fontSize: 15, fontWeight: '500', color: '#0F172A' },
+  dropdownItemEmail: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  selectedStudentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(13, 148, 136, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#0D9488',
+    borderRadius: 10,
+    backgroundColor: 'rgba(13, 148, 136, 0.06)',
   },
-  selectedChipText: { fontSize: 13, fontWeight: '600', color: '#0D9488' },
+  selectedStudentInfo: { flex: 1 },
+  selectedStudentHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  selectedStudentName: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  selectedStudentEmail: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  changeStudentBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFF',
+  },
+  changeStudentText: { fontSize: 13, fontWeight: '600', color: '#334155' },
   hint: { fontSize: 12, color: '#64748B', marginTop: 4 },
   validationBanner: {
     flexDirection: 'row',
@@ -1233,15 +1541,8 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
   },
   validationBannerText: { flex: 1, fontSize: 14, color: '#DC2626', fontWeight: '500' },
-  submitBtn: {
-    backgroundColor: '#0D9488',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
   submitBtnDisabled: { opacity: 0.7 },
-  submitBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  submitBtnText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
   submittingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   resultOverlay: {
     padding: 24,
@@ -1322,8 +1623,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resultSecondaryBtnText: { color: '#334155', fontSize: 15, fontWeight: '600' },
-  modeToggle: { marginBottom: 16 },
-  modeToggleLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 8 },
+  modeToggle: { marginBottom: 12 },
+  modeToggleLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
   modeToggleRow: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
@@ -1332,7 +1633,7 @@ const styles = StyleSheet.create({
   },
   modeTab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -1360,7 +1661,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 10,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#FAFAFA',
   },
   serviceCardSelected: {
@@ -1380,7 +1682,7 @@ const styles = StyleSheet.create({
   },
   selectedSummaryLabel: { fontSize: 12, fontWeight: '600', color: '#0D9488', marginBottom: 2 },
   selectedSummaryValue: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
-  bulkHint: { fontSize: 13, color: '#64748B', marginBottom: 12, lineHeight: 18 },
+  bulkHint: { fontSize: 13, color: '#64748B', marginBottom: 8, lineHeight: 18 },
   bulkDatesPreview: {
     marginTop: 16,
     padding: 12,
@@ -1406,30 +1708,64 @@ const styles = StyleSheet.create({
   },
   dateChipText: { fontSize: 13, fontWeight: '500', color: '#334155' },
   reviewBox: {
-    marginTop: 16,
-    padding: 14,
+    marginTop: 12,
+    padding: 12,
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   reviewTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 6,
     flexWrap: 'wrap',
   },
   reviewLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  reviewLabelTotal: { fontSize: 13, color: '#0F172A', fontWeight: '700' },
   reviewValue: { fontSize: 14, color: '#0F172A', fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+  reviewValueBold: { fontSize: 15, color: '#0F172A', fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  reviewValueError: { color: '#DC2626' },
+  costReviewBlock: {
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  costReviewHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  costDivider: {
+    height: 1,
+    backgroundColor: '#CBD5E1',
+    marginVertical: 6,
+  },
+  creditBlock: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  noChargeNote: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#64748B',
+    fontStyle: 'italic',
+  },
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',

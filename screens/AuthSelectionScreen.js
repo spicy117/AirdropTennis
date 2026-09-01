@@ -73,10 +73,10 @@ function AuthSelectionScreenInner({ navigation, route, language, updateLanguage,
       style={styles.langToggle}
       onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
       accessibilityRole="button"
-      accessibilityLabel={language === 'en' ? 'Switch to Chinese' : 'Switch to English'}
+      accessibilityLabel={language === 'en' ? t('switchToChinese') : t('switchToEnglish')}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
+      <Text style={styles.langText}>{language === 'en' ? t('langZhShort') : t('langEnShort')}</Text>
     </TouchableOpacity>
   );
 

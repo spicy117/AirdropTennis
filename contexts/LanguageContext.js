@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -15,9 +16,21 @@ export const useLanguage = () => {
 
 const LANGUAGE_STORAGE_KEY = 'user_language_preference';
 
+function readStoredLanguage() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (stored === 'en' || stored === 'zh-CN') return stored;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
 export const LanguageProvider = ({ children }) => {
   const { user, userRole } = useAuth();
-  const [language, setLanguage] = useState('en'); // 'en' or 'zh-CN'
+  const [language, setLanguage] = useState(() => readStoredLanguage() || 'en');
   const [loading, setLoading] = useState(true);
 
   // Load language preference on mount
@@ -66,6 +79,13 @@ export const LanguageProvider = ({ children }) => {
     try {
       setLanguage(newLanguage);
       await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, newLanguage);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(LANGUAGE_STORAGE_KEY, newLanguage);
+        } catch {
+          // ignore
+        }
+      }
 
       // Update user profile in Supabase if user is logged in
       if (user) {

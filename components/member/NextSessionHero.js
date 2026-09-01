@@ -5,6 +5,9 @@ import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTr
 import MemberButton from './MemberButton';
 import CourtWatermark from './CourtWatermark';
 import { HeroSkeleton } from './MemberSkeleton';
+import { formatDayNumber, formatMonthShort, formatWeekdayShort } from '../../utils/locale';
+import { translateServiceName } from '../../utils/serviceTranslations';
+import { getTranslation } from '../../utils/translations';
 
 export default function NextSessionHero({
   booking,
@@ -13,19 +16,20 @@ export default function NextSessionHero({
   onViewBooking,
   formatDate,
   formatTime,
+  language = 'en',
   labels = {},
 }) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
 
   const {
-    nextOnCourt = 'Next on court',
-    noBooking = 'Nothing booked yet',
-    noBookingSub = 'Find a session and get back on court.',
-    bookNow = 'Find a session',
-    viewBooking = 'View booking',
-    tennisLesson = 'Tennis lesson',
-    tbd = 'TBD',
+    nextOnCourt,
+    noBooking,
+    noBookingSub,
+    bookNow,
+    viewBooking,
+    tennisLesson,
+    tbd,
   } = labels;
 
   if (loading) {
@@ -47,9 +51,15 @@ export default function NextSessionHero({
   }
 
   const d = new Date(booking.start_time);
-  const dayNum = d.getDate();
-  const dayName = d.toLocaleDateString('en-AU', { weekday: 'short' });
-  const month = d.toLocaleDateString('en-AU', { month: 'short' });
+  const dayNum = formatDayNumber(d);
+  const dayName = formatWeekdayShort(d, language);
+  const month = formatMonthShort(d, language);
+  const t = (key) => getTranslation(language, key);
+  const serviceLabel = translateServiceName(
+    booking.service_name,
+    t,
+    booking.service_name || tennisLesson
+  );
 
   return (
     <Pressable
@@ -60,7 +70,7 @@ export default function NextSessionHero({
       ]}
       onPress={onViewBooking}
       accessibilityRole="button"
-      accessibilityLabel={`${booking.service_name || tennisLesson}, ${formatDate(booking.start_time)}`}
+      accessibilityLabel={`${serviceLabel}, ${formatDate(booking.start_time)}`}
     >
       <CourtWatermark variant="hero" />
 
@@ -76,7 +86,7 @@ export default function NextSessionHero({
 
           <View style={styles.sessionInfo}>
             <Text style={styles.serviceName} numberOfLines={2}>
-              {booking.service_name || tennisLesson}
+              {serviceLabel}
             </Text>
             <Text style={styles.time}>{formatTime(booking.start_time)}</Text>
             <View style={styles.locationRow}>
@@ -155,7 +165,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: memberColors.inkMuted,
     marginBottom: 2,
-    textTransform: 'capitalize',
   },
   dayNum: {
     fontSize: 44,
@@ -170,7 +179,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: memberColors.court,
     marginTop: 2,
-    textTransform: 'capitalize',
   },
   sessionInfo: {
     flex: 1,

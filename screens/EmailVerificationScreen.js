@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import AuthLayout from '../components/auth/AuthLayout';
 import AuthPrimaryButton, { AuthTextLink } from '../components/auth/AuthPrimaryButton';
-import { memberColors, memberRadius, memberTypography } from '../theme/memberTheme';
+import { memberColors, memberTypography } from '../theme/memberTheme';
 
 export default function EmailVerificationScreen({ route, navigation }) {
   const { resendVerificationEmail } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [loading, setLoading] = useState(false);
   const email = route?.params?.email || '';
 
   const handleResendEmail = async () => {
     if (!email) {
-      Alert.alert('Error', 'Email address not found');
+      Alert.alert(t('error'), t('emailNotFound'));
       return;
     }
 
@@ -21,9 +25,9 @@ export default function EmailVerificationScreen({ route, navigation }) {
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('error'), error.message);
     } else {
-      Alert.alert('Success', 'Verification email sent! Please check your inbox.');
+      Alert.alert(t('success'), t('verificationEmailSent'));
     }
   };
 
@@ -33,25 +37,23 @@ export default function EmailVerificationScreen({ route, navigation }) {
         <View style={styles.iconCircle}>
           <Text style={styles.icon}>✉️</Text>
         </View>
-        <Text style={styles.title}>Verify your email</Text>
-        <Text style={styles.message}>We've sent a verification email to:</Text>
+        <Text style={styles.title}>{t('verifyYourEmail')}</Text>
+        <Text style={styles.message}>{t('verificationEmailSentTo')}</Text>
         {email ? (
           <View style={styles.emailBox}>
             <Text style={styles.email}>{email}</Text>
           </View>
         ) : null}
-        <Text style={styles.instructions}>
-          Please check your email and click the verification link to activate your account.
-        </Text>
+        <Text style={styles.instructions}>{t('verifyEmailInstructions')}</Text>
 
         <AuthPrimaryButton
-          label={loading ? 'Sending…' : 'Resend verification email'}
+          label={loading ? t('sending') : t('resendVerificationEmail')}
           onPress={handleResendEmail}
           loading={loading}
           disabled={loading}
         />
 
-        <AuthTextLink label="Back to login" onPress={() => navigation.navigate('LogIn')} subtle />
+        <AuthTextLink label={t('backToLogin')} onPress={() => navigation.navigate('LogIn')} subtle />
       </View>
     </AuthLayout>
   );
@@ -83,16 +85,14 @@ const styles = StyleSheet.create({
   message: {
     ...memberTypography.body,
     textAlign: 'center',
-    color: memberColors.inkMuted,
     marginBottom: 12,
   },
   emailBox: {
     backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
     borderColor: memberColors.border,
-    borderRadius: memberRadius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 16,
     width: '100%',
   },
@@ -103,10 +103,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   instructions: {
-    fontSize: 14,
-    color: memberColors.inkMuted,
+    ...memberTypography.body,
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 20,
+    lineHeight: 22,
   },
 });

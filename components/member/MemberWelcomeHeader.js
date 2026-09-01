@@ -2,13 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { memberColors, memberTypography, memberWebTransition } from '../../theme/memberTheme';
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
+import { getGreetingKey } from '../../utils/locale';
+import { getTranslation } from '../../utils/translations';
 
 export default function MemberWelcomeHeader({
   userName,
@@ -20,7 +15,10 @@ export default function MemberWelcomeHeader({
   langEnShort,
   langZhShort,
 }) {
+  const t = (key) => getTranslation(language, key);
   const firstName = userName?.split(' ')[0] || userName;
+  const greeting = t(getGreetingKey());
+  const greetingPunct = language === 'zh-CN' ? '，' : ',';
 
   return (
     <View style={styles.header}>
@@ -29,14 +27,14 @@ export default function MemberWelcomeHeader({
           <Pressable
             style={({ pressed }) => [styles.menuBtn, pressed && styles.btnPressed]}
             onPress={onOpenSidebar}
-            accessibilityLabel="Open menu"
+            accessibilityLabel={t('openMenu')}
             accessibilityRole="button"
           >
             <Ionicons name="menu" size={22} color={memberColors.ink} />
           </Pressable>
         )}
         <View style={styles.textWrap}>
-          <Text style={styles.greeting}>{getGreeting()},</Text>
+          <Text style={styles.greeting}>{greeting}{greetingPunct}</Text>
           <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
           {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
         </View>
@@ -46,9 +44,10 @@ export default function MemberWelcomeHeader({
           style={({ pressed }) => [styles.langBtn, pressed && styles.btnPressed]}
           onPress={onToggleLanguage}
           accessibilityRole="button"
+          accessibilityLabel={language === 'en' ? t('switchToChinese') : t('switchToEnglish')}
         >
           <Ionicons name="language-outline" size={16} color={memberColors.inkMuted} />
-          <Text style={styles.langText}>{language === 'en' ? langEnShort : langZhShort}</Text>
+          <Text style={styles.langText}>{language === 'en' ? langZhShort : langEnShort}</Text>
         </Pressable>
       )}
     </View>

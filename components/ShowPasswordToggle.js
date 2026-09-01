@@ -2,19 +2,19 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { memberColors } from '../theme/memberTheme';
 
-export default function ShowPasswordToggle({ show, onToggle, accessible = true }) {
+export default function ShowPasswordToggle({ show, onToggle, accessible = true, showLabel = 'Show', hideLabel = 'Hide' }) {
   return (
     <TouchableOpacity
       style={styles.toggle}
       onPress={onToggle}
       accessible={accessible}
-      accessibilityLabel={show ? 'Hide password' : 'Show password'}
+      accessibilityLabel={show ? hideLabel : showLabel}
       accessibilityRole="button"
       accessibilityHint="Toggles password visibility"
       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       activeOpacity={0.65}
     >
-      <Text style={styles.label}>{show ? 'Hide' : 'Show'}</Text>
+      <Text style={styles.label}>{show ? hideLabel : showLabel}</Text>
     </TouchableOpacity>
   );
 }

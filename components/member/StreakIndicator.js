@@ -1,12 +1,17 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, Platform } from 'react-native';
 import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
+import { formatStreakWeeks } from '../../utils/locale';
 
-export default function StreakIndicator({ weeks = 0, onPress, labelActive, labelEmpty }) {
+export default function StreakIndicator({ weeks = 0, onPress, labelEmpty, labelActive, t }) {
   const hasStreak = weeks > 0;
   const text = hasStreak
-    ? `${weeks} week${weeks !== 1 ? 's' : ''}`
-    : labelEmpty || 'Start your streak';
+    ? (labelActive || (t ? formatStreakWeeks(weeks, t) : `${weeks} weeks`))
+    : (labelEmpty || 'Start your streak');
+
+  const a11yLabel = hasStreak
+    ? (labelActive || (t ? formatStreakWeeks(weeks, t) : `${weeks} week streak`))
+    : (labelEmpty || 'Start your streak');
 
   return (
     <Pressable
@@ -18,7 +23,7 @@ export default function StreakIndicator({ weeks = 0, onPress, labelActive, label
       ]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={hasStreak ? `${weeks} week streak` : 'Start your streak'}
+      accessibilityLabel={a11yLabel}
     >
       <Text style={styles.flame}>🔥</Text>
       <Text style={[styles.text, hasStreak && styles.textActive]}>{text}</Text>

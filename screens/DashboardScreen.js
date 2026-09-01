@@ -33,6 +33,8 @@ import SessionTimelineRow from '../components/member/SessionTimelineRow';
 import EmptyState from '../components/member/EmptyState';
 import MemberSkeleton from '../components/member/MemberSkeleton';
 import { memberColors } from '../theme/memberTheme';
+import { formatDateShort, formatTime as formatLocaleTime, formatDurationFromHours } from '../utils/locale';
+import { getServiceDurationHours } from '../utils/serviceTranslations';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isDesktop = Platform.OS === 'web' && SCREEN_WIDTH > 768;
@@ -1569,15 +1571,9 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  };
+  const formatDate = (dateString) => formatDateShort(dateString, language);
 
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  };
+  const formatTime = (dateString) => formatLocaleTime(dateString, language);
 
   const handleServicePress = (serviceName) => {
     if (onSelectService) onSelectService(serviceName);
@@ -1595,9 +1591,10 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     name: t(SERVICE_NAME_KEYS[service.id] || service.name),
     shortDesc: t(SERVICE_DESC_KEYS[service.id] || service.shortDesc),
     tag: service.tag ? t(TAG_KEYS[service.tag]) : null,
+    duration: formatDurationFromHours(getServiceDurationHours(service.id), t),
   }));
 
-  const welcomeSubtitle = nextBooking ? 'Your next session is coming up.' : 'Ready to get back on court?';
+  const welcomeSubtitle = nextBooking ? t('nextSessionComingUp') : t('readyToGetBackOnCourt');
 
   return (
     <MemberPageBackground>
@@ -1621,7 +1618,8 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           <StreakIndicator
             weeks={streakCount}
             onPress={onGoToPerformance}
-            labelEmpty="Start your streak"
+            labelEmpty={t('startStreak')}
+            t={t}
           />
         )}
 
@@ -1640,12 +1638,13 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
               }}
               formatDate={formatDate}
               formatTime={formatTime}
+              language={language}
               labels={{
-                nextOnCourt: 'Next on court',
-                noBooking: t('noLessonsYet'),
-                noBookingSub: t('bookFirstLesson'),
-                bookNow: t('bookNow'),
-                viewBooking: 'View booking',
+                nextOnCourt: t('nextOnCourt'),
+                noBooking: t('nothingBookedYet'),
+                noBookingSub: t('findSessionSub'),
+                bookNow: t('findSession'),
+                viewBooking: t('viewBooking'),
                 tennisLesson: t('tennisLesson'),
                 tbd: t('tbd'),
               }}
@@ -1744,7 +1743,9 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                   key={booking.id}
                   booking={booking}
                   formatTime={formatTime}
+                  language={language}
                   tennisLesson={t('tennisLesson')}
+                  tbd={t('tbd')}
                   showDivider={i < Math.min(upcomingBookings.length, 4) - 1}
                   onPress={() => {
                     setSelectedBooking(booking);

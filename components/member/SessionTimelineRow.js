@@ -2,11 +2,24 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
+import { formatDayNumber, formatMonthShort } from '../../utils/locale';
+import { translateServiceName } from '../../utils/serviceTranslations';
+import { getTranslation } from '../../utils/translations';
 
-export default function SessionTimelineRow({ booking, onPress, formatTime, tennisLesson = 'Tennis lesson', showDivider = true }) {
+export default function SessionTimelineRow({
+  booking,
+  onPress,
+  formatTime,
+  language = 'en',
+  tennisLesson = 'Tennis lesson',
+  tbd = 'TBD',
+  showDivider = true,
+}) {
+  const t = (key) => getTranslation(language, key);
   const d = new Date(booking.start_time);
-  const day = d.getDate();
-  const month = d.toLocaleDateString('en-AU', { month: 'short' });
+  const day = formatDayNumber(d);
+  const month = formatMonthShort(d, language);
+  const serviceLabel = translateServiceName(booking.service_name, t, booking.service_name || tennisLesson);
 
   return (
     <>
@@ -25,8 +38,8 @@ export default function SessionTimelineRow({ booking, onPress, formatTime, tenni
         </View>
         <View style={styles.info}>
           <Text style={styles.time}>{formatTime(booking.start_time)}</Text>
-          <Text style={styles.title} numberOfLines={1}>{booking.service_name || tennisLesson}</Text>
-          <Text style={styles.meta} numberOfLines={1}>{booking.locations?.name || 'TBD'}</Text>
+          <Text style={styles.title} numberOfLines={1}>{serviceLabel}</Text>
+          <Text style={styles.meta} numberOfLines={1}>{booking.locations?.name || tbd}</Text>
         </View>
         {booking.hasPendingRainCheck && (
           <View style={styles.rainTag}>
@@ -72,7 +85,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.2,
     color: memberColors.inkMuted,
-    textTransform: 'capitalize',
   },
   day: {
     fontSize: 22,

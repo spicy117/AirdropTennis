@@ -15,6 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getTranslation, t as tWithParams } from '../utils/translations';
+import { formatMonthShort, formatTime as formatLocaleTime, formatRelativeBookingDay } from '../utils/locale';
+import { translateServiceName } from '../utils/serviceTranslations';
 import BookingEditModal from '../components/BookingEditModal';
 import MemberPageBackground from '../components/member/MemberPageBackground';
 import { memberColors } from '../theme/memberTheme';
@@ -111,7 +113,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
                   coachName = [coachFirstName, coachLastName].filter(Boolean).join(' ');
                   coachInitials = (coachFirstName?.[0] || '') + (coachLastName?.[0] || '');
                 } else {
-                  coachName = coachProfile.email || 'Unknown Coach';
+                  coachName = coachProfile.email || t('unknownCoach');
                   coachInitials = coachName[0]?.toUpperCase() || '?';
                 }
                 return { ...booking, coachName, coachInitials: coachInitials.toUpperCase(), hasPendingRainCheck };
@@ -140,18 +142,13 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
 
   const formatDateCompact = (dateString) => {
     const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-    return { day, month };
+    return {
+      day: date.getDate(),
+      month: formatMonthShort(date, language).toUpperCase(),
+    };
   };
 
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
+  const formatTime = (dateString) => formatLocaleTime(dateString, language);
 
   const formatDuration = (startTime, endTime) => {
     const start = new Date(startTime);
@@ -167,16 +164,17 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
     const bookingDate = new Date(startTime);
     const diffMs = bookingDate - now;
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) {
-      return { text: 'Today', color: '#DC2626', bgColor: 'rgba(220, 38, 38, 0.1)' };
-    } else if (diffDays === 1) {
-      return { text: 'Tomorrow', color: '#D97706', bgColor: 'rgba(217, 119, 6, 0.1)' };
-    } else if (diffDays <= 7) {
-      return { text: `In ${diffDays} days`, color: '#0D9488', bgColor: 'rgba(13, 148, 136, 0.1)' };
-    } else {
-      return { text: 'Confirmed', color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.1)' };
+      return { text: t('today'), color: '#DC2626', bgColor: 'rgba(220, 38, 38, 0.1)' };
     }
+    if (diffDays === 1) {
+      return { text: t('tomorrow'), color: '#D97706', bgColor: 'rgba(217, 119, 6, 0.1)' };
+    }
+    if (diffDays <= 7) {
+      return { text: t('inDays', { count: diffDays }), color: '#0D9488', bgColor: 'rgba(13, 148, 136, 0.1)' };
+    }
+    return { text: t('confirmed'), color: '#6B7280', bgColor: 'rgba(107, 114, 128, 0.1)' };
   };
 
   // Elite Booking Card Component
@@ -219,7 +217,7 @@ export default function BookingsScreen({ onBookLesson, refreshTrigger, onGoHome 
           <View style={[styles.infoSection, cardMobile && styles.infoSectionMobile]}>
             {/* Service Name */}
             <Text style={styles.serviceName} numberOfLines={1}>
-              {booking.service_name || 'Tennis Session'}
+              {translateServiceName(booking.service_name, t, booking.service_name || t('tennisSession'))}
             </Text>
 
             {/* Time & Duration */}

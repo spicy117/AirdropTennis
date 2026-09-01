@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation, t as tWithParams } from '../utils/translations';
+import { formatDurationFromHours } from '../utils/locale';
 import { supabase } from '../lib/supabase';
 import Sidebar from '../components/Sidebar';
 import BottomNav from '../components/BottomNav';
@@ -59,6 +62,8 @@ const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.85);
 
 export default function HomeScreen() {
   const { signOut, user, session, isAdmin, userRole, roleLoading } = useAuth();
+  const { language } = useLanguage();
+  const t = (key, params) => tWithParams(language, key, params || {});
   const insets = useSafeAreaInsets();
 
   const [activeScreen, setActiveScreen] = useState('dashboard');
@@ -256,7 +261,7 @@ export default function HomeScreen() {
     }
 
     if (!sessionId) {
-      Alert.alert('Error', 'Payment session ID is missing.');
+      Alert.alert(t('error'), t('paymentSessionMissing'));
       return;
     }
 
@@ -306,8 +311,8 @@ export default function HomeScreen() {
                   setBookingModal({
                     visible: true,
                     success: false,
-                    title: 'Booking Failed',
-                    message: 'Bookings must be at least 1 week in advance.',
+                    title: t('bookingFailed'),
+                    message: t('bookingOneWeekAdvance'),
                   });
                   if (typeof window !== 'undefined') {
                     window.history.replaceState({}, '', '/home');
@@ -338,8 +343,8 @@ export default function HomeScreen() {
               setBookingModal({
                 visible: true,
                 success: true,
-                title: 'Booking Confirmed!',
-                message: 'Your lesson has been booked successfully.',
+                title: t('bookingConfirmed'),
+                message: t('bookingConfirmedMessage'),
               });
               if (typeof window !== 'undefined') {
                 window.history.replaceState({}, '', '/home');
@@ -472,7 +477,7 @@ export default function HomeScreen() {
 
   const handleBookingNext = async (selectedSlots, summary, selectedDate = null) => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to make a booking.');
+      Alert.alert(t('error'), t('mustBeLoggedInToBook'));
       return;
     }
 
@@ -517,9 +522,9 @@ export default function HomeScreen() {
 
             if (!availability) {
               Alert.alert(
-                'Booking Failed',
-                `The slot at ${slot.time} is no longer available. Please try again.`,
-                [{ text: 'OK' }]
+                t('bookingFailed'),
+                t('slotNoLongerAvailable', { time: slot.time }),
+                [{ text: t('ok') }]
               );
               return;
             }
@@ -545,9 +550,9 @@ export default function HomeScreen() {
 
             if (!slotAvailabilities || slotAvailabilities.length === 0) {
               Alert.alert(
-                'Booking Failed',
-                `The slot at ${slot.time} is no longer available. Please try again.`,
-                [{ text: 'OK' }]
+                t('bookingFailed'),
+                t('slotNoLongerAvailable', { time: slot.time }),
+                [{ text: t('ok') }]
               );
               return;
             }
@@ -586,9 +591,9 @@ export default function HomeScreen() {
 
         if (currentBookingCount >= MAX_CAPACITY) {
           Alert.alert(
-            'Slot Full',
-            `This time slot is already full (${currentBookingCount}/${MAX_CAPACITY} members). Please choose another time.`,
-            [{ text: 'OK' }]
+            t('slotFull'),
+            t('slotFullMessageWithCapacity', { current: currentBookingCount, max: MAX_CAPACITY }),
+            [{ text: t('ok') }]
           );
           return;
         }
@@ -643,10 +648,7 @@ export default function HomeScreen() {
             console.log('Wallet balance deducted successfully');
           } catch (walletError) {
             console.error('Error deducting from wallet:', walletError);
-            Alert.alert(
-              'Payment Error',
-              'Failed to process wallet payment. Please try again or use card payment.'
-            );
+            Alert.alert(t('paymentError'), t('walletPaymentFailed'));
             return;
           }
         } else {
@@ -655,8 +657,8 @@ export default function HomeScreen() {
             setBookingModal({
               visible: true,
               success: false,
-              title: 'Coming soon',
-              message: 'This feature will be available soon.',
+              title: t('comingSoon'),
+              message: t('featureComingSoon'),
             });
             return;
           }
@@ -710,8 +712,8 @@ export default function HomeScreen() {
           } catch (checkoutError) {
             console.error('Error creating checkout session:', checkoutError);
             Alert.alert(
-              'Payment Error',
-              checkoutError.message || 'Failed to initiate payment. Please try again.'
+              t('paymentError'),
+              checkoutError.message || t('failedToInitiatePayment')
             );
             return;
           }
@@ -735,9 +737,9 @@ export default function HomeScreen() {
             difference: now - startTime,
           });
           Alert.alert(
-            'Invalid Booking Time',
-            'Cannot create a booking for a time that has already passed. Please select a future time slot.',
-            [{ text: 'OK' }]
+            t('invalidBookingTime'),
+            t('cannotBookInPast'),
+            [{ text: t('ok') }]
           );
           throw new Error('Cannot create booking in the past');
         }
@@ -794,8 +796,10 @@ export default function HomeScreen() {
       setBookingModal({
         visible: true,
         success: true,
-        title: 'Booking Confirmed!',
-        message: `Your lesson has been booked successfully.\n\nDuration: ${summary.duration.toFixed(1)} ${summary.duration === 1 ? 'hour' : 'hours'}`,
+        title: t('bookingConfirmed'),
+        message: t('bookingConfirmedWithDuration', {
+          duration: formatDurationFromHours(summary.duration, t),
+        }),
       });
     } catch (error) {
       console.error('Error creating booking:', error);

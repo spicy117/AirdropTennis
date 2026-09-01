@@ -227,7 +227,12 @@ export default function SignInScreen({ navigation, embedded = false, onGoToSignU
         onSubmitEditing={handleSignIn}
         autoComplete="password"
         rightElement={
-          <ShowPasswordToggle show={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+          <ShowPasswordToggle
+            show={showPassword}
+            onToggle={() => setShowPassword(!showPassword)}
+            showLabel={t('showPassword')}
+            hideLabel={t('hidePassword')}
+          />
         }
       />
 

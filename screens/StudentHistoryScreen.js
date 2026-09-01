@@ -16,6 +16,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 import { utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
+import { translateServiceName } from '../utils/serviceTranslations';
 import MemberPageBackground from '../components/member/MemberPageBackground';
 import { memberColors } from '../theme/memberTheme';
 
@@ -132,7 +133,7 @@ export default function StudentHistoryScreen(props) {
                   coachName = [coachFirstName, coachLastName].filter(Boolean).join(' ');
                   coachInitials = (coachFirstName?.[0] || '') + (coachLastName?.[0] || '');
                 } else {
-                  coachName = coachProfile.email || 'Unknown Coach';
+                  coachName = coachProfile.email || t('unknownCoach');
                   coachInitials = coachName[0]?.toUpperCase() || '?';
                 }
               }
@@ -145,7 +146,7 @@ export default function StudentHistoryScreen(props) {
             ...booking,
             coachName,
             coachInitials: coachInitials.toUpperCase(),
-            locationName: booking.locations?.name || 'Unknown Location',
+            locationName: booking.locations?.name || t('unknownLocation'),
             status: 'completed',
           };
         })
@@ -175,7 +176,7 @@ export default function StudentHistoryScreen(props) {
                     coachName = [coachFirstName, coachLastName].filter(Boolean).join(' ');
                     coachInitials = (coachFirstName?.[0] || '') + (coachLastName?.[0] || '');
                   } else {
-                    coachName = coachProfile.email || 'Unknown Coach';
+                    coachName = coachProfile.email || t('unknownCoach');
                     coachInitials = coachName[0]?.toUpperCase() || '?';
                   }
                 }
@@ -188,7 +189,7 @@ export default function StudentHistoryScreen(props) {
               ...booking,
               coachName,
               coachInitials: coachInitials.toUpperCase(),
-              locationName: booking.locations?.name || 'Unknown Location',
+              locationName: booking.locations?.name || t('unknownLocation'),
               status: 'cancelled',
               cancelled_at: request.reviewed_at || request.created_at,
             };
@@ -271,7 +272,7 @@ export default function StudentHistoryScreen(props) {
         {/* Center: Info Section */}
         <View style={styles.infoSection}>
           <Text style={styles.serviceName} numberOfLines={1}>
-            {booking.service_name || t('tennisSession')}
+            {translateServiceName(booking.service_name, t, booking.service_name || t('tennisSession'))}
           </Text>
           
           <View style={styles.timeRow}>
@@ -433,7 +434,7 @@ export default function StudentHistoryScreen(props) {
         <View style={styles.emptyState}>
           <TennisCourtIcon />
           <Text style={styles.emptyTitle}>
-            {searchQuery ? 'No matching sessions' : 'No past sessions found'}
+            {searchQuery ? t('noMatchingSessions') : t('noPastSessions')}
           </Text>
           <Text style={styles.emptySubtext}>
             {searchQuery

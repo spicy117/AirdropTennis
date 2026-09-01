@@ -16,6 +16,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
+import { getLocale, getWeekdayLabels, formatDurationFromHours } from '../utils/locale';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
 
 // Conditionally import MapView for native platforms
@@ -517,6 +520,10 @@ const SkeletonChip = () => {
 
 export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter = null }) {
   const insets = useSafeAreaInsets();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
+  const locale = getLocale(language);
+  const weekdayLabels = getWeekdayLabels(language);
   // Initialize selectedDate as Sydney local date string
   const [selectedDate, setSelectedDate] = useState(getSydneyToday());
   const [availabilities, setAvailabilities] = useState([]);
@@ -575,19 +582,18 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
       
       let label = '';
       if (dateStr === todayStr) {
-        label = 'Today';
+        label = t('today');
       } else if (dateStr === tomorrowStr) {
-        label = 'Tomorrow';
+        label = t('tomorrow');
       } else {
-        // Format using local date for display
-        label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+        label = date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
       }
-      
+
       dates.push({
         dateStr,
-        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayName: date.toLocaleDateString(locale, { weekday: 'short' }),
         day: date.getDate(),
-        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        month: date.toLocaleDateString(locale, { month: 'short' }),
         label,
         isToday: dateStr === todayStr,
         isTomorrow: dateStr === tomorrowStr,
@@ -614,12 +620,12 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
     }
     
     // For weekly view, find the visible range
-    if (dateCards.length === 0) return 'This Week';
+    if (dateCards.length === 0) return t('thisWeek');
     
     const firstVisible = dateCards[0];
     const lastVisible = dateCards[dateCards.length - 1];
     
-    if (!firstVisible || !lastVisible) return 'This Week';
+    if (!firstVisible || !lastVisible) return t('thisWeek');
     
     // Create today date from todayStr (Sydney local time)
     // Use todayStr from component scope, fallback to getSydneyToday() if not available
@@ -1521,8 +1527,8 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
           </TouchableOpacity>
         )}
         <View style={styles.headerContent}>
-          <Text style={styles.title}>Book a Lesson</Text>
-          <Text style={styles.subtitle}>Select your preferred date and time</Text>
+          <Text style={styles.title}>{t('bookALesson')}</Text>
+          <Text style={styles.subtitle}>{t('selectPreferredDate')}</Text>
         </View>
         <TouchableOpacity
           style={[
@@ -1542,7 +1548,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
               showLocationsMap && styles.mapToggleButtonTextActive,
             ]}
           >
-            {showLocationsMap ? 'Hide Map' : 'Map'}
+            {showLocationsMap ? t('hideMap') : t('map')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1602,7 +1608,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
                       !selectedLocationId && styles.pillTextActive,
                     ]}
                   >
-                    All
+                    {t('all')}
                   </Text>
                 </TouchableOpacity>
                 {locations.map((location) => (
@@ -1635,7 +1641,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
                 >
                   <Text style={styles.dropdownText}>
                     {selectedLocationId
-                      ? locations.find((l) => l.id === selectedLocationId)?.name || 'Select Location'
+                      ? locations.find((l) => l.id === selectedLocationId)?.name || t('selectLocation')
                       : 'All Locations'}
                   </Text>
                   <Ionicons name="chevron-down" size={16} color="#8E8E93" />
@@ -1705,7 +1711,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
                 viewMode === 'weekly' && styles.viewSwitchTextActive,
               ]}
             >
-              Weekly
+              {t('weekly')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1721,7 +1727,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
                 viewMode === 'monthly' && styles.viewSwitchTextActive,
               ]}
             >
-              Monthly
+              {t('monthly')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1739,7 +1745,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
                 onPress={handleBackToToday}
               >
                 <Ionicons name="calendar-outline" size={14} color="#007AFF" />
-                <Text style={styles.backToTodayText}>Today</Text>
+                <Text style={styles.backToTodayText}>{t('today')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1849,7 +1855,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
           {/* Calendar Grid */}
           <View style={styles.calendarGrid}>
             {/* Day Headers */}
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            {weekdayLabels.map((day) => (
               <View key={day} style={styles.calendarDayHeader}>
                 <Text style={styles.calendarDayHeaderText}>{day}</Text>
               </View>
@@ -1928,7 +1934,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
         ) : groupedAvailabilities.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyTitle}>No availability</Text>
+            <Text style={styles.emptyTitle}>{t('noAvailability')}</Text>
             <Text style={styles.emptyText}>
               There are no available time slots for this date.
             </Text>
@@ -2041,13 +2047,13 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
               <View style={styles.summaryItem}>
                 <Ionicons name="hourglass-outline" size={isDesktop ? 18 : 16} color="#000" />
                 <Text style={[styles.summaryText, !isDesktop && styles.summaryTextMobile]}>
-                  {summary.duration.toFixed(1)} {summary.duration === 1 ? 'Hour' : 'Hours'}
+                  {formatDurationFromHours(summary.duration, t)}
                 </Text>
               </View>
               <View style={styles.summaryItem}>
                 <Ionicons name="wallet-outline" size={isDesktop ? 18 : 16} color="#000" />
                 <Text style={[styles.summaryText, !isDesktop && styles.summaryTextMobile]}>
-                  {summary.credits.toFixed(1)} {summary.credits === 1 ? 'Credit' : 'Credits'}
+                  {summary.credits.toFixed(1)} {summary.credits === 1 ? t('credit') : t('credits')}
                 </Text>
               </View>
             </View>
@@ -2058,7 +2064,7 @@ export default function BookingDiscoveryScreen({ onNext, onBack, serviceFilter =
               disabled={!canProceed}
             >
               <Text style={[styles.nextButtonText, !canProceed && styles.nextButtonTextDisabled]}>
-                Next
+                {t('next')}
               </Text>
               <Ionicons
                 name="arrow-forward"

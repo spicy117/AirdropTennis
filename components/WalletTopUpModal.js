@@ -47,7 +47,7 @@ export default function WalletTopUpModal({ visible, onClose, userId, onTopUpSucc
     }
 
     if (STRIPE_CHECKOUT_DISABLED) {
-      Alert.alert('Coming soon', 'This feature will be available soon.');
+      Alert.alert(t('comingSoon'), t('featureComingSoon'));
       return;
     }
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 import { validatePassword } from '../utils/passwordValidation';
 import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
@@ -13,6 +15,8 @@ import { memberColors, memberTypography } from '../theme/memberTheme';
 
 export default function ResetPasswordScreen({ navigation, route }) {
   const { updatePassword, signOut, resetPassword } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
   const [loading, setLoading] = useState(false);
   const [loadingResend, setLoadingResend] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -111,7 +115,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
 
   const handleResetPassword = async () => {
     if (linkExpired) {
-      setError('Please request a new password reset link first.');
+      setError(t('requestNewResetLinkFirst'));
       return;
     }
 
@@ -120,19 +124,19 @@ export default function ResetPasswordScreen({ navigation, route }) {
     setFieldErrors({});
 
     if (!formData.password) {
-      setFieldErrors({ password: 'Password is required' });
+      setFieldErrors({ password: t('passwordRequired') });
       return;
     }
     if (!passwordValidation.isValid) {
-      setFieldErrors({ password: 'Password does not meet requirements' });
+      setFieldErrors({ password: t('passwordDoesNotMeetRequirements') });
       return;
     }
     if (!formData.confirmPassword) {
-      setFieldErrors({ confirmPassword: 'Please confirm your password' });
+      setFieldErrors({ confirmPassword: t('confirmPasswordRequired') });
       return;
     }
     if (formData.password !== formData.confirmPassword) {
-      setFieldErrors({ confirmPassword: 'Passwords do not match' });
+      setFieldErrors({ confirmPassword: t('passwordsDoNotMatch') });
       return;
     }
 
@@ -143,12 +147,12 @@ export default function ResetPasswordScreen({ navigation, route }) {
     if (updateError) {
       if (updateError.message?.includes('expired') || updateError.message?.includes('invalid')) {
         setLinkExpired(true);
-        setError('This password reset link has expired. Please request a new one.');
+        setError(t('resetLinkExpired'));
       } else {
-        setError(updateError.message || 'Failed to reset password. Please try again.');
+        setError(updateError.message || t('failedToResetPassword'));
       }
     } else {
-      setSuccess('Password reset successfully! Redirecting to login...');
+      setSuccess(t('passwordResetSuccess'));
       await signOut();
       setTimeout(() => {
         navigation.navigate('AuthSelection');
@@ -184,13 +188,13 @@ export default function ResetPasswordScreen({ navigation, route }) {
 
   return (
     <AuthLayout scrollable keyboardAvoid>
-      <Text style={styles.title}>Reset your password</Text>
+      <Text style={styles.title}>{t('resetYourPassword')}</Text>
       {recoveryEmail ? (
         <Text style={styles.subtitle}>
-          Resetting password for <Text style={styles.emailStrong}>{recoveryEmail}</Text>
+          {t('resettingPasswordFor')} <Text style={styles.emailStrong}>{recoveryEmail}</Text>
         </Text>
       ) : (
-        <Text style={styles.subtitle}>Enter your new password below</Text>
+        <Text style={styles.subtitle}>{t('enterNewPasswordBelow')}</Text>
       )}
 
       {error ? <Text style={styles.bannerError}>{error}</Text> : null}

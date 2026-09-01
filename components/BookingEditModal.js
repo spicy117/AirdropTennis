@@ -78,7 +78,7 @@ export default function BookingEditModal({
 
   const handleCancelRequest = async () => {
     if (!reason.trim()) {
-      Alert.alert('Reason Required', 'Please provide a reason for cancellation.');
+      Alert.alert(t('reasonRequired'), t('provideReasonCancellation'));
       return;
     }
 
@@ -256,11 +256,11 @@ export default function BookingEditModal({
 
   const handleRainCheckRequest = async () => {
     if (!reason.trim()) {
-      Alert.alert('Reason Required', 'Please provide a reason for the rain check.');
+      Alert.alert(t('reasonRequired'), t('provideReasonRainCheck'));
       return;
     }
     if (!booking?.id) {
-      Alert.alert('Error', 'Booking not found. Please try again.');
+      Alert.alert(t('error'), t('bookingNotFound'));
       return;
     }
 
@@ -320,16 +320,16 @@ export default function BookingEditModal({
       setResultModal({
         visible: true,
         success: true,
-        title: 'Request Submitted',
-        message: 'Your rain check request has been submitted and is pending admin or coach approval.',
+        title: t('requestSubmitted'),
+        message: t('rainCheckSubmittedMessage'),
       });
     } catch (error) {
       console.error('Error submitting rain check request:', error?.message, error?.code, error?.details);
       setResultModal({
         visible: true,
         success: false,
-        title: 'Error',
-        message: 'Failed to submit rain check request. ' + (error?.message || 'Please try again.'),
+        title: t('error'),
+        message: t('failedToSubmitRainCheck'),
       });
     } finally {
       setLoading(false);
@@ -369,7 +369,7 @@ export default function BookingEditModal({
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {!requestType ? (
               <>
-                <Text style={styles.subtitle}>Select an option:</Text>
+                <Text style={styles.subtitle}>{t('selectAnOption')}</Text>
                 
                 <TouchableOpacity
                   style={styles.optionButton}
@@ -384,17 +384,17 @@ export default function BookingEditModal({
                   </View>
                   <View style={styles.optionContent}>
                     <Text style={styles.optionTitle}>
-                      {freeCancellationAvailable ? 'Cancel Booking' : 'Cancel Request'}
+                      {freeCancellationAvailable ? t('cancelBooking') : t('cancelRequest')}
                     </Text>
                     <Text style={styles.optionDescription}>
-                      {freeCancellationAvailable 
-                        ? 'Free cancellation available - cancel instantly without approval.'
-                        : 'Request to cancel this booking. Requires admin approval.'}
+                      {freeCancellationAvailable
+                        ? t('freeCancelAvailableDesc')
+                        : t('cancelRequestDesc')}
                     </Text>
                     {freeCancellationAvailable && (
                       <View style={styles.freeCancelBadge}>
                         <Ionicons name="time-outline" size={12} color="#34C759" />
-                        <Text style={styles.freeCancelBadgeText}>Free cancellation</Text>
+                        <Text style={styles.freeCancelBadgeText}>{t('freeCancellation')}</Text>
                       </View>
                     )}
                   </View>
@@ -409,39 +409,35 @@ export default function BookingEditModal({
                   onPress={() => setRequestType(null)}
                 >
                   <Ionicons name="arrow-back" size={20} color="#007AFF" />
-                  <Text style={styles.backButtonText}>Back</Text>
+                  <Text style={styles.backButtonText}>{t('back')}</Text>
                 </TouchableOpacity>
 
                 <Text style={styles.subtitle}>
-                  {requestType === 'cancel' 
-                    ? (freeCancellationAvailable ? 'Cancel Booking' : 'Cancel Request') 
-                    : 'Rain Check Request'}
+                  {requestType === 'cancel'
+                    ? (freeCancellationAvailable ? t('cancelBooking') : t('cancelRequest'))
+                    : t('rainCheckRequest')}
                 </Text>
 
                 {requestType === 'cancel' && freeCancellationAvailable && (
                   <View style={styles.freeCancelNotice}>
                     <Ionicons name="checkmark-circle" size={20} color="#34C759" />
-                    <Text style={styles.freeCancelNoticeText}>
-                      You're within the free cancellation window. Your booking will be cancelled immediately.
-                    </Text>
+                    <Text style={styles.freeCancelNoticeText}>{t('freeCancelWindowNotice')}</Text>
                   </View>
                 )}
 
                 {requestType === 'cancel' && !freeCancellationAvailable && (
                   <View style={styles.lateCancelNotice}>
                     <Ionicons name="information-circle" size={20} color="#FF9500" />
-                    <Text style={styles.lateCancelNoticeText}>
-                      Free cancellation ends at 12pm the day before your booking. This request requires admin approval.
-                    </Text>
+                    <Text style={styles.lateCancelNoticeText}>{t('lateCancelNotice')}</Text>
                   </View>
                 )}
 
                 <Text style={styles.label}>
-                  Reason {requestType === 'cancel' ? 'for Cancellation' : 'for Rain Check'} *
+                  {requestType === 'cancel' ? t('reasonForCancellation') : t('reasonForRainCheck')}
                 </Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder={`Please provide a reason ${requestType === 'cancel' ? 'for cancelling' : 'for the rain check'}...`}
+                  placeholder={requestType === 'cancel' ? t('reasonPlaceholderCancel') : t('reasonPlaceholderRainCheck')}
                   value={reason}
                   onChangeText={setReason}
                   multiline
@@ -455,7 +451,7 @@ export default function BookingEditModal({
                   disabled={loading}
                 >
                   <Text style={styles.submitButtonText}>
-                    {loading ? 'Submitting...' : 'Submit Request'}
+                    {loading ? t('submitting') : t('submitRequest')}
                   </Text>
                 </TouchableOpacity>
               </>

@@ -75,7 +75,7 @@ export default function ProfileScreen({ onSignOut, onNavigate }) {
 
       {isMember && (
         <View style={memberStyles.section}>
-          <Text style={memberStyles.sectionTitle}>Account</Text>
+          <Text style={memberStyles.sectionTitle}>{t('account')}</Text>
           <View style={memberStyles.row}>
             <Ionicons name="mail-outline" size={18} color={memberColors.inkMuted} />
             <Text style={memberStyles.rowText}>{user?.email}</Text>
