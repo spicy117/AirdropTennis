@@ -47,7 +47,7 @@ function LedgerRow({ item, expanded, onToggle }) {
           </View>
 
           <Text style={styles.rowTitle}>{item.title}</Text>
-          <Text style={styles.rowTypeLabel}>{item.typeLabel}</Text>
+          <Text style={[styles.rowTypeLabel, item.note && styles.rowTypeLabelNote]}>{item.typeLabel}</Text>
 
           {item.subtitle ? <Text style={styles.rowSubtitle}>{item.subtitle}</Text> : null}
 
@@ -374,6 +374,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
+  },
+  rowTypeLabelNote: {
+    color: '#475569',
+    fontStyle: 'italic',
   },
   rowSubtitle: {
     fontSize: 13,
