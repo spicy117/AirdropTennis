@@ -8,29 +8,29 @@ import { memberColors } from '../../theme/memberTheme';
  */
 export default function CourtWatermark({ variant = 'ambient', style }) {
   const { width } = useWindowDimensions();
-  const isCompact = width < 640;
   const isHero = variant === 'hero';
 
-  if (isHero && isCompact) {
-    return (
-      <View style={[styles.compactWrap, style]} pointerEvents="none">
-        <View style={styles.compactLine} />
-        <View style={[styles.ballDot, styles.compactBall]} />
-      </View>
-    );
-  }
-
   if (isHero) {
+    // Mobile: remove decoration — card content needs full clarity
+    if (width < 640) {
+      return null;
+    }
+
+    // Tablet: single soft orb only
+    if (width < 1024) {
+      return (
+        <View style={[styles.heroWrap, style]} pointerEvents="none">
+          <View style={styles.heroSoftOrb} />
+        </View>
+      );
+    }
+
+    // Desktop: orb + one faint line + cropped arc — no grid/box
     return (
       <View style={[styles.heroWrap, style]} pointerEvents="none">
-        <View style={styles.heroCourt}>
-          <View style={styles.heroBaseline} />
-          <View style={styles.heroServiceLine} />
-          <View style={styles.heroCenterLine} />
-          <View style={styles.heroSinglesLine} />
-          <View style={styles.heroArc} />
-          <View style={[styles.ballDot, styles.heroBall]} />
-        </View>
+        <View style={styles.heroSoftOrb} />
+        <View style={styles.heroServiceLine} />
+        <View style={styles.heroArc} />
       </View>
     );
   }
@@ -52,95 +52,42 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: '42%',
+    width: '38%',
     overflow: 'hidden',
   },
-  heroCourt: {
-    flex: 1,
-    marginRight: -8,
-    marginTop: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: lineColor,
-    borderLeftWidth: 0,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    opacity: 0.09,
-  },
-  heroBaseline: {
+  heroSoftOrb: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: '18%',
-    height: 1,
-    backgroundColor: lineColor,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    right: -48,
+    top: '18%',
+    backgroundColor: memberColors.limeSoft,
+    opacity: 0.45,
+    ...(Platform.OS === 'web' && { filter: 'blur(1px)' }),
   },
   heroServiceLine: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '38%',
+    right: 16,
+    left: '8%',
+    top: '46%',
     height: 1,
     backgroundColor: lineColor,
-    opacity: 0.85,
-  },
-  heroCenterLine: {
-    position: 'absolute',
-    top: '38%',
-    bottom: '18%',
-    left: '50%',
-    width: 1,
-    marginLeft: -0.5,
-    backgroundColor: lineColor,
-    opacity: 0.7,
-  },
-  heroSinglesLine: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '22%',
-    width: 1,
-    backgroundColor: lineColor,
-    opacity: 0.45,
+    opacity: 0.05,
   },
   heroArc: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    right: -12,
+    bottom: '12%',
     borderWidth: 1,
     borderColor: memberColors.lime,
-    borderBottomColor: 'transparent',
+    borderTopColor: 'transparent',
     borderLeftColor: 'transparent',
-    top: '8%',
-    right: '-20%',
-    opacity: 0.35,
-    transform: [{ rotate: '-25deg' }],
-  },
-  heroBall: {
-    top: '22%',
-    right: '28%',
-    opacity: 0.5,
-  },
-  compactWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  compactLine: {
-    position: 'absolute',
-    right: 24,
-    top: '30%',
-    bottom: '25%',
-    width: 1,
-    backgroundColor: lineColor,
-    opacity: 0.08,
-  },
-  compactBall: {
-    top: '35%',
-    right: 20,
-    width: 6,
-    height: 6,
-    opacity: 0.35,
+    opacity: 0.12,
+    transform: [{ rotate: '-18deg' }],
   },
   ambientWrap: {
     ...StyleSheet.absoluteFillObject,
