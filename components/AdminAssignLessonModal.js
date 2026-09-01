@@ -17,6 +17,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
 import { getWalletBalance, deductFromWallet } from '../lib/stripe';
+import { getPhoneDisplayLabel } from '../utils/phone';
+import { formatWalletAmount } from '../utils/wallet';
 import { SERVICE_PRICES } from '../utils/pricing';
 import { getSydneyToday } from '../utils/timezone';
 import { mapBookingError } from '../utils/assignLessonErrors';
@@ -243,6 +245,7 @@ function StudentSearchCombobox({
   selectedLabel,
   changeLabel,
   noResultsLabel,
+  noPhoneLabel,
 }) {
   const [focused, setFocused] = useState(false);
   const blurTimeoutRef = useRef(null);
@@ -296,10 +299,17 @@ function StudentSearchCombobox({
     return (
       <View style={styles.selectedStudentCard}>
         <View style={styles.selectedStudentInfo}>
-          <Text style={styles.selectedStudentHeading}>{selectedLabel}</Text>
           <Text style={styles.selectedStudentName}>{selectedStudent.label}</Text>
           {selectedStudent.email ? (
             <Text style={styles.selectedStudentEmail}>{selectedStudent.email}</Text>
+          ) : null}
+          <Text style={styles.selectedStudentPhone}>
+            {getPhoneDisplayLabel(selectedStudent.phone, noPhoneLabel)}
+          </Text>
+          {selectedStudent.walletBalance != null ? (
+            <Text style={styles.selectedStudentBalance}>
+              Credit balance: {formatWalletAmount(selectedStudent.walletBalance)}
+            </Text>
           ) : null}
         </View>
         <TouchableOpacity style={styles.changeStudentBtn} onPress={onChangeStudent} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -359,6 +369,9 @@ function StudentSearchCombobox({
                       {item.email}
                     </Text>
                   ) : null}
+                  <Text style={styles.dropdownItemPhone} numberOfLines={1}>
+                    {getPhoneDisplayLabel(item.phone, noPhoneLabel)}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -515,15 +528,17 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
     try {
       const { data, error: err } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, full_name, email, phone, wallet_balance')
         .eq('role', 'student')
         .order('first_name', { ascending: true });
       if (err) throw err;
       setStudents(
         (data || []).map((p) => ({
           id: p.id,
-          label: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || p.id,
+          label: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || p.email || p.id,
           email: p.email,
+          phone: p.phone,
+          walletBalance: parseFloat(p.wallet_balance) || 0,
         }))
       );
     } catch (e) {
@@ -547,12 +562,16 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
     }
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
-      !studentSearch.trim() ||
-      s.label.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      (s.email && s.email.toLowerCase().includes(studentSearch.toLowerCase()))
-  );
+  const filteredStudents = students.filter((s) => {
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return false;
+    const phoneHaystack = (s.phone || '').replace(/[\s\-()]/g, '').toLowerCase();
+    return (
+      s.label.toLowerCase().includes(q) ||
+      (s.email && s.email.toLowerCase().includes(q)) ||
+      (phoneHaystack && phoneHaystack.includes(q.replace(/[\s\-()]/g, '')))
+    );
+  });
 
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
   const selectedLocation = locations.find((l) => l.id === locationId);
@@ -990,6 +1009,7 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                     selectedLabel={t('assignLessonSelectedStudent') || 'Selected student'}
                     changeLabel={t('assignLessonChange') || 'Change'}
                     noResultsLabel={t('assignLessonNoStudentsFound') || 'No students found.'}
+                    noPhoneLabel={t('noPhoneNumber') || 'No phone number'}
                   />
                 </Section>
 
@@ -1577,6 +1597,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemName: { fontSize: 15, fontWeight: '500', color: '#0F172A' },
   dropdownItemEmail: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  dropdownItemPhone: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
   selectedStudentCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1589,16 +1610,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(13, 148, 136, 0.06)',
   },
   selectedStudentInfo: { flex: 1 },
-  selectedStudentHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 4,
-  },
   selectedStudentName: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
   selectedStudentEmail: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  selectedStudentPhone: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  selectedStudentBalance: { fontSize: 12, color: '#0D9488', marginTop: 6, fontWeight: '600' },
   changeStudentBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,

@@ -179,6 +179,7 @@ export default {
   filterLocation: '场地',
   selectService: '服务',
   selectServiceToBook: '请选择服务以查看可预约时段',
+  noPhoneNumber: '无电话号码',
   filterAllLocations: '全部场地',
   book: '预约',
   durationOneHour: '1 小时',

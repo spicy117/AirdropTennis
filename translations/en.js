@@ -179,6 +179,7 @@ export default {
   filterLocation: 'Location',
   selectService: 'Service',
   selectServiceToBook: 'Select a service to view available sessions',
+  noPhoneNumber: 'No phone number',
   filterAllLocations: 'All locations',
   book: 'Book',
   durationOneHour: '1 hour',
