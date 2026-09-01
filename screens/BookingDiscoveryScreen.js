@@ -564,6 +564,7 @@ export default function BookingDiscoveryScreen({
   const [showLocationsMap, setShowLocationsMap] = useState(false);
   const [monthlyCalendarExpanded, setMonthlyCalendarExpanded] = useState(true);
   const monthlyScrollRef = useRef(null);
+  const pageScrollRef = monthlyScrollRef;
   const sessionsSectionY = useRef(0);
   // Use Sydney local time for today
   const todayStr = getSydneyToday();
@@ -746,7 +747,7 @@ export default function BookingDiscoveryScreen({
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       requestAnimationFrame(() => {
         setTimeout(() => {
-          monthlyScrollRef.current?.scrollTo({
+          pageScrollRef.current?.scrollTo({
             y: Math.max(0, sessionsSectionY.current - 8),
             animated: !reduceMotion,
           });
@@ -1705,7 +1706,7 @@ export default function BookingDiscoveryScreen({
           style={styles.changeDateBtn}
           onPress={() => {
             setMonthlyCalendarExpanded(true);
-            monthlyScrollRef.current?.scrollTo({ y: 0, animated: true });
+            pageScrollRef.current?.scrollTo({ y: 0, animated: true });
           }}
           accessibilityRole="button"
           accessibilityLabel={t('changeDate')}
@@ -1717,7 +1718,218 @@ export default function BookingDiscoveryScreen({
     </View>
   );
 
-  const scrollBottomPadding = insets.bottom + (selectedSlots.length > 0 ? 140 : 88);
+  const hasFixedMemberBottomNav = Platform.OS === 'web' && isMobileLayout;
+  const memberBottomNavOffset = hasFixedMemberBottomNav
+    ? 48 + Math.max(insets.bottom, 6) // BottomNav: paddingTop 4 + minHeight 44 + safe area
+    : 0;
+  const summaryFooterHeight = selectedSlots.length > 0 ? (isMobileLayout ? 136 : 96) : 0;
+  const scrollBottomPadding =
+    memberBottomNavOffset + summaryFooterHeight + (isMobileLayout ? 16 : 24);
+
+  const selectedLocationLabel =
+    selectedLocationId != null
+      ? locations.find((l) => l.id === selectedLocationId)?.name || t('selectLocation')
+      : t('allLocations');
+
+  const renderActionsRow = () => (
+    <View style={[styles.actionsRow, isMobileLayout && styles.actionsRowMobile]}>
+      {locations.length > 0 && (
+        <View style={[styles.filterContainer, isMobileLayout && styles.filterContainerMobile]}>
+          {locations.length < 4 ? (
+            <View style={styles.pillSelector}>
+              <TouchableOpacity
+                style={[styles.pill, !selectedLocationId && styles.pillActive]}
+                onPress={() => setSelectedLocationId(null)}
+              >
+                <Text style={[styles.pillText, !selectedLocationId && styles.pillTextActive]}>
+                  {t('all')}
+                </Text>
+              </TouchableOpacity>
+              {locations.map((location) => (
+                <TouchableOpacity
+                  key={location.id}
+                  style={[styles.pill, selectedLocationId === location.id && styles.pillActive]}
+                  onPress={() => setSelectedLocationId(location.id)}
+                >
+                  <Text
+                    style={[styles.pillText, selectedLocationId === location.id && styles.pillTextActive]}
+                    numberOfLines={isMobileLayout ? 2 : 1}
+                  >
+                    {location.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={[styles.dropdownContainer, isMobileLayout && styles.dropdownContainerMobile]}>
+              {isMobileLayout ? (
+                <Text style={styles.locationFieldLabel}>{t('filterLocation')}</Text>
+              ) : (
+                <Text style={styles.dropdownLabel}>Location:</Text>
+              )}
+              <TouchableOpacity
+                style={[styles.dropdown, isMobileLayout && styles.dropdownMobile]}
+                onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+                accessibilityLabel={selectedLocationLabel}
+              >
+                <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">
+                  {selectedLocationLabel}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              {showLocationDropdown && (
+                <>
+                  {Platform.OS === 'web' && (
+                    <TouchableOpacity
+                      style={styles.dropdownOverlay}
+                      activeOpacity={1}
+                      onPress={() => setShowLocationDropdown(false)}
+                    />
+                  )}
+                  <View style={[styles.dropdownMenu, isMobileLayout && styles.dropdownMenuMobile]}>
+                    <TouchableOpacity
+                      style={styles.dropdownMenuItem}
+                      onPress={() => {
+                        setSelectedLocationId(null);
+                        setShowLocationDropdown(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownMenuItemText, !selectedLocationId && styles.dropdownMenuItemTextActive]}>
+                        {t('allLocations')}
+                      </Text>
+                      {!selectedLocationId && <Ionicons name="checkmark" size={16} color="#000" />}
+                    </TouchableOpacity>
+                    {locations.map((location) => (
+                      <TouchableOpacity
+                        key={location.id}
+                        style={styles.dropdownMenuItem}
+                        onPress={() => {
+                          setSelectedLocationId(location.id);
+                          setShowLocationDropdown(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownMenuItemText,
+                            selectedLocationId === location.id && styles.dropdownMenuItemTextActive,
+                          ]}
+                        >
+                          {location.name}
+                        </Text>
+                        {selectedLocationId === location.id && (
+                          <Ionicons name="checkmark" size={16} color="#000" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      <View style={[styles.viewSwitcher, isMobileLayout && styles.viewSwitcherMobile]}>
+        <TouchableOpacity
+          style={[styles.viewSwitchButton, isMobileLayout && styles.viewSwitchButtonMobile, viewMode === 'weekly' && styles.viewSwitchButtonActive]}
+          onPress={() => handleViewModeChange('weekly')}
+        >
+          <Text style={[styles.viewSwitchText, viewMode === 'weekly' && styles.viewSwitchTextActive]}>
+            {t('weekly')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewSwitchButton, isMobileLayout && styles.viewSwitchButtonMobile, viewMode === 'monthly' && styles.viewSwitchButtonActive]}
+          onPress={() => handleViewModeChange('monthly')}
+        >
+          <Text style={[styles.viewSwitchText, viewMode === 'monthly' && styles.viewSwitchTextActive]}>
+            {t('monthly')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderWeeklyView = () => (
+    <Animated.View style={{ opacity: fadeAnim }}>
+      <View style={styles.dateRangeHeader}>
+        <Text style={styles.dateRangeLabel}>{getDateRangeLabel()}</Text>
+        {selectedDate !== todayStr && (
+          <TouchableOpacity style={styles.backToTodayButton} onPress={handleBackToToday}>
+            <Ionicons name="calendar-outline" size={14} color="#007AFF" />
+            <Text style={styles.backToTodayText}>{t('today')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={[styles.datePickerContainer, isMobileLayout && styles.datePickerContainerMobile]}>
+        {Platform.OS === 'web' && !isMobileLayout && showPrevArrow && (
+          <TouchableOpacity style={styles.datePickerArrow} onPress={handleScrollPrev}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+        )}
+
+        <ScrollView
+          ref={dateScrollViewRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.datePicker, isMobileLayout && styles.datePickerMobile]}
+          contentContainerStyle={styles.datePickerContent}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          snapToInterval={DATE_CARD_WIDTH + DATE_CARD_GAP}
+          decelerationRate="fast"
+          snapToAlignment="start"
+          nestedScrollEnabled
+          {...(Platform.OS === 'web' && {
+            scrollSnapType: 'x mandatory',
+          })}
+        >
+          {dateCards.map((dateCard, index) => {
+            const isSelected = dateCard.dateStr === selectedDate;
+            const hasAvailability = availabilityHeatmap[dateCard.dateStr] === true;
+            const hasNoAvailability = availabilityHeatmap[dateCard.dateStr] === false && !heatmapLoading;
+
+            return (
+              <TouchableOpacity
+                key={`${dateCard.dateStr}-${index}`}
+                style={[
+                  styles.dateCard,
+                  hasAvailability && !isSelected && styles.dateCardAvailable,
+                  hasNoAvailability && !isSelected && styles.dateCardUnavailable,
+                  isSelected && styles.dateCardSelected,
+                  Platform.OS === 'web' && { scrollSnapAlign: 'center' },
+                ]}
+                onPress={() => setSelectedDate(dateCard.dateStr)}
+              >
+                <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected]}>
+                  {dateCard.label}
+                </Text>
+                <Text style={[styles.dateDay, isSelected && styles.dateDaySelected]}>
+                  {dateCard.day}
+                </Text>
+                <Text style={[styles.dateMonth, isSelected && styles.dateMonthSelected]}>
+                  {dateCard.month}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {Platform.OS === 'web' && !isMobileLayout && showNextArrow && (
+          <TouchableOpacity
+            style={[styles.datePickerArrow, { left: 'auto', right: 10 }]}
+            onPress={handleScrollNext}
+          >
+            <Ionicons name="chevron-forward" size={24} color="#000" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </Animated.View>
+  );
+
+  const mobileStickyHeaderIndex =
+    viewMode === 'monthly' ? (monthlyCalendarExpanded ? 2 : 1) : undefined;
 
   // Derived locations list with valid coordinates
   const locationsWithCoords = locations.filter(
@@ -1926,285 +2138,76 @@ export default function BookingDiscoveryScreen({
         </View>
       )}
 
-      {/* Actions Row - Filters and View Toggle */}
-      <View style={[styles.actionsRow, Platform.OS !== 'web' && styles.actionsRowMobile]}>
-        {/* Location Filter */}
-        {locations.length > 0 && (
-          <View style={styles.filterContainer}>
-            {locations.length < 4 ? (
-              // Pill-based selector for < 4 locations
-              <View style={styles.pillSelector}>
-                <TouchableOpacity
-                  style={[
-                    styles.pill,
-                    !selectedLocationId && styles.pillActive,
-                  ]}
-                  onPress={() => setSelectedLocationId(null)}
-                >
-                  <Text
-                    style={[
-                      styles.pillText,
-                      !selectedLocationId && styles.pillTextActive,
-                    ]}
-                  >
-                    {t('all')}
-                  </Text>
-                </TouchableOpacity>
-                {locations.map((location) => (
-                  <TouchableOpacity
-                    key={location.id}
-                    style={[
-                      styles.pill,
-                      selectedLocationId === location.id && styles.pillActive,
-                    ]}
-                    onPress={() => setSelectedLocationId(location.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        selectedLocationId === location.id && styles.pillTextActive,
-                      ]}
-                    >
-                      {location.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              // Dropdown for 4+ locations
-              <View style={styles.dropdownContainer}>
-                <Text style={styles.dropdownLabel}>Location:</Text>
-                <TouchableOpacity
-                  style={styles.dropdown}
-                  onPress={() => setShowLocationDropdown(!showLocationDropdown)}
-                >
-                  <Text style={styles.dropdownText}>
-                    {selectedLocationId
-                      ? locations.find((l) => l.id === selectedLocationId)?.name || t('selectLocation')
-                      : 'All Locations'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={16} color="#8E8E93" />
-                </TouchableOpacity>
-                {showLocationDropdown && (
-                  <>
-                    {/* Overlay to close dropdown on outside click */}
-                    {Platform.OS === 'web' && (
-                      <TouchableOpacity
-                        style={styles.dropdownOverlay}
-                        activeOpacity={1}
-                        onPress={() => setShowLocationDropdown(false)}
-                      />
-                    )}
-                    <View style={styles.dropdownMenu}>
-                      <TouchableOpacity
-                        style={styles.dropdownMenuItem}
-                        onPress={() => {
-                          setSelectedLocationId(null);
-                          setShowLocationDropdown(false);
-                        }}
-                      >
-                        <Text style={[styles.dropdownMenuItemText, !selectedLocationId && styles.dropdownMenuItemTextActive]}>
-                          All Locations
-                        </Text>
-                        {!selectedLocationId && (
-                          <Ionicons name="checkmark" size={16} color="#000" />
-                        )}
-                      </TouchableOpacity>
-                      {locations.map((location) => (
-                        <TouchableOpacity
-                          key={location.id}
-                          style={styles.dropdownMenuItem}
-                          onPress={() => {
-                            setSelectedLocationId(location.id);
-                            setShowLocationDropdown(false);
-                          }}
-                        >
-                          <Text style={[styles.dropdownMenuItemText, selectedLocationId === location.id && styles.dropdownMenuItemTextActive]}>
-                            {location.name}
-                          </Text>
-                          {selectedLocationId === location.id && (
-                            <Ionicons name="checkmark" size={16} color="#000" />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* View Switcher */}
-        <View style={styles.viewSwitcher}>
-          <TouchableOpacity
-            style={[
-              styles.viewSwitchButton,
-              viewMode === 'weekly' && styles.viewSwitchButtonActive,
-            ]}
-            onPress={() => handleViewModeChange('weekly')}
-          >
-            <Text
-              style={[
-                styles.viewSwitchText,
-                viewMode === 'weekly' && styles.viewSwitchTextActive,
-              ]}
-            >
-              {t('weekly')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.viewSwitchButton,
-              viewMode === 'monthly' && styles.viewSwitchButtonActive,
-            ]}
-            onPress={() => handleViewModeChange('monthly')}
-          >
-            <Text
-              style={[
-                styles.viewSwitchText,
-                viewMode === 'monthly' && styles.viewSwitchTextActive,
-              ]}
-            >
-              {t('monthly')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Weekly View */}
-      {viewMode === 'weekly' && (
-        <Animated.View style={{ opacity: fadeAnim }}>
-          {/* Date Range Label - Centered */}
-          <View style={styles.dateRangeHeader}>
-            <Text style={styles.dateRangeLabel}>{getDateRangeLabel()}</Text>
-            {selectedDate !== todayStr && (
-              <TouchableOpacity
-                style={styles.backToTodayButton}
-                onPress={handleBackToToday}
-              >
-                <Ionicons name="calendar-outline" size={14} color="#007AFF" />
-                <Text style={styles.backToTodayText}>{t('today')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Horizontal Date Picker with Infinite Scroll */}
-          <View style={styles.datePickerContainer}>
-            {/* Prev Arrow (Desktop only, on hover) */}
-            {Platform.OS === 'web' && showPrevArrow && (
-              <TouchableOpacity
-                style={styles.datePickerArrow}
-                onPress={handleScrollPrev}
-              >
-                <Ionicons name="chevron-back" size={24} color="#000" />
-              </TouchableOpacity>
-            )}
-
-            <ScrollView
-              ref={dateScrollViewRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.datePicker}
-              contentContainerStyle={styles.datePickerContent}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              snapToInterval={DATE_CARD_WIDTH + DATE_CARD_GAP}
-              decelerationRate="fast"
-              snapToAlignment="center"
-              {...(Platform.OS === 'web' && {
-                scrollSnapType: 'x mandatory',
-              })}
-            >
-              {dateCards.map((dateCard, index) => {
-                const isSelected = dateCard.dateStr === selectedDate;
-                const hasAvailability = availabilityHeatmap[dateCard.dateStr] === true;
-                const hasNoAvailability = availabilityHeatmap[dateCard.dateStr] === false && !heatmapLoading;
-                
-                return (
-                  <TouchableOpacity
-                    key={`${dateCard.dateStr}-${index}`}
-                    style={[
-                      styles.dateCard,
-                      hasAvailability && !isSelected && styles.dateCardAvailable,
-                      hasNoAvailability && !isSelected && styles.dateCardUnavailable,
-                      isSelected && styles.dateCardSelected,
-                      Platform.OS === 'web' && { scrollSnapAlign: 'center' },
-                    ]}
-                    onPress={() => setSelectedDate(dateCard.dateStr)}
-                  >
-                    <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected]}>
-                      {dateCard.label}
-                    </Text>
-                    <Text style={[styles.dateDay, isSelected && styles.dateDaySelected]}>
-                      {dateCard.day}
-                    </Text>
-                    <Text style={[styles.dateMonth, isSelected && styles.dateMonthSelected]}>
-                      {dateCard.month}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Next Arrow (Desktop only, on hover) */}
-            {Platform.OS === 'web' && showNextArrow && (
-              <TouchableOpacity
-                style={[styles.datePickerArrow, { left: 'auto', right: 10 }]}
-                onPress={handleScrollNext}
-              >
-                <Ionicons name="chevron-forward" size={24} color="#000" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
-      )}
-
-      {/* Monthly View — desktop / tablet: calendar above session list */}
-      {viewMode === 'monthly' && !isMobileMonthly && renderMonthlyCalendar()}
-
-      {/* Mobile monthly: single natural scroll (calendar + sessions) */}
-      {isMobileMonthly ? (
+      {isMobileLayout ? (
         <ScrollView
-          ref={monthlyScrollRef}
-          style={styles.monthlyScroll}
+          ref={pageScrollRef}
+          style={styles.pageScroll}
           contentContainerStyle={[
             styles.contentContainer,
             styles.contentContainerMobileMonthly,
             { paddingBottom: scrollBottomPadding },
           ]}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[monthlyCalendarExpanded ? 1 : 0]}
+          stickyHeaderIndices={
+            mobileStickyHeaderIndex != null ? [mobileStickyHeaderIndex] : undefined
+          }
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
         >
-          {monthlyCalendarExpanded && renderMonthlyCalendar()}
+          {renderActionsRow()}
+          {viewMode === 'weekly' && renderWeeklyView()}
+          {viewMode === 'monthly' && monthlyCalendarExpanded && renderMonthlyCalendar()}
+          {viewMode === 'monthly' && (
+            <View
+              style={styles.monthlyDateHeaderStickyWrap}
+              onLayout={(e) => {
+                sessionsSectionY.current = e.nativeEvent.layout.y;
+              }}
+            >
+              {renderMonthlyDateHeader()}
+            </View>
+          )}
           <View
-            style={styles.monthlyDateHeaderStickyWrap}
-            onLayout={(e) => {
-              sessionsSectionY.current = e.nativeEvent.layout.y;
-            }}
+            style={[
+              styles.monthlySessionsSection,
+              viewMode === 'weekly' && styles.weeklySessionsSection,
+            ]}
           >
-            {renderMonthlyDateHeader()}
-          </View>
-          <View style={styles.monthlySessionsSection}>
-            {renderAvailabilityContent(true)}
+            {renderAvailabilityContent(viewMode === 'monthly')}
           </View>
         </ScrollView>
       ) : (
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={[styles.contentContainer, { paddingBottom: scrollBottomPadding }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {renderAvailabilityContent(false)}
-        </ScrollView>
+        <>
+          {renderActionsRow()}
+          {viewMode === 'weekly' && renderWeeklyView()}
+          {viewMode === 'monthly' && renderMonthlyCalendar()}
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={[styles.contentContainer, { paddingBottom: scrollBottomPadding }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {renderAvailabilityContent(false)}
+          </ScrollView>
+        </>
       )}
 
-      {/* Selection Summary Bar - Full Width Sticky Footer */}
+      {/* Selection Summary Bar - above member bottom nav on mobile */}
       {selectedSlots.length > 0 && (
-        <View style={styles.summaryBar}>
-          <View style={[styles.summaryBarContent, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 20) }]}>
+        <View
+          style={[
+            styles.summaryBar,
+            isMobileLayout && styles.summaryBarMobile,
+            hasFixedMemberBottomNav && { bottom: memberBottomNavOffset },
+          ]}
+        >
+          <View
+            style={[
+              styles.summaryBarContent,
+              isMobileLayout && styles.summaryBarContentMobile,
+              !isMobileLayout && { paddingBottom: Math.max(insets.bottom, 20) },
+            ]}
+          >
             <View style={[styles.summaryInfo, !isDesktop && styles.summaryInfoMobile]}>
               {summary.timeRange && (
                 <View style={styles.summaryItem}>
@@ -2227,14 +2230,16 @@ export default function BookingDiscoveryScreen({
                 </Text>
               </View>
             </View>
-            
+
             <TouchableOpacity
               style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
               onPress={() => canProceed && onNext && onNext(selectedSlots, summary, selectedDate)}
               disabled={!canProceed}
+              accessibilityRole="button"
+              accessibilityLabel={isMobileLayout ? t('bookLesson') : t('next')}
             >
               <Text style={[styles.nextButtonText, !canProceed && styles.nextButtonTextDisabled]}>
-                {t('next')}
+                {isMobileLayout ? t('bookLesson') : t('next')}
               </Text>
               <Ionicons
                 name="arrow-forward"
@@ -2307,6 +2312,13 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
+  viewSwitcherMobile: {
+    alignSelf: 'stretch',
+  },
+  viewSwitchButtonMobile: {
+    flex: 1,
+    alignItems: 'center',
+  },
   viewSwitchButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -2336,7 +2348,19 @@ const styles = StyleSheet.create({
   actionsRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  filterContainerMobile: {
+    flex: 0,
+    width: '100%',
+  },
+  locationFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: memberColors.inkMuted,
+    marginBottom: 6,
   },
   filterContainer: {
     flex: 1,
@@ -2374,6 +2398,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 10000,
   },
+  dropdownContainerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    width: '100%',
+    gap: 0,
+  },
   dropdownLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -2392,11 +2422,20 @@ const styles = StyleSheet.create({
     minWidth: 150,
     maxWidth: 200,
   },
+  dropdownMobile: {
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    minHeight: 44,
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
+  },
   dropdownText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#000',
     flex: 1,
+    minWidth: 0,
   },
   dropdownOverlay: {
     ...(Platform.OS === 'web' && {
@@ -2458,6 +2497,12 @@ const styles = StyleSheet.create({
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
     }),
   },
+  dropdownMenuMobile: {
+    left: 0,
+    right: 0,
+    width: '100%',
+    maxWidth: '100%',
+  },
   dropdownMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2493,6 +2538,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 1, // Lower than dropdown
+  },
+  datePickerContainerMobile: {
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   datePickerArrow: {
     position: 'absolute',
@@ -2601,6 +2651,13 @@ const styles = StyleSheet.create({
       WebkitOverflowScrolling: 'touch',
     }),
   },
+  datePickerMobile: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+    maxHeight: 112,
+  },
   datePickerContent: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -2680,6 +2737,12 @@ const styles = StyleSheet.create({
   },
   monthlyScroll: {
     flex: 1,
+  },
+  pageScroll: {
+    flex: 1,
+    ...(Platform.OS === 'web' && {
+      minHeight: 0,
+    }),
   },
   monthNav: {
     flexDirection: 'row',
@@ -2841,6 +2904,9 @@ const styles = StyleSheet.create({
   monthlySessionsSection: {
     paddingHorizontal: 16,
     paddingTop: 4,
+  },
+  weeklySessionsSection: {
+    paddingBottom: 8,
   },
   sessionRowList: {
     paddingBottom: 8,
@@ -3119,6 +3185,9 @@ const styles = StyleSheet.create({
       boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
     }),
   },
+  summaryBarMobile: {
+    zIndex: 90,
+  },
   summaryBarContent: {
     maxWidth: 1280, // max-w-7xl equivalent (80rem = 1280px)
     marginHorizontal: 'auto',
@@ -3138,6 +3207,12 @@ const styles = StyleSheet.create({
       gap: 12,
       paddingTop: 16,
     }),
+  },
+  summaryBarContentMobile: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 10,
   },
   summaryInfo: {
     flexDirection: 'row',
