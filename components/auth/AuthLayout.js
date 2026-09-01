@@ -1,85 +1,115 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions, ScrollView, KeyboardAvoidingView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  useWindowDimensions,
+  ScrollView,
+  KeyboardAvoidingView,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { memberColors, memberRadius, memberTypography } from '../../theme/memberTheme';
+import { memberColors, memberTypography, memberBreakpoints } from '../../theme/memberTheme';
 
-const DESKTOP_BREAKPOINT = 768;
+const TABLET_BREAKPOINT = memberBreakpoints.tablet;
+const DESKTOP_BREAKPOINT = memberBreakpoints.desktop;
 
-function BrandCourtLines() {
+/** Single baseline + lime point — restrained, almost invisible */
+function BrandAccent() {
   return (
-    <View style={brandStyles.linesWrap} pointerEvents="none">
-      <View style={brandStyles.lineH} />
-      <View style={brandStyles.lineV} />
-      <View style={brandStyles.arc} />
-      <View style={brandStyles.ball} />
+    <View style={accentStyles.wrap} pointerEvents="none">
+      <View style={accentStyles.line} />
+      <View style={accentStyles.dot} />
     </View>
   );
 }
 
-export function AuthBrandPanel({ taglines }) {
-  const lines = taglines || ['Your court.', 'Your sessions.', 'Your game.'];
-
+export function AuthPageHeader({ headerRight }) {
   return (
-    <View style={brandStyles.panel}>
-      <BrandCourtLines />
-      <View style={brandStyles.content}>
-        <Text style={brandStyles.logo}>🎾 Airdrop Tennis</Text>
-        <View style={brandStyles.taglines}>
-          {lines.map((line) => (
-            <Text key={line} style={brandStyles.tagline}>{line}</Text>
-          ))}
-        </View>
+    <View style={headerStyles.row}>
+      <Text style={headerStyles.wordmark}>Airdrop Tennis</Text>
+      {headerRight ? <View style={headerStyles.right}>{headerRight}</View> : null}
+    </View>
+  );
+}
+
+function DesktopBrandField() {
+  return (
+    <View style={brandStyles.field} pointerEvents="none">
+      <BrandAccent />
+      <View style={brandStyles.copy}>
+        <Text style={brandStyles.editorial}>Back on court.</Text>
       </View>
     </View>
   );
 }
 
-export function AuthMobileHeader() {
+function MobileBrandAccent() {
   return (
-    <View style={brandStyles.mobileHeader}>
-      <Text style={brandStyles.mobileLogo}>🎾 Airdrop Tennis</Text>
-      <View style={brandStyles.mobileBall} />
+    <View style={mobileStyles.wrap}>
+      <View style={mobileStyles.bar} />
+      <View style={mobileStyles.dot} />
     </View>
   );
 }
 
 export default function AuthLayout({
   children,
-  desktopBrand = true,
   scrollable = false,
   keyboardAvoid = true,
+  headerRight = null,
+  showBrandField = true,
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isTabletUp = Platform.OS === 'web' && width >= TABLET_BREAKPOINT;
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 
-  const body = scrollable ? (
-    <ScrollView
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
+  const formContent = (
+    <View
+      style={[
+        styles.formInner,
+        isDesktop && styles.formInnerDesktop,
+        !isTabletUp && { paddingBottom: insets.bottom + 20 },
+      ]}
     >
-      {!isDesktop && <AuthMobileHeader />}
-      {children}
-    </ScrollView>
-  ) : (
-    <View style={[styles.authBody, { paddingBottom: insets.bottom + 16 }]}>
-      {!isDesktop && <AuthMobileHeader />}
+      {!isDesktop && showBrandField && <MobileBrandAccent />}
       {children}
     </View>
   );
 
-  const inner = (
-    <View style={[styles.shell, isDesktop && styles.shellDesktop]}>
-      {isDesktop && desktopBrand && <AuthBrandPanel />}
-      <View style={[styles.authColumn, isDesktop && styles.authColumnDesktop]}>
-        {body}
+  const body = scrollable ? (
+    <ScrollView
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: insets.bottom + 24 },
+        isDesktop && styles.scrollContentDesktop,
+      ]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      {formContent}
+    </ScrollView>
+  ) : (
+    formContent
+  );
+
+  const page = (
+    <View style={[styles.page, { paddingTop: insets.top + (isDesktop ? 28 : 16) }]}>
+      {isDesktop && showBrandField && <DesktopBrandField />}
+
+      <View style={[styles.contentGrid, isDesktop && styles.contentGridDesktop]}>
+        <AuthPageHeader headerRight={headerRight} />
+
+        <View style={[styles.main, isDesktop && styles.mainDesktop]}>
+          <View style={[styles.formColumn, isDesktop && styles.formColumnDesktop]}>{body}</View>
+        </View>
       </View>
     </View>
   );
 
   if (!keyboardAvoid) {
-    return <View style={styles.screen}>{inner}</View>;
+    return <View style={styles.screen}>{page}</View>;
   }
 
   return (
@@ -88,7 +118,7 @@ export default function AuthLayout({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {inner}
+      {page}
     </KeyboardAvoidingView>
   );
 }
@@ -99,137 +129,151 @@ const styles = StyleSheet.create({
     backgroundColor: memberColors.bg,
     ...(Platform.OS === 'web' && { minHeight: '100vh' }),
   },
-  shell: {
+  page: {
+    flex: 1,
+    position: 'relative',
+    ...(Platform.OS === 'web' && { minHeight: '100vh' }),
+  },
+  contentGrid: {
     flex: 1,
     width: '100%',
-  },
-  shellDesktop: {
-    flexDirection: 'row',
-    maxWidth: 1080,
+    maxWidth: 1120,
     alignSelf: 'center',
-    width: '100%',
-    minHeight: '100vh',
-    padding: 32,
-    gap: 0,
-  },
-  authColumn: {
-    flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingTop: 48,
   },
-  authColumnDesktop: {
-    maxWidth: 440,
-    paddingHorizontal: 48,
-    paddingVertical: 48,
-    justifyContent: 'center',
+  contentGridDesktop: {
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+    paddingLeft: '38%',
+    paddingRight: 56,
   },
-  authBody: {
+  main: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  mainDesktop: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingTop: 40,
+    paddingBottom: 64,
+  },
+  formColumn: {
+    width: '100%',
+  },
+  formColumnDesktop: {
+    width: '100%',
+    maxWidth: 380,
+    minWidth: 280,
+  },
+  formInner: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
+  },
+  formInnerDesktop: {
+    maxWidth: 360,
+    alignSelf: 'flex-start',
+    marginTop: 0,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingTop: 8,
+    paddingTop: 4,
+  },
+  scrollContentDesktop: {
+    paddingTop: 0,
+  },
+});
+
+const headerStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+    ...(Platform.OS === 'web' && { marginBottom: 24 }),
+  },
+  wordmark: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: memberColors.ink,
+  },
+  right: {
+    flexShrink: 0,
   },
 });
 
 const brandStyles = StyleSheet.create({
-  panel: {
-    flex: 1,
-    maxWidth: 520,
+  field: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '36%',
+    maxWidth: 420,
     backgroundColor: memberColors.court,
-    borderRadius: memberRadius.xl,
     overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'center',
-    padding: 48,
+    ...(Platform.OS === 'web' && {
+      borderTopRightRadius: 0,
+      borderBottomRightRadius: 0,
+    }),
   },
-  linesWrap: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.2,
-  },
-  lineH: {
+  copy: {
     position: 'absolute',
-    top: '42%',
-    left: '10%',
-    right: '8%',
-    height: 1,
-    backgroundColor: memberColors.white,
-  },
-  lineV: {
-    position: 'absolute',
-    top: '18%',
+    left: 48,
     bottom: '18%',
-    left: '58%',
-    width: 1,
-    backgroundColor: memberColors.white,
+    maxWidth: 280,
   },
-  arc: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: memberColors.lime,
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
-    bottom: '12%',
-    right: '8%',
-    opacity: 0.5,
-    transform: [{ rotate: '-20deg' }],
+  editorial: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: 'rgba(255, 255, 255, 0.72)',
   },
-  ball: {
+});
+
+const accentStyles = StyleSheet.create({
+  wrap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  line: {
     position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    left: 48,
+    right: '20%',
+    bottom: '22%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  dot: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: memberColors.lime,
-    top: '28%',
-    right: '22%',
-    opacity: 0.55,
+    left: 48,
+    bottom: '22%',
+    marginBottom: -2.5,
+    opacity: 0.85,
   },
-  content: {
-    zIndex: 1,
-    position: 'relative',
-  },
-  logo: {
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    color: memberColors.white,
-    marginBottom: 32,
-  },
-  taglines: {
-    gap: 6,
-  },
-  tagline: {
-    fontSize: 28,
-    fontWeight: '600',
-    letterSpacing: -0.8,
-    color: memberColors.white,
-    lineHeight: 34,
-  },
-  mobileHeader: {
+});
+
+const mobileStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
-    position: 'relative',
+    gap: 10,
+    marginBottom: 20,
   },
-  mobileLogo: {
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: memberColors.ink,
+  bar: {
+    width: 40,
+    height: 3,
+    backgroundColor: memberColors.court,
   },
-  mobileBall: {
-    position: 'absolute',
-    right: '18%',
-    top: -8,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: memberColors.lime,
-    opacity: 0.7,
   },
 });

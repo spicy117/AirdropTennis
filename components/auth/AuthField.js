@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
-import { memberColors, memberRadius, memberTypography, memberWebTransition } from '../../theme/memberTheme';
+import { memberColors, memberTypography, memberWebTransition } from '../../theme/memberTheme';
 
 export default function AuthField({
   label,
@@ -51,35 +51,32 @@ export default function AuthField({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: 16,
+    marginBottom: 14,
     width: '100%',
   },
   label: {
-    ...memberTypography.label,
-    textTransform: 'none',
-    fontSize: 13,
-    fontWeight: '600',
-    color: memberColors.inkSecondary,
+    ...memberTypography.bodyStrong,
+    fontSize: 14,
+    fontWeight: '500',
+    color: memberColors.ink,
     marginBottom: 6,
-    letterSpacing: 0,
+    letterSpacing: -0.1,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 48,
+    minHeight: 44,
     borderWidth: 1,
-    borderColor: memberColors.border,
-    borderRadius: memberRadius.md,
-    backgroundColor: memberColors.surfaceRaised,
-    ...memberWebTransition('border-color, box-shadow'),
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 1px 2px rgba(20, 20, 20, 0.04)',
-    }),
+    borderColor: memberColors.borderStrong,
+    borderRadius: 8,
+    backgroundColor: '#FEFEFE',
+    ...memberWebTransition('border-color, box-shadow, background-color'),
   },
   inputRowFocused: {
     borderColor: memberColors.court,
+    backgroundColor: memberColors.white,
     ...(Platform.OS === 'web' && {
-      boxShadow: '0 0 0 3px rgba(30, 61, 50, 0.12)',
+      boxShadow: '0 0 0 2px rgba(30, 61, 50, 0.1)',
     }),
   },
   inputRowError: {
@@ -88,9 +85,9 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
     color: memberColors.ink,
     minHeight: 44,
     ...(Platform.OS === 'web' && {
@@ -99,18 +96,18 @@ const styles = StyleSheet.create({
     }),
   },
   inputWithRight: {
-    paddingRight: 52,
+    paddingRight: 56,
   },
   error: {
     fontSize: 12,
     color: memberColors.danger,
-    marginTop: 6,
+    marginTop: 5,
     lineHeight: 16,
   },
   hint: {
     fontSize: 12,
     color: memberColors.inkMuted,
-    marginTop: 6,
+    marginTop: 5,
     lineHeight: 16,
   },
 });

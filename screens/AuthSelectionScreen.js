@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Platform, Dimensions, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet, Platform, Dimensions, TouchableOpacity, Text } from 'react-native';
 import SignInScreen from './SignInScreen';
 import SignUpScreen from './SignUpScreen';
 import AuthLayout from '../components/auth/AuthLayout';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { memberColors, memberRadius } from '../theme/memberTheme';
+import { memberColors } from '../theme/memberTheme';
 
 const getWindowWidth = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -28,7 +27,7 @@ function AuthSelectionScreenInner({ navigation, route, language, updateLanguage,
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab);
-  const [desktop, setDesktop] = useState(isDesktop());
+  const [, setDesktop] = useState(isDesktop());
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -69,21 +68,20 @@ function AuthSelectionScreenInner({ navigation, route, language, updateLanguage,
     }
   };
 
-  return (
-    <AuthLayout scrollable={activeTab === 'signup'} keyboardAvoid>
-      <View style={styles.topRow}>
-        <View style={styles.spacer} />
-        <TouchableOpacity
-          style={styles.langToggle}
-          onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
-          accessibilityRole="button"
-          accessibilityLabel={language === 'en' ? 'Switch to Chinese' : 'Switch to English'}
-        >
-          <Ionicons name="language-outline" size={16} color={memberColors.inkMuted} />
-          <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
-        </TouchableOpacity>
-      </View>
+  const languageToggle = (
+    <TouchableOpacity
+      style={styles.langToggle}
+      onPress={() => updateLanguage(language === 'en' ? 'zh-CN' : 'en')}
+      accessibilityRole="button"
+      accessibilityLabel={language === 'en' ? 'Switch to Chinese' : 'Switch to English'}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Text style={styles.langText}>{language === 'en' ? t('langEnShort') : t('langZhShort')}</Text>
+    </TouchableOpacity>
+  );
 
+  return (
+    <AuthLayout scrollable={activeTab === 'signup'} keyboardAvoid headerRight={languageToggle}>
       <View style={styles.formArea}>
         {activeTab === 'login' ? (
           <SignInScreen
@@ -118,28 +116,15 @@ export default function AuthSelectionScreen(props) {
 }
 
 const styles = StyleSheet.create({
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 8,
-    width: '100%',
-  },
-  spacer: { flex: 1 },
   langToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: memberRadius.pill,
-    backgroundColor: memberColors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: memberColors.border,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   langText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     color: memberColors.inkMuted,
+    letterSpacing: 0.1,
   },
   formArea: {
     width: '100%',

@@ -10,7 +10,7 @@ import ShowPasswordToggle from '../components/ShowPasswordToggle';
 import SuccessCard from '../components/SuccessCard';
 import AuthLayout from '../components/auth/AuthLayout';
 import AuthField from '../components/auth/AuthField';
-import AuthPrimaryButton, { AuthTextLink } from '../components/auth/AuthPrimaryButton';
+import AuthPrimaryButton, { AuthTextLink, AuthDivider } from '../components/auth/AuthPrimaryButton';
 import { memberColors, memberTypography } from '../theme/memberTheme';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -300,10 +300,12 @@ export default function SignUpScreen({ navigation, embedded = false, onGoToLogin
 
       {(onGoToLogin || !embedded) && (
         <View style={styles.footer}>
+          <AuthDivider />
           <Text style={styles.footerText}>{t('alreadyHaveAccount')}</Text>
           <AuthTextLink
             label={t('logIn')}
             onPress={() => (onGoToLogin ? onGoToLogin() : navigation.navigate('LogIn'))}
+            inline
           />
         </View>
       )}
@@ -330,11 +332,14 @@ const styles = StyleSheet.create({
   },
   title: {
     ...memberTypography.h1,
-    fontSize: 26,
-    marginBottom: 6,
+    fontSize: 28,
+    letterSpacing: -0.9,
+    marginBottom: 4,
   },
   subtitle: {
     ...memberTypography.body,
+    fontSize: 15,
+    lineHeight: 22,
     marginBottom: 20,
     color: memberColors.inkMuted,
   },
@@ -354,9 +359,9 @@ const styles = StyleSheet.create({
     flex: Platform.OS === 'web' ? 1 : undefined,
   },
   footer: {
-    marginTop: 24,
-    alignItems: 'center',
-    gap: 4,
+    marginTop: 4,
+    alignItems: 'flex-start',
+    gap: 2,
   },
   footerText: {
     fontSize: 14,

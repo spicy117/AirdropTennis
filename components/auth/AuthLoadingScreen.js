@@ -5,8 +5,10 @@ import { memberColors, memberTypography } from '../../theme/memberTheme';
 export default function AuthLoadingScreen({ message = 'Loading…' }) {
   return (
     <View style={styles.screen}>
-      <View style={styles.orb} />
-      <Text style={styles.logo}>🎾</Text>
+      <View style={styles.accent}>
+        <View style={styles.bar} />
+        <View style={styles.dot} />
+      </View>
       <Text style={styles.brand}>Airdrop Tennis</Text>
       <ActivityIndicator size="small" color={memberColors.court} style={styles.spinner} />
       <Text style={styles.message}>{message}</Text>
@@ -18,26 +20,32 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: memberColors.bg,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
+    paddingHorizontal: 32,
     ...(Platform.OS === 'web' && { minHeight: '100vh' }),
   },
-  orb: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: memberColors.limeSoft,
-    top: '30%',
-    ...(Platform.OS === 'web' && { filter: 'blur(60px)' }),
+  accent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
   },
-  logo: {
-    fontSize: 40,
-    marginBottom: 8,
+  bar: {
+    width: 40,
+    height: 3,
+    backgroundColor: memberColors.court,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: memberColors.lime,
   },
   brand: {
-    ...memberTypography.h3,
-    marginBottom: 24,
+    ...memberTypography.h2,
+    letterSpacing: -0.6,
+    marginBottom: 28,
   },
   spinner: {
     marginBottom: 12,

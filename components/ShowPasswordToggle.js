@@ -11,10 +11,10 @@ export default function ShowPasswordToggle({ show, onToggle, accessible = true }
       accessibilityLabel={show ? 'Hide password' : 'Show password'}
       accessibilityRole="button"
       accessibilityHint="Toggles password visibility"
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      activeOpacity={0.7}
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      activeOpacity={0.65}
     >
-      <Text style={styles.icon}>{show ? 'Hide' : 'Show'}</Text>
+      <Text style={styles.label}>{show ? 'Hide' : 'Show'}</Text>
     </TouchableOpacity>
   );
 }
@@ -22,19 +22,19 @@ export default function ShowPasswordToggle({ show, onToggle, accessible = true }
 const styles = StyleSheet.create({
   toggle: {
     position: 'absolute',
-    right: 4,
+    right: 0,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    minWidth: 44,
+    paddingHorizontal: 12,
+    minWidth: 48,
     zIndex: 1,
   },
-  icon: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    color: memberColors.court,
+  label: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: -0.1,
+    color: memberColors.inkMuted,
   },
 });

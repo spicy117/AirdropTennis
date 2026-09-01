@@ -6,7 +6,7 @@ import { getTranslation } from '../utils/translations';
 import ShowPasswordToggle from '../components/ShowPasswordToggle';
 import AuthLayout from '../components/auth/AuthLayout';
 import AuthField from '../components/auth/AuthField';
-import AuthPrimaryButton, { AuthTextLink } from '../components/auth/AuthPrimaryButton';
+import AuthPrimaryButton, { AuthTextLink, AuthDivider } from '../components/auth/AuthPrimaryButton';
 import { memberColors, memberTypography } from '../theme/memberTheme';
 
 export default function SignInScreen({ navigation, embedded = false, onGoToSignUp }) {
@@ -196,6 +196,7 @@ export default function SignInScreen({ navigation, embedded = false, onGoToSignU
   const renderLogin = () => (
     <View style={styles.block}>
       <Text style={styles.title}>{t('welcomeBack')}</Text>
+      <Text style={styles.subtitle}>{t('logInSubtitle')}</Text>
 
       <AuthField
         label={t('emailPlaceholder')}
@@ -251,10 +252,12 @@ export default function SignInScreen({ navigation, embedded = false, onGoToSignU
 
       {(onGoToSignUp || !embedded) && (
         <View style={styles.footer}>
-          <Text style={styles.footerText}>{t('newToAirdrop')}</Text>
+          <AuthDivider />
+          <Text style={styles.footerText}>{t('newHere')}</Text>
           <AuthTextLink
             label={t('createAccount')}
             onPress={() => (onGoToSignUp ? onGoToSignUp() : navigation.navigate('SignUp'))}
+            inline
           />
         </View>
       )}
@@ -280,12 +283,15 @@ const styles = StyleSheet.create({
   },
   title: {
     ...memberTypography.h1,
-    fontSize: 26,
-    marginBottom: 6,
+    fontSize: 28,
+    letterSpacing: -0.9,
+    marginBottom: 4,
   },
   subtitle: {
     ...memberTypography.body,
-    marginBottom: 24,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 22,
     color: memberColors.inkMuted,
   },
   emailBox: {
@@ -317,12 +323,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   footer: {
-    marginTop: 28,
-    alignItems: 'center',
-    gap: 4,
+    marginTop: 4,
+    alignItems: 'flex-start',
+    gap: 2,
   },
   footerText: {
     fontSize: 14,
     color: memberColors.inkMuted,
+    lineHeight: 20,
   },
 });
