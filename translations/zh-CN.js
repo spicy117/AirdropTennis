@@ -61,6 +61,7 @@ export default {
   navCoaches: '教练',
   navBookingHistory: '预订历史',
   navPerformanceManagement: '表现管理',
+  navAdminGuide: '管理指南',
   navAdmin: '管理',
   assignLesson: '分配课程',
   assignLessonTitle: '分配课程',

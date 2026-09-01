@@ -61,6 +61,7 @@ export default {
   navCoaches: 'Coaches',
   navBookingHistory: 'Booking History',
   navPerformanceManagement: 'Performance Management',
+  navAdminGuide: 'Admin Guide',
   navAdmin: 'ADMIN',
   assignLesson: 'Assign lesson',
   assignLessonTitle: 'Assign a lesson',

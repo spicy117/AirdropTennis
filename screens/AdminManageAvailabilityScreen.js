@@ -22,6 +22,7 @@ import AvailabilityEditModal from '../components/AvailabilityEditModal';
 import BookingDetailsModal from '../components/BookingDetailsModal';
 import BookingRequestsModal from '../components/BookingRequestsModal';
 import ActiveBookingsModal from '../components/ActiveBookingsModal';
+import AdminGuideHelpLink from '../components/AdminGuideHelpLink';
 import { countSessionsNeedingCoach } from '../utils/coachAssignment';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, sydneyDateTimeToUTC, getDayOfWeekFromDateString, addDaysToDateString, utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
 
@@ -1505,9 +1506,18 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
       }
     >
       <View style={[styles.header, isMobile && styles.headerMobile]}>
-        <Text style={[styles.title, isMobile && styles.titleMobile]} numberOfLines={1}>
-          {isMobile ? 'Availability & Bookings' : 'Manage Availability & Bookings'}
-        </Text>
+        <View style={styles.headerTitleBlock}>
+          <Text style={[styles.title, isMobile && styles.titleMobile]} numberOfLines={1}>
+            {isMobile ? 'Availability & Bookings' : 'Manage Availability & Bookings'}
+          </Text>
+          {onNavigate && (
+            <AdminGuideHelpLink
+              section="availability"
+              onNavigate={onNavigate}
+              label="How availability works"
+            />
+          )}
+        </View>
         {isMobile ? (
           <View style={styles.headerActionsWrap}>
             {onNavigate && (
@@ -2005,6 +2015,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     marginBottom: 16,
     gap: 12,
+  },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   title: {
     fontSize: 32,

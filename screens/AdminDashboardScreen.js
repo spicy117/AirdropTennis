@@ -19,6 +19,7 @@ import StatCard from '../components/StatCard';
 import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
 import AdminAssignLessonModal from '../components/AdminAssignLessonModal';
 import AssignCoachModal from '../components/AssignCoachModal';
+import AdminGuideHelpLink from '../components/AdminGuideHelpLink';
 import { countSessionsNeedingCoach, sessionNeedsCoach } from '../utils/coachAssignment';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd } from '../utils/timezone';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -35,7 +36,7 @@ const ADMIN_NAV_BUTTONS = [
   { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline' },
 ];
 
-export default function AdminDashboardScreen({ onNavigate }) {
+export default function AdminDashboardScreen({ onNavigate, screenParams }) {
   const { width } = useWindowDimensions?.() ?? { width: 400 };
   const isDesktop = width >= DESKTOP_BREAKPOINT;
   const { language } = useLanguage();
@@ -61,6 +62,12 @@ export default function AdminDashboardScreen({ onNavigate }) {
     loadUpcomingSessions();
     loadOutstandingTasks();
   }, []);
+
+  useEffect(() => {
+    if (screenParams?.openAssignLesson) {
+      setAssignLessonVisible(true);
+    }
+  }, [screenParams?.openAssignLesson]);
 
   const loadStats = async () => {
     try {
@@ -353,13 +360,20 @@ export default function AdminDashboardScreen({ onNavigate }) {
           <Text style={styles.title}>Admin Dashboard</Text>
           <Text style={styles.subtitle}>Overview of your tennis court bookings</Text>
         </View>
-        <TouchableOpacity
-          style={styles.assignLessonBtn}
-          onPress={() => setAssignLessonVisible(true)}
-        >
-          <Ionicons name="add-circle" size={20} color="#FFF" />
-          <Text style={styles.assignLessonBtnText}>Assign lesson</Text>
-        </TouchableOpacity>
+        <View style={styles.titleActions}>
+          <AdminGuideHelpLink
+            section="assign-lesson"
+            onNavigate={onNavigate}
+            label="How manual assignments work"
+          />
+          <TouchableOpacity
+            style={styles.assignLessonBtn}
+            onPress={() => setAssignLessonVisible(true)}
+          >
+            <Ionicons name="add-circle" size={20} color="#FFF" />
+            <Text style={styles.assignLessonBtnText}>Assign lesson</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Action required: coach assignments */}
@@ -443,7 +457,14 @@ export default function AdminDashboardScreen({ onNavigate }) {
       {/* Upcoming Sessions Section */}
       <View style={styles.sessionsSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
+            <AdminGuideHelpLink
+              section="rain-check"
+              onNavigate={onNavigate}
+              label="How Rain Check works"
+            />
+          </View>
           <View style={styles.sessionsBadge}>
             <Text style={styles.sessionsBadgeText}>
               {groupedSessions.length} {groupedSessions.length === 1 ? 'session' : 'sessions'} • {totalUpcomingStudents} {totalUpcomingStudents === 1 ? 'student' : 'students'}
@@ -582,6 +603,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 12,
     ...(Platform.OS === 'web' && { flexWrap: 'wrap' }),
+  },
+  titleActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+    flexShrink: 0,
   },
   actionRequiredCard: {
     backgroundColor: '#FEF2F2',
@@ -781,8 +807,15 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  sectionHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   sectionTitle: {
     fontSize: 18,

@@ -35,6 +35,7 @@ import AdminCoachesScreen from './AdminCoachesScreen';
 import AdminHistoryScreen from './AdminHistoryScreen';
 import AdminActiveBookingsScreen from './AdminActiveBookingsScreen';
 import AdminCoachAssignmentsScreen from './AdminCoachAssignmentsScreen';
+import AdminGuideScreen from './AdminGuideScreen';
 import CoachDashboardScreen from './CoachDashboardScreen';
 import StudentHistoryScreen from './StudentHistoryScreen';
 import PerformanceScreen from './PerformanceScreen';
@@ -1038,7 +1039,7 @@ export default function HomeScreen() {
       // CRITICAL: Coaches should NEVER see these admin screens - redirect immediately
       case 'admin-dashboard':
         if (userRole === 'admin') {
-          return <AdminDashboardScreen onNavigate={handleNavigate} />;
+          return <AdminDashboardScreen onNavigate={handleNavigate} screenParams={screenParams} />;
         } else if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
@@ -1058,6 +1059,18 @@ export default function HomeScreen() {
       case 'admin-coach-assignments':
         if (userRole === 'admin') {
           return <AdminCoachAssignmentsScreen onNavigate={handleNavigate} />;
+        } else if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return studentFallbackDashboard;
+      case 'admin-guide':
+        if (userRole === 'admin') {
+          return (
+            <AdminGuideScreen
+              onNavigate={handleNavigate}
+              initialSection={screenParams.section}
+            />
+          );
         } else if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }
@@ -1109,7 +1122,7 @@ export default function HomeScreen() {
       // Coach screens — never show coach UI to admins (stale URL / screen state)
       case 'coach-dashboard':
         if (userRole === 'admin') {
-          return <AdminDashboardScreen onNavigate={handleNavigate} />;
+          return <AdminDashboardScreen onNavigate={handleNavigate} screenParams={screenParams} />;
         }
         if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;

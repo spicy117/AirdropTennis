@@ -19,6 +19,7 @@ import {
   getSessionUrgencyLabel,
 } from '../utils/coachAssignment';
 import AssignCoachModal from '../components/AssignCoachModal';
+import AdminGuideHelpLink from '../components/AdminGuideHelpLink';
 
 const DESKTOP_BREAKPOINT = 768;
 
@@ -125,6 +126,11 @@ export default function AdminCoachAssignmentsScreen({ onNavigate }) {
           <View style={styles.headerLeft}>
             <Text style={styles.title}>Coach Assignments</Text>
             <Text style={styles.subtitle}>Bookings that still need a coach.</Text>
+            <AdminGuideHelpLink
+              section="new-booking"
+              onNavigate={onNavigate}
+              label="How coach assignments work"
+            />
           </View>
           {onNavigate && (
             <TouchableOpacity

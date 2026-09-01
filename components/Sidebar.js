@@ -32,6 +32,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'admin-coaches', labelKey: 'navCoaches', icon: 'shield-outline', activeIcon: 'shield' },
   { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline', activeIcon: 'archive' },
   { id: 'admin-performance', labelKey: 'navPerformanceManagement', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
+  { id: 'admin-guide', labelKey: 'navAdminGuide', icon: 'book-outline', activeIcon: 'book' },
   { id: 'profile', labelKey: 'profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
