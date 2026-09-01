@@ -23,7 +23,7 @@ import { getTranslation } from '../utils/translations';
 import { getWeekdayLabels, formatDurationFromHours, formatDateGroupHeader, formatMonthYear } from '../utils/locale';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
 import { memberColors } from '../theme/memberTheme';
-import { BOOKABLE_SERVICE_OPTIONS, toDbServiceName } from '../utils/serviceTranslations';
+import { BOOKABLE_SERVICE_OPTIONS, toDbServiceName, translateServiceName } from '../utils/serviceTranslations';
 
 // Conditionally import MapView for native platforms
 let MapView, Marker, UrlTile;
@@ -1238,8 +1238,9 @@ export default function BookingDiscoveryScreen({
 
   const renderCompactSessionRow = (slot, index) => {
     const isSelected = isSlotSelected(slot);
-    const serviceName = slot.serviceName || t('tennisLesson');
-    const durationHours = SERVICE_DURATION_RULES[serviceName] || 1;
+    const dbServiceName = slot.serviceName || 'Private Lessons';
+    const serviceName = translateServiceName(dbServiceName, t, t('tennisLesson'));
+    const durationHours = SERVICE_DURATION_RULES[dbServiceName] || 1;
 
     return (
       <Pressable
@@ -1457,11 +1458,13 @@ export default function BookingDiscoveryScreen({
     <View style={[styles.monthlyDateHeader, isMobileLayout && styles.monthlyDateHeaderMobile]}>
       <View style={styles.monthlyDateHeaderText}>
         <Text style={styles.monthlyDateTitle}>{formatDateGroupHeader(selectedDate, language)}</Text>
-        {!loading && selectedDateSessionCount > 0 && (
+        {effectiveServiceFilter && !loading && (
           <Text style={styles.monthlyDateSub}>
-            {selectedDateSessionCount === 1
-              ? t('sessionAvailable')
-              : t('sessionsAvailable').replace('{{count}}', String(selectedDateSessionCount))}
+            {selectedDateSessionCount === 0
+              ? t('noAvailabilityForDate')
+              : selectedDateSessionCount === 1
+                ? t('sessionAvailable')
+                : t('sessionsAvailable').replace('{{count}}', String(selectedDateSessionCount))}
           </Text>
         )}
       </View>
@@ -1488,7 +1491,7 @@ export default function BookingDiscoveryScreen({
     : 0;
   const summaryFooterHeight = selectedSlots.length > 0 ? (isMobileLayout ? 136 : 96) : 0;
   const scrollBottomPadding =
-    memberBottomNavOffset + summaryFooterHeight + (isMobileLayout ? 16 : 24);
+    memberBottomNavOffset + summaryFooterHeight + (isMobileLayout ? 24 : 24);
 
   const selectedLocationLabel =
     selectedLocationId != null
@@ -1497,37 +1500,87 @@ export default function BookingDiscoveryScreen({
 
   const renderActionsRow = () => (
     <View style={[styles.actionsRow, isMobileLayout && styles.actionsRowMobile]}>
-      <View style={[styles.filterContainer, isMobileLayout && styles.filterContainerMobile]}>
-        <Text style={isMobileLayout ? styles.locationFieldLabel : styles.dropdownLabel}>
-          {t('selectService')}
-        </Text>
-        <View style={styles.serviceChipRow}>
-          {BOOKABLE_SERVICE_OPTIONS.map((opt) => {
-            const isActive = effectiveServiceFilter === opt.dbName;
-            return (
-              <TouchableOpacity
-                key={opt.key}
-                style={[styles.serviceChip, isActive && styles.serviceChipActive]}
-                onPress={() => {
-                  setActiveServiceFilter(opt.dbName);
-                  setSelectedSlots([]);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.serviceChipText, isActive && styles.serviceChipTextActive]}>
-                  {t(opt.labelKey)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+      <View
+        style={[
+          styles.filterContainer,
+          isMobileLayout ? styles.filterContainerMobile : styles.filterContainerDesktop,
+        ]}
+      >
+        <Text style={styles.fieldLabel}>{t('selectService')}</Text>
+        {isMobileLayout ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            style={styles.serviceChipScroll}
+            contentContainerStyle={styles.serviceChipScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {BOOKABLE_SERVICE_OPTIONS.map((opt) => {
+              const isActive = effectiveServiceFilter === opt.dbName;
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={({ pressed }) => [
+                    styles.serviceChip,
+                    styles.serviceChipScrollItem,
+                    isActive && styles.serviceChipActive,
+                    pressed && !isActive && styles.serviceChipPressed,
+                  ]}
+                  onPress={() => {
+                    setActiveServiceFilter(opt.dbName);
+                    setSelectedSlots([]);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={[styles.serviceChipText, isActive && styles.serviceChipTextActive]}>
+                    {t(opt.labelKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View style={styles.serviceChipRow}>
+            {BOOKABLE_SERVICE_OPTIONS.map((opt) => {
+              const isActive = effectiveServiceFilter === opt.dbName;
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={({ pressed }) => [
+                    styles.serviceChip,
+                    isActive && styles.serviceChipActive,
+                    pressed && !isActive && styles.serviceChipPressed,
+                  ]}
+                  onPress={() => {
+                    setActiveServiceFilter(opt.dbName);
+                    setSelectedSlots([]);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={[styles.serviceChipText, isActive && styles.serviceChipTextActive]}>
+                    {t(opt.labelKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {locations.length > 0 && (
-        <View style={[styles.filterContainer, isMobileLayout && styles.filterContainerMobile]}>
+        <View
+          style={[
+            styles.filterContainer,
+            isMobileLayout ? styles.filterContainerMobile : styles.filterContainerDesktop,
+          ]}
+        >
           {locations.length < 4 ? (
-            <View style={styles.pillSelector}>
+            <>
+              {isMobileLayout && <Text style={styles.fieldLabel}>{t('filterLocation')}</Text>}
+              <View style={styles.pillSelector}>
               <TouchableOpacity
                 style={[styles.pill, !selectedLocationId && styles.pillActive]}
                 onPress={() => setSelectedLocationId(null)}
@@ -1550,14 +1603,11 @@ export default function BookingDiscoveryScreen({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+              </View>
+            </>
           ) : (
             <View style={[styles.dropdownContainer, isMobileLayout && styles.dropdownContainerMobile]}>
-              {isMobileLayout ? (
-                <Text style={styles.locationFieldLabel}>{t('filterLocation')}</Text>
-              ) : (
-                <Text style={styles.dropdownLabel}>Location:</Text>
-              )}
+              <Text style={styles.fieldLabel}>{t('filterLocation')}</Text>
               <TouchableOpacity
                 style={[styles.dropdown, isMobileLayout && styles.dropdownMobile]}
                 onPress={() => setShowLocationDropdown(!showLocationDropdown)}
@@ -1784,7 +1834,7 @@ export default function BookingDiscoveryScreen({
           <Ionicons
             name="map"
             size={18}
-            color={showLocationsMap ? '#fff' : '#000'}
+            color={showLocationsMap ? memberColors.white : memberColors.inkMuted}
           />
           <Text
             style={[
@@ -1983,16 +2033,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mapToggleButtonActive: {
-    backgroundColor: '#000',
-    borderColor: '#000',
+    backgroundColor: memberColors.court,
+    borderColor: memberColors.court,
   },
   mapToggleButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#000',
+    color: memberColors.inkMuted,
   },
   mapToggleButtonTextActive: {
-    color: '#fff',
+    color: memberColors.white,
   },
   viewSwitcher: {
     flexDirection: 'row',
@@ -2037,19 +2087,42 @@ const styles = StyleSheet.create({
   actionsRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 10,
+    flexGrow: 0,
+    flexShrink: 0,
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   filterContainerMobile: {
-    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
     width: '100%',
+  },
+  filterContainerDesktop: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: memberColors.inkSecondary,
+    marginBottom: 6,
   },
   locationFieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: memberColors.inkMuted,
+    color: memberColors.inkSecondary,
     marginBottom: 6,
+  },
+  serviceChipScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  serviceChipScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 4,
   },
   serviceChipRow: {
     flexDirection: 'row',
@@ -2060,25 +2133,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: memberColors.borderStrong,
+  },
+  serviceChipScrollItem: {
+    flexShrink: 0,
   },
   serviceChipActive: {
-    backgroundColor: '#000',
-    borderColor: '#000',
+    backgroundColor: memberColors.court,
+    borderColor: memberColors.court,
+  },
+  serviceChipPressed: {
+    backgroundColor: memberColors.courtMuted,
   },
   serviceChipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: memberColors.ink,
   },
   serviceChipTextActive: {
-    color: '#fff',
+    color: memberColors.white,
     fontWeight: '600',
   },
   filterContainer: {
-    flex: 1,
+    width: '100%',
   },
   pillSelector: {
     flexDirection: 'row',
@@ -2089,21 +2168,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: memberColors.borderStrong,
   },
   pillActive: {
-    backgroundColor: '#000',
-    borderColor: '#000',
+    backgroundColor: memberColors.court,
+    borderColor: memberColors.court,
   },
   pillText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: memberColors.ink,
   },
   pillTextActive: {
-    color: '#fff',
+    color: memberColors.white,
     fontWeight: '600',
   },
   dropdownContainer: {
@@ -2130,9 +2209,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: memberColors.borderStrong,
     gap: 8,
     minWidth: 150,
     maxWidth: 200,
@@ -2691,8 +2770,9 @@ const styles = StyleSheet.create({
     color: memberColors.court,
   },
   sessionRowDivider: {
-    height: 1,
-    backgroundColor: memberColors.border,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: memberColors.borderStrong,
+    marginLeft: 0,
   },
   emptyStateCompact: {
     alignItems: 'center',
@@ -2739,6 +2819,7 @@ const styles = StyleSheet.create({
   },
   contentContainerMobileMonthly: {
     padding: 0,
+    flexGrow: 0,
   },
   skeletonContainer: {
     gap: 24,
