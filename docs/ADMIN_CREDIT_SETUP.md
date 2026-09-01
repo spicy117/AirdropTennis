@@ -1,60 +1,44 @@
 # Admin manual credit adjustment
 
-Manual credit changes use the **same balance** as member Top Up and booking deductions:
+Balance lives on **`profiles.wallet_balance`** (numeric dollars). Manual adjustments use **`admin_adjust_wallet`** RPC + **`wallet_transactions`** audit row.
 
-| What | Where |
-|------|--------|
-| Balance | `profiles.wallet_balance` (numeric **dollars**, e.g. `200.02`) |
-| Top up | Stripe → `credit_stripe_session` / `add_wallet_balance` |
-| Booking charge | `deduct_wallet_balance` (Edge Function) |
-| Admin manual adjust | `admin_adjust_wallet` RPC + `wallet_transactions` audit row |
+## Setup (required once)
 
-## Required SQL (one time)
+Supabase project **`rozxeqqwxpnfqbyvtvch`**:
 
-Supabase project **`rozxeqqwxpnfqbyvtvch`** → **SQL Editor**:
+### 1. SQL Editor
 
-1. If `wallet_transactions` already exists but adjustment fails with **column "created_by" does not exist**, run first:  
-   `supabase/migrations/017_wallet_transactions_schema_fix.sql`  
-   (This is the full fix — you can stop after step 1 if it succeeds.)
+Run **one** file:
 
-2. Otherwise run the full file:  
-   `supabase/migrations/015_admin_wallet_ledger.sql`
+`supabase/migrations/018_admin_wallet_complete.sql`
 
-3. If you already ran an older 015, also run:  
-   `supabase/migrations/016_admin_wallet_insert_policy.sql`
+This creates/repairs `wallet_transactions`, `is_admin()`, and `admin_adjust_wallet`, then reloads the API schema cache.
 
-This creates:
-
-- `wallet_transactions` audit table
-- `is_admin()` helper
-- `admin_adjust_wallet(p_user_id, p_amount, p_direction, p_reason, p_note)` RPC
-
-## Verify
-
-In SQL Editor:
+Verify:
 
 ```sql
-SELECT routine_name
-FROM information_schema.routines
-WHERE routine_schema = 'public'
-  AND routine_name = 'admin_adjust_wallet';
+SELECT routine_name FROM information_schema.routines
+WHERE routine_schema = 'public' AND routine_name = 'admin_adjust_wallet';
 ```
 
-Should return one row.
+### 2. Edge Function `admin-adjust-wallet`
+
+1. Edge Functions → **Create** → name: `admin-adjust-wallet`
+2. Paste `supabase/functions/admin-adjust-wallet/index.ts`
+3. **Verify JWT: ON** → Deploy
+
+The app calls this function (not the RPC directly). It verifies the admin JWT, then runs `admin_adjust_wallet`.
 
 ## Test
 
-1. Admin → Students → Adjust credits → Add `$10.00`
-2. Balance should increase; `wallet_transactions` gets a row with `source = manual_admin_adjustment`
-3. Member home **Credit Balance** should match after refresh
+Admin → **Students** → **Adjust credits** → Add `$10.00`.
 
-## If adjustment still fails
+Expected: balance updates, row in `wallet_transactions`, member home shows the same balance.
 
-Open browser devtools → Console. Look for `Credit adjustment failed` with `code` / `message`:
+## Troubleshooting
 
-| Code / message | Meaning |
-|----------------|---------|
-| `PGRST202` / function not found | Run migration 015 |
-| `permission_denied` | Admin academy mismatch or not admin |
-| `insufficient_balance` | Remove would go below $0 |
-| `user_not_found` | Student profile missing |
+| Symptom | Fix |
+|---------|-----|
+| Generic “Credit could not be updated” | Run SQL step 1 + deploy Edge Function step 2 |
+| `column "created_by" does not exist` | Run `018_admin_wallet_complete.sql` (repairs partial table) |
+| Edge function 404 | Deploy `admin-adjust-wallet` on the **same** Supabase project as the app |

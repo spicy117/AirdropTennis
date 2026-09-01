@@ -23,9 +23,13 @@ export function mapWalletRpcError(error) {
   const hint = String(error?.hint || '').toLowerCase();
   const combined = `${msg} ${hint}`;
 
+  if (msg.includes('rpc_not_deployed') || combined.includes('migration 018')) {
+    return 'Credit adjustment is not set up on the server. Run migration 018 in Supabase SQL Editor, then deploy the admin-adjust-wallet Edge Function.';
+  }
   if (
     code === 'PGRST202' ||
     combined.includes('could not find the function') ||
+    combined.includes('admin-adjust-wallet') ||
     (code === 'PGRST205' && combined.includes('wallet_transactions'))
   ) {
     // Logged in adminAdjustWallet; keep UI generic for missing server setup.
