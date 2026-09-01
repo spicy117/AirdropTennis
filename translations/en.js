@@ -54,6 +54,7 @@ export default {
   navCoachDashboard: 'Coach Dashboard',
   navAdminDashboard: 'Admin Dashboard',
   navActiveBookings: 'Active Bookings',
+  navCoachAssignments: 'Coach Assignments',
   navLocations: 'Locations',
   navAvailability: 'Availability',
   navStudents: 'Students',

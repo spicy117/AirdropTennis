@@ -34,6 +34,7 @@ import AdminLocationsCourtsScreen from './AdminLocationsCourtsScreen';
 import AdminCoachesScreen from './AdminCoachesScreen';
 import AdminHistoryScreen from './AdminHistoryScreen';
 import AdminActiveBookingsScreen from './AdminActiveBookingsScreen';
+import AdminCoachAssignmentsScreen from './AdminCoachAssignmentsScreen';
 import CoachDashboardScreen from './CoachDashboardScreen';
 import StudentHistoryScreen from './StudentHistoryScreen';
 import PerformanceScreen from './PerformanceScreen';
@@ -74,6 +75,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   const [activeScreen, setActiveScreen] = useState('dashboard');
+  const [screenParams, setScreenParams] = useState({});
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isDesktop, setIsDesktop] = useState(getIsDesktop());
   const [serviceFilter, setServiceFilter] = useState(null);
@@ -897,7 +899,7 @@ export default function HomeScreen() {
     setServiceFilter(toDbServiceName(serviceName));
   };
 
-  const handleNavigate = (screen) => {
+  const handleNavigate = (screen, params = null) => {
     if (roleLoading) return;
     if (userRole === 'coach') {
       const allowedScreens = ['coach-dashboard', 'admin-performance', 'profile'];
@@ -907,6 +909,7 @@ export default function HomeScreen() {
         return;
       }
     }
+    setScreenParams(params || {});
     setActiveScreen(screen);
     if (screen === 'dashboard') {
       setDashboardRefreshKey(prev => prev + 1);
@@ -1042,7 +1045,19 @@ export default function HomeScreen() {
         return studentFallbackDashboard;
       case 'admin-active-bookings':
         if (userRole === 'admin') {
-          return <AdminActiveBookingsScreen onNavigate={handleNavigate} />;
+          return (
+            <AdminActiveBookingsScreen
+              onNavigate={handleNavigate}
+              initialFilter={screenParams.filter}
+            />
+          );
+        } else if (userRole === 'coach') {
+          return <CoachDashboardScreen onNavigate={handleNavigate} />;
+        }
+        return studentFallbackDashboard;
+      case 'admin-coach-assignments':
+        if (userRole === 'admin') {
+          return <AdminCoachAssignmentsScreen onNavigate={handleNavigate} />;
         } else if (userRole === 'coach') {
           return <CoachDashboardScreen onNavigate={handleNavigate} />;
         }

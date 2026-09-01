@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 const MOBILE_BREAKPOINT = 480;
 
+import { sessionNeedsCoach } from '../utils/coachAssignment';
+
 /**
  * GroupedSessionCard - Elite Branded Session Card for Coaches/Admins
  * Displays grouped bookings with glassmorphism design
@@ -21,7 +23,7 @@ const MOBILE_BREAKPOINT = 480;
  * - session: { serviceName, startTime, endTime, locationName, students: [], totalRevenue }
  * - isAdmin: boolean - shows revenue info if true
  */
-const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) => {
+const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings, onAssignCoach }) => {
   const { width } = useWindowDimensions?.() ?? { width: 400 };
   const isMobile = width < MOBILE_BREAKPOINT;
   const [expanded, setExpanded] = useState(false);
@@ -159,12 +161,19 @@ const GroupedSessionCard = ({ session, isAdmin = false, onRainCheckBookings }) =
             <Ionicons name="location-outline" size={15} color="#6B7280" />
             <Text style={styles.infoText} numberOfLines={1}>{session.locationName}</Text>
           </View>
-          {isAdmin && session.coachName && (
+          {isAdmin && sessionNeedsCoach(session) && onAssignCoach ? (
+            <View style={styles.coachRequiredRow}>
+              <Text style={styles.coachRequiredText}>⚠ Coach required</Text>
+              <TouchableOpacity style={styles.coachAssignBtn} onPress={onAssignCoach} activeOpacity={0.8}>
+                <Text style={styles.coachAssignBtnText}>Assign</Text>
+              </TouchableOpacity>
+            </View>
+          ) : isAdmin && session.coachName ? (
             <View style={styles.infoItem}>
               <Ionicons name="person-outline" size={15} color="#7C3AED" />
-              <Text style={styles.coachText} numberOfLines={1}>{session.coachName}</Text>
+              <Text style={styles.coachText} numberOfLines={1}>Coach: {session.coachName}</Text>
             </View>
-          )}
+          ) : null}
           {isAdmin && session.totalRevenue !== undefined && (
             <View style={styles.revenueItem}>
               <Text style={styles.revenueText}>${session.totalRevenue?.toFixed(2) || '0.00'}</Text>
@@ -569,6 +578,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#7C3AED',
     maxWidth: 120,
+  },
+  coachRequiredRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  coachRequiredText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  coachAssignBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  coachAssignBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFF',
   },
   revenueItem: {
     backgroundColor: 'rgba(16, 185, 129, 0.1)',

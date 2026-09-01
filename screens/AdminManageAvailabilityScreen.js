@@ -22,6 +22,7 @@ import AvailabilityEditModal from '../components/AvailabilityEditModal';
 import BookingDetailsModal from '../components/BookingDetailsModal';
 import BookingRequestsModal from '../components/BookingRequestsModal';
 import ActiveBookingsModal from '../components/ActiveBookingsModal';
+import { countSessionsNeedingCoach } from '../utils/coachAssignment';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, sydneyDateTimeToUTC, getDayOfWeekFromDateString, addDaysToDateString, utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
 
 const MOBILE_BREAKPOINT = 768; // Mobile-first: tablet and smaller get mobile layout
@@ -53,13 +54,13 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
   const [loadingListView, setLoadingListView] = useState(false);
   const [requestsModalVisible, setRequestsModalVisible] = useState(false);
   const [activeBookingsModalVisible, setActiveBookingsModalVisible] = useState(false);
-  const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
+  const [coachRequiredCount, setCoachRequiredCount] = useState(0);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   useEffect(() => {
     loadData();
     checkMyRole(); // Check role on mount
-    loadUnassignedBookingsCount();
+    loadCoachRequiredCount();
     loadPendingRequestsCount();
     verifyAdminAccess(); // Verify admin access on mount
   }, []);
@@ -107,7 +108,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
   // Reload count when active bookings modal closes (coach may have been assigned)
   useEffect(() => {
     if (!activeBookingsModalVisible) {
-      loadUnassignedBookingsCount();
+      loadCoachRequiredCount();
     }
   }, [activeBookingsModalVisible]);
 
@@ -121,22 +122,20 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
   // Periodically refresh the count (every 30 seconds) to catch changes from other sources
   useEffect(() => {
     const interval = setInterval(() => {
-      loadUnassignedBookingsCount();
+      loadCoachRequiredCount();
       loadPendingRequestsCount();
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
   }, []);
 
-  const loadUnassignedBookingsCount = async () => {
-    // Only load count if user is admin
+  const loadCoachRequiredCount = async () => {
     if (userRole !== 'admin') {
-      setUnassignedBookingsCount(0);
+      setCoachRequiredCount(0);
       return;
     }
 
     try {
-      // Server-side verification: Check admin role before counting
       if (!user?.id) return;
 
       const { data: profile, error: roleError } = await supabase
@@ -146,21 +145,15 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         .single();
 
       if (roleError || !profile || profile.role !== 'admin') {
-        setUnassignedBookingsCount(0);
+        setCoachRequiredCount(0);
         return;
       }
 
-      // Count bookings that have at least one student (all bookings have user_id) but have NULL coach_id
-      const { count, error } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .is('coach_id', null);
-
-      if (error) throw error;
-      setUnassignedBookingsCount(count || 0);
+      const count = await countSessionsNeedingCoach(supabase);
+      setCoachRequiredCount(count);
     } catch (error) {
-      console.error('Error loading unassigned bookings count:', error);
-      setUnassignedBookingsCount(0);
+      console.error('Error loading coach required count:', error);
+      setCoachRequiredCount(0);
     }
   };
 
@@ -1506,7 +1499,7 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         <RefreshControl refreshing={loading} onRefresh={() => {
           loadAvailabilities();
           loadData();
-          loadUnassignedBookingsCount();
+          loadCoachRequiredCount();
           loadPendingRequestsCount();
         }} />
       }
@@ -1543,18 +1536,13 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
             {userRole === 'admin' && (
               <>
                 <TouchableOpacity
-                  style={[styles.activeBookingsButton, styles.headerButtonMobile, styles.headerButtonWrapItem, unassignedBookingsCount > 0 && styles.headerButtonMobileWithBadge]}
-                  onPress={() => setActiveBookingsModalVisible(true)}
+                  style={[styles.activeBookingsButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
+                  onPress={() => onNavigate && onNavigate('admin-active-bookings')}
                 >
                   <View style={styles.activeBookingsButtonContent}>
                     <Ionicons name="calendar-outline" size={18} color="#34C759" />
                     <Text style={[styles.activeBookingsButtonText, styles.headerButtonTextMobile]}>Active</Text>
                   </View>
-                  {unassignedBookingsCount > 0 && (
-                    <View style={[styles.badge, isMobile && styles.badgeMobile]}>
-                      <Text style={styles.badgeText}>{unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}</Text>
-                    </View>
-                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.historyButton, styles.headerButtonMobile, styles.headerButtonWrapItem]}
@@ -1604,17 +1592,12 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
               <>
                 <TouchableOpacity
                   style={styles.activeBookingsButton}
-                  onPress={() => setActiveBookingsModalVisible(true)}
+                  onPress={() => onNavigate && onNavigate('admin-active-bookings')}
                 >
                   <View style={styles.activeBookingsButtonContent}>
                     <Ionicons name="calendar-outline" size={20} color="#34C759" />
                     <Text style={styles.activeBookingsButtonText}>Active Bookings</Text>
                   </View>
-                  {unassignedBookingsCount > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}</Text>
-                    </View>
-                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.historyButton}
@@ -1652,18 +1635,18 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
       )}
 
       {/* Unassigned bookings notification banner (admin) */}
-      {userRole === 'admin' && unassignedBookingsCount > 0 && (
+      {userRole === 'admin' && coachRequiredCount > 0 && (
         <TouchableOpacity
           style={[styles.unassignedBookingsBanner, isMobile && styles.bannerMobile]}
-          onPress={() => setActiveBookingsModalVisible(true)}
+          onPress={() => onNavigate && onNavigate('admin-coach-assignments')}
           activeOpacity={0.8}
         >
-          <Ionicons name="calendar-outline" size={isMobile ? 18 : 20} color="#34C759" />
+          <Ionicons name="person-add-outline" size={isMobile ? 18 : 20} color="#DC2626" />
           <Text style={[styles.unassignedBookingsBannerText, isMobile && styles.bannerTextMobile]} numberOfLines={2}>
-            {unassignedBookingsCount} booking{unassignedBookingsCount !== 1 ? 's' : ''} need{unassignedBookingsCount === 1 ? 's' : ''} a coach
+            {coachRequiredCount} session{coachRequiredCount !== 1 ? 's' : ''} need{coachRequiredCount === 1 ? 's' : ''} a coach
           </Text>
-          <Text style={[styles.unassignedBookingsBannerAction, isMobile && styles.bannerActionMobile]}>View</Text>
-          <Ionicons name="chevron-forward" size={18} color="#34C759" />
+          <Text style={[styles.unassignedBookingsBannerAction, isMobile && styles.bannerActionMobile]}>Assign</Text>
+          <Ionicons name="chevron-forward" size={18} color="#DC2626" />
         </TouchableOpacity>
       )}
 
@@ -1989,10 +1972,10 @@ export default function ManageAvailabilityScreen({ onNavigate }) {
         visible={activeBookingsModalVisible}
         onClose={() => {
           setActiveBookingsModalVisible(false);
-          loadUnassignedBookingsCount(); // Refresh count when modal closes
+          loadCoachRequiredCount(); // Refresh count when modal closes
         }}
         onCoachAssigned={() => {
-          loadUnassignedBookingsCount(); // Refresh count immediately when coach is assigned
+          loadCoachRequiredCount(); // Refresh count immediately when coach is assigned
         }}
       />
     </ScrollView>

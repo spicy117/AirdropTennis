@@ -18,6 +18,8 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import StatCard from '../components/StatCard';
 import GroupedSessionCard, { groupBookingsBySession } from '../components/GroupedSessionCard';
 import AdminAssignLessonModal from '../components/AdminAssignLessonModal';
+import AssignCoachModal from '../components/AssignCoachModal';
+import { countSessionsNeedingCoach, sessionNeedsCoach } from '../utils/coachAssignment';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd } from '../utils/timezone';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
@@ -25,6 +27,7 @@ import { getTranslation } from '../utils/translations';
 // Nav items matching Sidebar (excluding admin-dashboard) so mobile users can reach all sections
 const ADMIN_NAV_BUTTONS = [
   { id: 'admin-active-bookings', labelKey: 'navActiveBookings', icon: 'calendar-outline' },
+  { id: 'admin-coach-assignments', labelKey: 'navCoachAssignments', icon: 'person-add-outline', badgeKey: 'coachRequired' },
   { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline' },
   { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline' },
   { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline' },
@@ -49,7 +52,9 @@ export default function AdminDashboardScreen({ onNavigate }) {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [rainCheckConfirm, setRainCheckConfirm] = useState({ visible: false, message: '', bookings: [] });
   const [rainCheckResult, setRainCheckResult] = useState({ visible: false, success: true, title: '', message: '' });
-  const [outstandingTasksCount, setOutstandingTasksCount] = useState(0);
+  const [coachRequiredCount, setCoachRequiredCount] = useState(0);
+  const [assignCoachSession, setAssignCoachSession] = useState(null);
+  const [assignCoachModalVisible, setAssignCoachModalVisible] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -202,16 +207,22 @@ export default function AdminDashboardScreen({ onNavigate }) {
 
   const loadOutstandingTasks = async () => {
     try {
-      const [unassignedRes, pendingRes] = await Promise.all([
-        supabase.from('bookings').select('*', { count: 'exact', head: true }).is('coach_id', null),
-        supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      ]);
-      const unassigned = unassignedRes.count || 0;
-      const pending = pendingRes.count || 0;
-      setOutstandingTasksCount(unassigned + pending);
+      const count = await countSessionsNeedingCoach(supabase);
+      setCoachRequiredCount(count);
     } catch (err) {
-      console.error('Error loading outstanding tasks:', err);
+      console.error('Error loading coach assignment count:', err);
+      setCoachRequiredCount(0);
     }
+  };
+
+  const handleAssignCoachFromDashboard = (session) => {
+    setAssignCoachSession(session);
+    setAssignCoachModalVisible(true);
+  };
+
+  const handleCoachAssigned = () => {
+    loadUpcomingSessions();
+    loadOutstandingTasks();
   };
 
   const runRainCheckCancel = async (bookings) => {
@@ -351,12 +362,41 @@ export default function AdminDashboardScreen({ onNavigate }) {
         </TouchableOpacity>
       </View>
 
+      {/* Action required: coach assignments */}
+      {coachRequiredCount > 0 ? (
+        <View style={styles.actionRequiredCard}>
+          <View style={styles.actionRequiredHeader}>
+            <View style={styles.actionRequiredDot} />
+            <Text style={styles.actionRequiredLabel}>ACTION REQUIRED</Text>
+          </View>
+          <Text style={styles.actionRequiredTitle}>
+            {coachRequiredCount} booking{coachRequiredCount !== 1 ? 's' : ''} need a coach
+          </Text>
+          <Text style={styles.actionRequiredSub}>
+            Customers have booked these sessions and a coach still needs to be assigned.
+          </Text>
+          <TouchableOpacity
+            style={styles.actionRequiredBtn}
+            onPress={() => onNavigate && onNavigate('admin-coach-assignments')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.actionRequiredBtnText}>Assign coaches</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      ) : !loadingSessions && groupedSessions.length > 0 ? (
+        <View style={styles.allAssignedRow}>
+          <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+          <Text style={styles.allAssignedText}>All upcoming bookings have coaches assigned</Text>
+        </View>
+      ) : null}
+
       {/* Nav buttons (replaces Total Students / Total Revenue on mobile so side tabs are accessible) */}
       <View style={[styles.navButtonsSection, isDesktop && styles.navButtonsSectionDesktop]}>
         <Text style={styles.navButtonsLabel}>Menu</Text>
         <View style={[styles.navButtonsGrid, isDesktop && styles.navButtonsGridDesktop]}>
           {ADMIN_NAV_BUTTONS.map((item) => {
-            const showBadge = item.id === 'admin-availability' && outstandingTasksCount > 0;
+            const showBadge = item.badgeKey === 'coachRequired' && coachRequiredCount > 0;
             return (
               <TouchableOpacity
                 key={item.id}
@@ -367,7 +407,7 @@ export default function AdminDashboardScreen({ onNavigate }) {
                 {showBadge && (
                   <View style={styles.navButtonBadge}>
                     <Text style={styles.navButtonBadgeText}>
-                      {outstandingTasksCount > 99 ? '99+' : outstandingTasksCount}
+                      {coachRequiredCount > 99 ? '99+' : coachRequiredCount}
                     </Text>
                   </View>
                 )}
@@ -431,6 +471,9 @@ export default function AdminDashboardScreen({ onNavigate }) {
               session={session}
               isAdmin={true}
               onRainCheckBookings={handleRainCheckBookings}
+              onAssignCoach={
+                sessionNeedsCoach(session) ? () => handleAssignCoachFromDashboard(session) : undefined
+              }
             />
           ))
         )}
@@ -497,6 +540,17 @@ export default function AdminDashboardScreen({ onNavigate }) {
         </View>
       </Modal>
 
+    <AssignCoachModal
+      visible={assignCoachModalVisible}
+      session={assignCoachSession}
+      onClose={() => {
+        setAssignCoachModalVisible(false);
+        setAssignCoachSession(null);
+        handleCoachAssigned();
+      }}
+      onAssigned={handleCoachAssigned}
+    />
+
     <AdminAssignLessonModal
       visible={assignLessonVisible}
       onClose={() => setAssignLessonVisible(false)}
@@ -528,6 +582,70 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 12,
     ...(Platform.OS === 'web' && { flexWrap: 'wrap' }),
+  },
+  actionRequiredCard: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  actionRequiredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  actionRequiredDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+  },
+  actionRequiredLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+    letterSpacing: 0.4,
+  },
+  actionRequiredTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#7F1D1D',
+  },
+  actionRequiredSub: {
+    fontSize: 14,
+    color: '#991B1B',
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  actionRequiredBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 14,
+    backgroundColor: '#DC2626',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  actionRequiredBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  allAssignedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+    paddingVertical: 4,
+  },
+  allAssignedText: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   title: {
     fontSize: 32,

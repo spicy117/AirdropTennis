@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,35 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { utcToSydneyDate, utcToSydneyTime } from '../utils/timezone';
+import { bookingNeedsCoach, buildSessionKey } from '../utils/coachAssignment';
+import { groupBookingsBySession } from '../components/GroupedSessionCard';
+import AssignCoachModal from '../components/AssignCoachModal';
 
-export default function AdminActiveBookingsScreen({ onNavigate }) {
+const DESKTOP_BREAKPOINT = 768;
+
+export default function AdminActiveBookingsScreen({ onNavigate, initialFilter }) {
   const { user, userRole } = useAuth();
+  const { width } = useWindowDimensions?.() ?? { width: 400 };
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
   const [bookings, setBookings] = useState([]);
   const [groupedByDate, setGroupedByDate] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState(initialFilter === 'needsCoach' ? 'needsCoach' : 'all');
+  const [assignSession, setAssignSession] = useState(null);
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (initialFilter === 'needsCoach') {
+      setFilter('needsCoach');
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     if (userRole === 'admin') {
@@ -48,7 +65,7 @@ export default function AdminActiveBookingsScreen({ onNavigate }) {
       const bookingsWithDetails = await Promise.all(
         (bookingsData || []).map(async (booking) => {
           let studentName = 'Unknown Student';
-          let coachName = '—';
+          let coachName = null;
           if (booking.user_id) {
             const { data: profile } = await supabase
               .from('profiles')
@@ -70,7 +87,7 @@ export default function AdminActiveBookingsScreen({ onNavigate }) {
             if (coach) {
               const fn = coach.first_name || '';
               const ln = coach.last_name || '';
-              coachName = [fn, ln].filter(Boolean).join(' ') || '—';
+              coachName = [fn, ln].filter(Boolean).join(' ') || null;
             }
           }
           return {
@@ -101,77 +118,181 @@ export default function AdminActiveBookingsScreen({ onNavigate }) {
     }
   };
 
+  const sessionMap = useMemo(() => {
+    const sessions = groupBookingsBySession(bookings);
+    const map = new Map();
+    sessions.forEach((s) => map.set(s.key, s));
+    return map;
+  }, [bookings]);
+
+  const filteredGroupedByDate = useMemo(() => {
+    if (filter !== 'needsCoach') return groupedByDate;
+    const filtered = {};
+    Object.entries(groupedByDate).forEach(([dateKey, items]) => {
+      const needsCoach = items.filter((b) => bookingNeedsCoach(b));
+      if (needsCoach.length) filtered[dateKey] = needsCoach;
+    });
+    return filtered;
+  }, [groupedByDate, filter]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadBookings();
   };
 
-  const dateKeys = Object.keys(groupedByDate).sort();
+  const openAssignModal = (booking) => {
+    const sessionKey = buildSessionKey(booking);
+    const session = sessionMap.get(sessionKey);
+    if (session) {
+      setAssignSession({
+        ...session,
+        sessionKey,
+        studentNames: session.students?.map((s) => s.name) || [booking.studentName],
+      });
+    } else {
+      setAssignSession({
+        sessionKey,
+        key: sessionKey,
+        locationId: booking.location_id,
+        locationName: booking.locationName,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        serviceName: booking.service_name,
+        bookings: [booking],
+        students: [{ id: booking.user_id, name: booking.studentName, bookingId: booking.id }],
+        studentNames: [booking.studentName],
+        coachId: booking.coach_id,
+      });
+    }
+    setAssignModalVisible(true);
+  };
+
+  const dateKeys = Object.keys(filteredGroupedByDate).sort();
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.title}>Active Bookings</Text>
-          <Text style={styles.subtitle}>All upcoming lessons</Text>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Active Bookings</Text>
+            <Text style={styles.subtitle}>All upcoming lessons</Text>
+          </View>
+          {onNavigate && (
+            <TouchableOpacity
+              style={styles.dashboardBtn}
+              onPress={() => onNavigate('admin-dashboard')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="grid-outline" size={18} color="#0D9488" />
+              <Text style={styles.dashboardBtnText}>Dashboard</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {onNavigate && (
-          <TouchableOpacity
-            style={styles.dashboardBtn}
-            onPress={() => onNavigate('admin-dashboard')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="grid-outline" size={18} color="#0D9488" />
-            <Text style={styles.dashboardBtnText}>Dashboard</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#0D9488" />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.filterChip, filter === 'all' && styles.filterChipActive]}
+            onPress={() => setFilter('all')}
+          >
+            <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, filter === 'needsCoach' && styles.filterChipActive]}
+            onPress={() => setFilter('needsCoach')}
+          >
+            <Text style={[styles.filterChipText, filter === 'needsCoach' && styles.filterChipTextActive]}>
+              Needs coach
+            </Text>
+          </TouchableOpacity>
         </View>
-      ) : dateKeys.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Ionicons name="calendar-outline" size={56} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>No upcoming bookings</Text>
-          <Text style={styles.emptySub}>Bookings will appear here when students book or you assign lessons.</Text>
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {dateKeys.map((dateKey) => (
-            <View key={dateKey} style={styles.dateSection}>
-              <View style={styles.dateHeader}>
-                <Ionicons name="calendar" size={18} color="#0D9488" />
-                <Text style={styles.dateHeaderText}>{dateKey}</Text>
-                <View style={styles.dateBadge}>
-                  <Text style={styles.dateBadgeText}>{groupedByDate[dateKey].length}</Text>
+
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#0D9488" />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        ) : dateKeys.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="calendar-outline" size={56} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>
+              {filter === 'needsCoach' ? 'No bookings need a coach' : 'No upcoming bookings'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {filter === 'needsCoach'
+                ? 'All upcoming bookings have coaches assigned.'
+                : 'Bookings will appear here when students book or you assign lessons.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {dateKeys.map((dateKey) => (
+              <View key={dateKey} style={styles.dateSection}>
+                <View style={styles.dateHeader}>
+                  <Ionicons name="calendar" size={18} color="#0D9488" />
+                  <Text style={styles.dateHeaderText}>{dateKey}</Text>
+                  <View style={styles.dateBadge}>
+                    <Text style={styles.dateBadgeText}>{filteredGroupedByDate[dateKey].length}</Text>
+                  </View>
                 </View>
+                {filteredGroupedByDate[dateKey].map((b) => {
+                  const needsCoach = bookingNeedsCoach(b);
+                  return (
+                    <View
+                      key={b.id}
+                      style={[styles.row, needsCoach && styles.rowNeedsCoach]}
+                    >
+                      <View style={styles.timeBlock}>
+                        <Text style={styles.timeText}>{utcToSydneyTime(b.start_time)}</Text>
+                      </View>
+                      <View style={styles.detailsBlock}>
+                        {needsCoach && (
+                          <View style={styles.requiredPill}>
+                            <Text style={styles.requiredPillText}>COACH REQUIRED</Text>
+                          </View>
+                        )}
+                        <Text style={styles.studentText} numberOfLines={1}>{b.studentName}</Text>
+                        <Text style={styles.metaText}>
+                          {b.locationName} · {b.service_name || 'Session'}
+                        </Text>
+                        {needsCoach ? (
+                          <View style={styles.coachRequiredLine}>
+                            <Text style={styles.coachNotAssigned}>Coach: Not assigned</Text>
+                            <TouchableOpacity
+                              style={styles.assignBtnSmall}
+                              onPress={() => openAssignModal(b)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.assignBtnSmallText}>Assign coach</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <Text style={styles.coachText}>Coach: {b.coachName}</Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-              {groupedByDate[dateKey].map((b) => (
-                <View key={b.id} style={styles.row}>
-                  <View style={styles.timeBlock}>
-                    <Text style={styles.timeText}>{utcToSydneyTime(b.start_time)}</Text>
-                  </View>
-                  <View style={styles.detailsBlock}>
-                    <Text style={styles.studentText} numberOfLines={1}>{b.studentName}</Text>
-                    <Text style={styles.metaText}>
-                      {b.locationName} · {b.service_name || 'Session'}
-                    </Text>
-                    <Text style={styles.coachText}>Coach: {b.coachName}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      <AssignCoachModal
+        visible={assignModalVisible}
+        session={assignSession}
+        onClose={() => {
+          setAssignModalVisible(false);
+          setAssignSession(null);
+          loadBookings();
+        }}
+        onAssigned={loadBookings}
+      />
+    </>
   );
 }
 
@@ -184,8 +305,13 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  contentDesktop: {
+    maxWidth: 900,
+    alignSelf: 'center',
+    width: '100%',
+  },
   header: {
-    marginBottom: 24,
+    marginBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -211,6 +337,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#0D9488',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  filterChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterChipActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  filterChipTextActive: {
+    color: '#B91C1C',
+    fontWeight: '600',
   },
   title: {
     fontSize: 24,
@@ -290,15 +442,21 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
+  rowNeedsCoach: {
+    backgroundColor: '#FEF2F2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+  },
   timeBlock: {
     width: 72,
     marginRight: 16,
+    paddingTop: 2,
   },
   timeText: {
     fontSize: 15,
@@ -307,6 +465,21 @@ const styles = StyleSheet.create({
   },
   detailsBlock: {
     flex: 1,
+    minWidth: 0,
+  },
+  requiredPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  requiredPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B91C1C',
+    letterSpacing: 0.3,
   },
   studentText: {
     fontSize: 16,
@@ -321,6 +494,27 @@ const styles = StyleSheet.create({
   coachText: {
     fontSize: 12,
     color: '#9CA3AF',
-    marginTop: 2,
+    marginTop: 4,
+  },
+  coachRequiredLine: {
+    marginTop: 6,
+    gap: 6,
+  },
+  coachNotAssigned: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  assignBtnSmall: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0D9488',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  assignBtnSmallText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
 import { supabase } from '../lib/supabase';
+import { countSessionsNeedingCoach } from '../utils/coachAssignment';
 import { memberColors, memberRadius } from '../theme/memberTheme';
 
 // SOURCE OF TRUTH: Navigation uses ONLY the role from the profiles table. Do NOT use auth.user or user_metadata for nav.
@@ -24,8 +25,9 @@ const NON_ADMIN_NAV_ITEMS = [
 const ADMIN_NAV_ITEMS = [
   { id: 'admin-dashboard', labelKey: 'navAdminDashboard', icon: 'grid-outline', activeIcon: 'grid' },
   { id: 'admin-active-bookings', labelKey: 'navActiveBookings', icon: 'calendar-outline', activeIcon: 'calendar' },
+  { id: 'admin-coach-assignments', labelKey: 'navCoachAssignments', icon: 'person-add-outline', activeIcon: 'person-add', badgeKey: 'coachRequired' },
   { id: 'admin-locations-courts', labelKey: 'navLocations', icon: 'location-outline', activeIcon: 'location' },
-  { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline', activeIcon: 'time', badgeKey: 'unassigned' },
+  { id: 'admin-availability', labelKey: 'navAvailability', icon: 'time-outline', activeIcon: 'time' },
   { id: 'admin-students', labelKey: 'navStudents', icon: 'people-outline', activeIcon: 'people' },
   { id: 'admin-coaches', labelKey: 'navCoaches', icon: 'shield-outline', activeIcon: 'shield' },
   { id: 'admin-history', labelKey: 'navBookingHistory', icon: 'archive-outline', activeIcon: 'archive' },
@@ -37,7 +39,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
   const { user, userRole: authUserRole, roleLoading } = useAuth();
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
-  const [unassignedBookingsCount, setUnassignedBookingsCount] = useState(0);
+  const [coachRequiredCount, setCoachRequiredCount] = useState(0);
 
   // Same role as HomeScreen (AuthContext loads from profiles first)
   const userRole = roleLoading || authUserRole == null ? undefined : authUserRole;
@@ -55,15 +57,16 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
 
   if (userRole === undefined) return null;
 
-  // Only admins: unassigned bookings count
+  // Only admins: sessions needing coach assignment (action required)
   useEffect(() => {
     if (userRole !== 'admin') return;
     const load = async () => {
-      const { count, error } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .is('coach_id', null);
-      if (!error) setUnassignedBookingsCount(count || 0);
+      try {
+        const count = await countSessionsNeedingCoach(supabase);
+        setCoachRequiredCount(count);
+      } catch {
+        setCoachRequiredCount(0);
+      }
     };
     load();
     const intervalId = setInterval(load, 30000);
@@ -71,15 +74,16 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
   }, [userRole]);
 
   useEffect(() => {
-    if (userRole !== 'admin' || activeScreen === 'admin-availability') return;
-    const t = setTimeout(async () => {
-      const { count, error } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .is('coach_id', null);
-      if (!error) setUnassignedBookingsCount(count || 0);
+    if (userRole !== 'admin') return;
+    const timer = setTimeout(async () => {
+      try {
+        const count = await countSessionsNeedingCoach(supabase);
+        setCoachRequiredCount(count);
+      } catch {
+        setCoachRequiredCount(0);
+      }
     }, 500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [activeScreen, userRole]);
 
   const displayName =
@@ -134,7 +138,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
             </View>
             {ADMIN_NAV_ITEMS.map((item) => {
               const isActive = activeScreen === item.id;
-              const showBadge = item.badgeKey === 'unassigned' && unassignedBookingsCount > 0;
+              const showBadge = item.badgeKey === 'coachRequired' && coachRequiredCount > 0;
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -154,7 +158,7 @@ export default function Sidebar({ activeScreen, onNavigate, onSignOut, isMobile 
                   {showBadge && (
                     <View style={styles.sidebarBadge}>
                       <Text style={styles.sidebarBadgeText}>
-                        {unassignedBookingsCount > 99 ? '99+' : unassignedBookingsCount}
+                        {coachRequiredCount > 99 ? '99+' : coachRequiredCount}
                       </Text>
                     </View>
                   )}

@@ -54,6 +54,7 @@ export default {
   navCoachDashboard: '教练工作台',
   navAdminDashboard: '管理后台',
   navActiveBookings: '当前预约',
+  navCoachAssignments: '教练分配',
   navLocations: '场地',
   navAvailability: '可预订时间',
   navStudents: '学生',
