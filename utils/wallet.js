@@ -23,6 +23,9 @@ export function mapWalletRpcError(error) {
   const hint = String(error?.hint || '').toLowerCase();
   const combined = `${msg} ${hint}`;
 
+  if (msg.includes('wallet_column_unmapped')) {
+    return 'Credit could not be updated. No changes were made.';
+  }
   if (msg.includes('wallet_transactions_schema_unsupported')) {
     return 'Credit could not be updated. No changes were made.';
   }

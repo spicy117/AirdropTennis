@@ -8,11 +8,11 @@ Supabase project **`rozxeqqwxpnfqbyvtvch`**:
 
 ### 1. SQL Editor
 
-Run **one** file (use **019** if you already ran 018):
+Run **020** (latest fix for legacy audit table columns):
 
-`supabase/migrations/019_wallet_transactions_amount_column.sql`
+`supabase/migrations/020_wallet_transactions_dynamic_insert.sql`
 
-Or for a fresh setup: `supabase/migrations/018_admin_wallet_complete.sql`
+If you have not run any wallet migration yet, use `018_admin_wallet_complete.sql` first, then **020**.
 
 This creates/repairs `wallet_transactions`, `is_admin()`, and `admin_adjust_wallet`, then reloads the API schema cache.
 
