@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       return jsonResponse(
         {
           error: mapped.code === "rpc_not_deployed"
-            ? "Admin credit adjustment is not set up. Run migration 018 in Supabase SQL Editor."
+            ? "Admin credit adjustment is not set up. Run migration 021 in Supabase SQL Editor."
             : error.message || mapped.code,
           code: mapped.code,
         },
