@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase, clearPersistedAuthSession, isAuthSessionMissingError } from '../lib/supabase';
 import { getAuthRedirectUrl } from '../lib/appUrl';
 import {
   markPostAuthScrollReset,
@@ -119,6 +119,7 @@ export const AuthProvider = ({ children }) => {
   const roleLoading = user !== null && userRole === null;
   // Track if we just processed an email confirmation to prevent false SIGNED_OUT events
   const recentEmailConfirmationRef = useRef(false);
+  const intentionalSignOutRef = useRef(false);
   const resolveProfileAndRoleRef = useRef(null);
   const initialSessionHandledRef = useRef(false);
 
@@ -285,6 +286,16 @@ export const AuthProvider = ({ children }) => {
           setUserRole(null);
         }
       } else if (event === 'SIGNED_OUT') {
+        if (intentionalSignOutRef.current) {
+          intentionalSignOutRef.current = false;
+          recentEmailConfirmationRef.current = false;
+          setSession(null);
+          setUser(null);
+          setUserRole(null);
+          setLoading(false);
+          return;
+        }
+
         const isRecentEmailConfirmation = recentEmailConfirmationRef.current;
         const hash = Platform.OS === 'web' && typeof window !== 'undefined' 
           ? window.location.hash 
@@ -645,11 +656,35 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
+    intentionalSignOutRef.current = true;
+    recentEmailConfirmationRef.current = false;
+    updateRecoveryMode(false);
+
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession) {
+        const { error } = await supabase.auth.signOut();
+        if (error && !isAuthSessionMissingError(error)) {
+          console.error('Error signing out:', error);
+        }
+      }
     } catch (error) {
-      console.error('Error signing out:', error);
+      if (!isAuthSessionMissingError(error)) {
+        console.error('Error signing out:', error);
+      }
+    } finally {
+      try {
+        await clearPersistedAuthSession();
+      } catch {
+        // Storage may already be cleared
+      }
+      setSession(null);
+      setUser(null);
+      setUserRole(null);
+      setLoading(false);
+      setTimeout(() => {
+        intentionalSignOutRef.current = false;
+      }, 3000);
     }
   };
 
