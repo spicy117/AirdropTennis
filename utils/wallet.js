@@ -18,8 +18,19 @@ export function parseWalletInput(value) {
 }
 
 export function mapWalletRpcError(error) {
-  const code = error?.code || error?.message || '';
+  const code = String(error?.code || '');
   const msg = String(error?.message || error || '').toLowerCase();
+  const hint = String(error?.hint || '').toLowerCase();
+  const combined = `${msg} ${hint}`;
+
+  if (
+    code === 'PGRST202' ||
+    combined.includes('could not find the function') ||
+    (code === 'PGRST205' && combined.includes('wallet_transactions'))
+  ) {
+    // Logged in adminAdjustWallet; keep UI generic for missing server setup.
+    return 'Credit could not be updated. No changes were made.';
+  }
 
   if (msg.includes('invalid_amount') || code === 'invalid_amount') {
     return 'Enter an amount greater than $0.';

@@ -1,5 +1,19 @@
 -- Admin wallet ledger + secure manual credit adjustments. Safe to re-run.
 
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+
 CREATE TABLE IF NOT EXISTS public.wallet_transactions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -40,19 +54,17 @@ CREATE POLICY "wallet_transactions_admin_select"
     )
   );
 
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+-- Allow audit inserts from admin_adjust_wallet when RLS applies to SECURITY DEFINER callers.
+DROP POLICY IF EXISTS "wallet_transactions_admin_insert" ON public.wallet_transactions;
+CREATE POLICY "wallet_transactions_admin_insert"
+  ON public.wallet_transactions
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    public.is_admin()
+    AND created_by = auth.uid()
+    AND source = 'manual_admin_adjustment'
   );
-$$;
-
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.admin_adjust_wallet(
   p_user_id uuid,
@@ -135,6 +147,10 @@ BEGIN
   UPDATE public.profiles
   SET wallet_balance = v_new
   WHERE id = p_user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user_not_found';
+  END IF;
 
   INSERT INTO public.wallet_transactions (
     user_id,
