@@ -54,7 +54,7 @@ export default function AvailableSessionsScreen({ onBack, onBookSession }) {
   const isMobile = width <= 768;
 
   const [activeServiceKey, setActiveServiceKey] = useState('all');
-  const [activePeriod, setActivePeriod] = useState('thisWeek');
+  const [activePeriod, setActivePeriod] = useState('nextWeek');
   const [activeLocationId, setActiveLocationId] = useState(null);
   const [locations, setLocations] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -76,7 +76,7 @@ export default function AvailableSessionsScreen({ onBack, onBookSession }) {
     return found?.dbName || null;
   }, [activeServiceKey]);
 
-  const periodLabel = t(PERIOD_OPTIONS.find((p) => p.key === activePeriod)?.labelKey || 'filterThisWeek');
+  const periodLabel = t(PERIOD_OPTIONS.find((p) => p.key === activePeriod)?.labelKey || 'filterNextWeek');
 
   const locationLabel = useMemo(() => {
     if (!activeLocationId) return t('filterAllLocations');
@@ -174,8 +174,10 @@ export default function AvailableSessionsScreen({ onBack, onBookSession }) {
             onServiceChange={setActiveServiceKey}
             periodLabel={periodLabel}
             onPeriodPress={() => setPeriodModalVisible(true)}
+            periodMenuOpen={periodModalVisible}
             locationLabel={locationLabel}
             onLocationPress={() => setLocationModalVisible(true)}
+            locationMenuOpen={locationModalVisible}
             showLocationFilter={showLocationFilter}
           />
         </View>
@@ -195,7 +197,7 @@ export default function AvailableSessionsScreen({ onBack, onBookSession }) {
             actionLabel={t('clearFilters')}
             onAction={() => {
               setActiveServiceKey('all');
-              setActivePeriod('thisWeek');
+              setActivePeriod('nextWeek');
               setActiveLocationId(null);
             }}
           />
@@ -261,7 +263,7 @@ function PickerModal({ visible, title, options, activeKey, onSelect, onClose }) 
                 {opt.label}
               </Text>
               {activeKey === opt.key ? (
-                <Ionicons name="checkmark" size={18} color={memberColors.court} />
+                <Ionicons name="checkmark" size={18} color={memberColors.white} />
               ) : null}
             </TouchableOpacity>
           ))}
@@ -313,7 +315,7 @@ const pickerStyles = StyleSheet.create({
     borderBottomColor: memberColors.border,
   },
   optionActive: {
-    backgroundColor: memberColors.limeSoft,
+    backgroundColor: memberColors.court,
     marginHorizontal: -12,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -326,7 +328,7 @@ const pickerStyles = StyleSheet.create({
   },
   optionTextActive: {
     fontWeight: '600',
-    color: memberColors.ink,
+    color: memberColors.white,
   },
 });
 

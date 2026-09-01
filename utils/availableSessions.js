@@ -5,6 +5,8 @@ import {
   sydneyDateToUTCEnd,
   utcToSydneyDate,
   utcToSydneyTime,
+  addDaysToDateString,
+  getDayOfWeekFromDateString,
 } from './timezone';
 import { calculateBookingCost } from './pricing';
 import { SERVICE_NAME_TO_ID, getServiceDurationHours } from './serviceTranslations';
@@ -38,21 +40,37 @@ function getDurationHours(serviceName) {
   return id ? getServiceDurationHours(id) : 1;
 }
 
-function addDaysToDateStr(dateStr, days) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d + days);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function getMondayOfWeekContaining(dateStr) {
+  const dayOfWeek = getDayOfWeekFromDateString(dateStr);
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  return addDaysToDateString(dateStr, -daysFromMonday);
+}
+
+/** Calendar week (Mon–Sun) containing the given Sydney date. */
+function getCalendarWeekRange(dateStr) {
+  const monday = getMondayOfWeekContaining(dateStr);
+  const sunday = addDaysToDateString(monday, 6);
+  return { startDate: monday, endDate: sunday };
+}
+
+/** Next calendar week (Mon–Sun) after the week containing the given Sydney date. */
+function getNextCalendarWeekRange(todayStr) {
+  const thisWeek = getCalendarWeekRange(todayStr);
+  const nextMonday = addDaysToDateString(thisWeek.endDate, 1);
+  const nextSunday = addDaysToDateString(nextMonday, 6);
+  return { startDate: nextMonday, endDate: nextSunday };
 }
 
 export function getDateRangeForPeriod(period, todayStr = getSydneyToday()) {
   switch (period) {
     case 'today':
       return { startDate: todayStr, endDate: todayStr };
-    case 'nextWeek':
-      return { startDate: addDaysToDateStr(todayStr, 7), endDate: addDaysToDateStr(todayStr, 13) };
     case 'thisWeek':
+      return getCalendarWeekRange(todayStr);
+    case 'nextWeek':
+      return getNextCalendarWeekRange(todayStr);
     default:
-      return { startDate: todayStr, endDate: addDaysToDateStr(todayStr, 6) };
+      return getNextCalendarWeekRange(todayStr);
   }
 }
 

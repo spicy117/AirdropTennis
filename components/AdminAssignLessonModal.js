@@ -9,6 +9,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Pressable,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -241,11 +242,55 @@ function StudentSearchCombobox({
   placeholder,
   selectedLabel,
   changeLabel,
+  noResultsLabel,
 }) {
   const [focused, setFocused] = useState(false);
-  const showDropdown =
-    !selectedStudentId && focused && studentSearch.trim().length > 0 && filteredStudents.length > 0;
+  const blurTimeoutRef = useRef(null);
+  const hasQuery = studentSearch.trim().length > 0;
+  const showDropdown = !selectedStudentId && focused && hasQuery;
   const dropdownItems = filteredStudents.slice(0, 20);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showDropdown) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setFocused(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showDropdown]);
+
+  useEffect(() => () => {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+  }, []);
+
+  const handleBlur = () => {
+    blurTimeoutRef.current = setTimeout(() => setFocused(false), 180);
+  };
+
+  const handleFocus = () => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    setFocused(true);
+  };
+
+  const handleSelect = (item) => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    onSelect(item);
+    setFocused(false);
+  };
+
+  const preventBlurOnPress = (event) => {
+    if (Platform.OS === 'web' && event?.preventDefault) {
+      event.preventDefault();
+    }
+  };
 
   if (selectedStudent) {
     return (
@@ -274,35 +319,53 @@ function StudentSearchCombobox({
           onSearchChange(v);
           setFocused(true);
         }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         placeholderTextColor="#94A3B8"
       />
+
       {showDropdown && (
-        <View style={styles.dropdown}>
-          <ScrollView style={styles.dropdownScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-            {dropdownItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.dropdownItem}
-                onPress={() => {
-                  onSelect(item);
-                  setFocused(false);
-                }}
-              >
-                <Text style={styles.dropdownItemName} numberOfLines={1}>
-                  {item.label}
-                </Text>
-                {item.email ? (
-                  <Text style={styles.dropdownItemEmail} numberOfLines={1}>
-                    {item.email}
+        <View
+          style={styles.dropdown}
+          {...(Platform.OS === 'web' ? { onMouseDown: preventBlurOnPress } : {})}
+        >
+          {dropdownItems.length === 0 ? (
+            <View style={styles.dropdownEmpty}>
+              <Text style={styles.dropdownEmptyText}>{noResultsLabel}</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.dropdownScroll}
+              contentContainerStyle={styles.dropdownScrollContent}
+              keyboardShouldPersistTaps="always"
+              nestedScrollEnabled
+            >
+              {dropdownItems.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed, hovered }) => [
+                    styles.dropdownItem,
+                    hovered && Platform.OS === 'web' && styles.dropdownItemHovered,
+                    pressed && styles.dropdownItemPressed,
+                  ]}
+                  onPress={() => handleSelect(item)}
+                  {...(Platform.OS === 'web' ? { onMouseDown: preventBlurOnPress } : {})}
+                >
+                  <Text style={styles.dropdownItemName} numberOfLines={1}>
+                    {item.label}
                   </Text>
-                ) : null}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                  {item.email ? (
+                    <Text style={styles.dropdownItemEmail} numberOfLines={1}>
+                      {item.email}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
         </View>
       )}
+
       <FieldError message={fieldError} />
     </View>
   );
@@ -926,6 +989,7 @@ export default function AdminAssignLessonModal({ visible, onClose, onAssigned })
                     placeholder={t('assignLessonSearchStudent') || 'Search by name or email...'}
                     selectedLabel={t('assignLessonSelectedStudent') || 'Selected student'}
                     changeLabel={t('assignLessonChange') || 'Change'}
+                    noResultsLabel={t('assignLessonNoStudentsFound') || 'No students found.'}
                   />
                 </Section>
 
@@ -1471,29 +1535,45 @@ const styles = StyleSheet.create({
   },
   optionText: { fontSize: 15, color: '#0F172A', fontWeight: '500' },
   optionSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  comboboxWrap: { position: 'relative', zIndex: 20 },
+  comboboxWrap: {},
   dropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
+    marginTop: 6,
     backgroundColor: '#FFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderRadius: 10,
-    maxHeight: 280,
-    zIndex: 30,
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
-    }),
+    overflow: 'hidden',
+    maxHeight: 260,
   },
-  dropdownScroll: { maxHeight: 280 },
+  dropdownScroll: {
+    maxHeight: 260,
+  },
+  dropdownScrollContent: {
+    flexGrow: 0,
+  },
   dropdownItem: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
+    minHeight: 52,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFF',
+  },
+  dropdownItemHovered: {
+    backgroundColor: '#F8FAFC',
+  },
+  dropdownItemPressed: {
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+  },
+  dropdownEmpty: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFF',
+  },
+  dropdownEmptyText: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
   },
   dropdownItemName: { fontSize: 15, fontWeight: '500', color: '#0F172A' },
   dropdownItemEmail: { fontSize: 12, color: '#64748B', marginTop: 2 },

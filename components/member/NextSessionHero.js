@@ -18,9 +18,10 @@ export default function NextSessionHero({
   formatTime,
   language = 'en',
   labels = {},
+  compact = false,
 }) {
   const { width } = useWindowDimensions();
-  const isWide = width >= 640;
+  const isWide = width >= 640 && !compact;
 
   const {
     nextOnCourt,
@@ -38,10 +39,10 @@ export default function NextSessionHero({
 
   if (!booking) {
     return (
-      <View style={[styles.hero, styles.heroEmpty]}>
+      <View style={[styles.hero, styles.heroEmpty, compact && styles.heroEmptyCompact]}>
         <CourtWatermark variant="hero" />
-        <View style={styles.heroBody}>
-          <Text style={styles.eyebrow}>{nextOnCourt}</Text>
+        <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+          <Text style={[styles.eyebrow, compact && styles.eyebrowCompact]}>{nextOnCourt}</Text>
           <Text style={styles.emptyTitle}>{noBooking}</Text>
           <Text style={styles.emptySub}>{noBookingSub}</Text>
           <MemberButton label={bookNow} onPress={onBook} variant="lime" icon="arrow-forward" style={styles.cta} />
@@ -63,6 +64,7 @@ export default function NextSessionHero({
     <Pressable
       style={({ pressed, hovered }) => [
         styles.hero,
+        compact && styles.heroCompact,
         hovered && Platform.OS === 'web' && styles.heroHovered,
         pressed && styles.heroPressed,
       ]}
@@ -72,30 +74,30 @@ export default function NextSessionHero({
     >
       <CourtWatermark variant="hero" />
 
-      <View style={[styles.heroBody, isWide && styles.heroBodyWide]}>
-        <Text style={styles.eyebrow}>{nextOnCourt}</Text>
+      <View style={[styles.heroBody, isWide && styles.heroBodyWide, compact && styles.heroBodyCompact]}>
+        <Text style={[styles.eyebrow, compact && styles.eyebrowCompact]}>{nextOnCourt}</Text>
 
-        <View style={styles.heroRow}>
-          <View style={styles.dateBlock}>
+        <View style={[styles.heroRow, compact && styles.heroRowCompact]}>
+          <View style={[styles.dateBlock, compact && styles.dateBlockCompact]}>
             {dateParts.layout === 'zh' ? (
               <>
-                <Text style={styles.dayNumZh}>{dateParts.primary}</Text>
+                <Text style={[styles.dayNumZh, compact && styles.dayNumZhCompact]}>{dateParts.primary}</Text>
                 <Text style={styles.dayName}>{dateParts.secondary}</Text>
               </>
             ) : (
               <>
                 <Text style={styles.dayName}>{dateParts.tertiary}</Text>
-                <Text style={styles.dayNum}>{dateParts.primary}</Text>
+                <Text style={[styles.dayNum, compact && styles.dayNumCompact]}>{dateParts.primary}</Text>
                 <Text style={styles.month}>{dateParts.secondary}</Text>
               </>
             )}
           </View>
 
-          <View style={styles.sessionInfo}>
-            <Text style={styles.serviceName} numberOfLines={2}>
+          <View style={[styles.sessionInfo, compact && styles.sessionInfoCompact]}>
+            <Text style={[styles.serviceName, compact && styles.serviceNameCompact]} numberOfLines={2}>
               {serviceLabel}
             </Text>
-            <Text style={styles.time}>{formatTime(booking.start_time)}</Text>
+            <Text style={[styles.time, compact && styles.timeCompact]}>{formatTime(booking.start_time)}</Text>
             <View style={styles.locationRow}>
               <Ionicons name="location-outline" size={14} color={memberColors.inkMuted} />
               <Text style={styles.location} numberOfLines={1}>
@@ -105,7 +107,7 @@ export default function NextSessionHero({
           </View>
         </View>
 
-        <View style={styles.viewRow}>
+        <View style={[styles.viewRow, compact && styles.viewRowCompact]}>
           <Text style={styles.viewText}>{viewBooking}</Text>
           <Ionicons name="arrow-forward" size={16} color={memberColors.ink} />
         </View>
@@ -126,6 +128,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     ...memberWebTransition('box-shadow, transform, border-color'),
   },
+  heroCompact: {
+    minHeight: 168,
+  },
   heroHovered: {
     ...(Platform.OS === 'web' && {
       boxShadow: '0 20px 48px rgba(20, 20, 20, 0.11)',
@@ -140,10 +145,17 @@ const styles = StyleSheet.create({
     padding: 22,
     minHeight: 220,
   },
+  heroEmptyCompact: {
+    padding: 16,
+    minHeight: 180,
+  },
   heroBody: {
     padding: 22,
     zIndex: 1,
     maxWidth: '100%',
+  },
+  heroBodyCompact: {
+    padding: 16,
   },
   heroBodyWide: {
     maxWidth: '62%',
@@ -154,6 +166,38 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     fontSize: 11,
+  },
+  eyebrowCompact: {
+    marginBottom: 8,
+  },
+  heroRowCompact: {
+    gap: 14,
+  },
+  dateBlockCompact: {
+    minWidth: 56,
+    paddingTop: 2,
+  },
+  dayNumCompact: {
+    fontSize: 38,
+    lineHeight: 42,
+  },
+  dayNumZhCompact: {
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  sessionInfoCompact: {
+    paddingTop: 2,
+  },
+  serviceNameCompact: {
+    marginBottom: 4,
+  },
+  timeCompact: {
+    fontSize: 20,
+    marginBottom: 6,
+  },
+  viewRowCompact: {
+    marginTop: 12,
+    paddingTop: 10,
   },
   heroRow: {
     flexDirection: 'row',

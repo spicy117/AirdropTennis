@@ -1,27 +1,39 @@
 import React from 'react';
-import { Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { Text, StyleSheet, Pressable, Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
 
-export default function AvailableSessionsButton({ label, onPress, variant = 'primary' }) {
-  const isPrimary = variant === 'primary';
+export default function AvailableSessionsButton({ label, onPress, variant = 'secondary' }) {
+  const isBooking = variant === 'booking' || variant === 'primary';
+  const isSecondary = variant === 'secondary';
 
   return (
     <Pressable
       style={({ pressed, hovered }) => [
         styles.btn,
-        isPrimary ? styles.btnPrimary : styles.btnSecondary,
-        hovered && Platform.OS === 'web' && (isPrimary ? styles.btnPrimaryHover : styles.btnSecondaryHover),
+        isBooking && styles.btnBooking,
+        isSecondary && styles.btnSecondary,
+        hovered && Platform.OS === 'web' && isBooking && styles.btnBookingHover,
+        hovered && Platform.OS === 'web' && isSecondary && styles.btnSecondaryHover,
         pressed && styles.btnPressed,
       ]}
       onPress={onPress}
       accessibilityRole="button"
     >
-      <Text style={[styles.label, isPrimary ? styles.labelPrimary : styles.labelSecondary]}>{label}</Text>
+      {isBooking && <View style={styles.limeAccent} />}
+      <Text
+        style={[
+          styles.label,
+          isBooking && styles.labelBooking,
+          isSecondary && styles.labelSecondary,
+        ]}
+      >
+        {label}
+      </Text>
       <Ionicons
         name="arrow-forward"
         size={16}
-        color={isPrimary ? memberColors.ink : memberColors.court}
+        color={isBooking ? memberColors.lime : memberColors.court}
       />
     </Pressable>
   );
@@ -33,18 +45,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 13,
-    paddingHorizontal: 18,
+    minHeight: 44,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
     borderRadius: memberRadius.md,
     alignSelf: 'stretch',
+    position: 'relative',
+    overflow: 'hidden',
     ...memberWebTransition('background-color, transform, box-shadow'),
   },
-  btnPrimary: {
-    backgroundColor: memberColors.lime,
+  btnBooking: {
+    backgroundColor: memberColors.court,
   },
-  btnPrimaryHover: {
+  btnBookingHover: {
     ...(Platform.OS === 'web' && {
-      boxShadow: '0 4px 16px rgba(212, 249, 52, 0.35)',
+      boxShadow: '0 4px 14px rgba(30, 61, 50, 0.22)',
     }),
   },
   btnSecondary: {
@@ -55,6 +70,14 @@ const styles = StyleSheet.create({
   btnSecondaryHover: {
     ...(Platform.OS === 'web' && { backgroundColor: memberColors.limeSoft }),
   },
+  limeAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: memberColors.lime,
+  },
   btnPressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.94,
@@ -63,8 +86,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  labelPrimary: {
-    color: memberColors.ink,
+  labelBooking: {
+    color: memberColors.white,
   },
   labelSecondary: {
     color: memberColors.court,

@@ -1612,13 +1612,18 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
     <MemberPageBackground>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (isMobile ? 88 : 24) }]}
+        contentContainerStyle={[
+          styles.content,
+          servicesUse2x2 && isStudent && styles.contentMobile,
+          { paddingBottom: insets.bottom + (servicesUse2x2 ? 76 : isMobile ? 88 : 24) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <MemberWelcomeHeader
           userName={userName}
           subtitle={isStudent ? welcomeSubtitle : undefined}
-          showMenu={!isDesktop && !!onOpenSidebar}
+          compact={servicesUse2x2 && isStudent}
+          showMenu={!isDesktop && !!onOpenSidebar && !(servicesUse2x2 && isStudent)}
           onOpenSidebar={onOpenSidebar}
           language={language}
           onToggleLanguage={isStudent ? () => updateLanguage(language === 'en' ? 'zh-CN' : 'en') : undefined}
@@ -1630,52 +1635,112 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           <StreakIndicator
             weeks={streakCount}
             onPress={onGoToPerformance}
-            labelEmpty={t('startStreak')}
+            compact={servicesUse2x2}
+            labelEmpty={servicesUse2x2 ? t('startStreakShort') : t('startStreak')}
+            labelActive={
+              servicesUse2x2 && streakCount > 0
+                ? t('streakWeeksShort').replace('{{count}}', String(streakCount))
+                : undefined
+            }
             t={t}
           />
         )}
 
         {isStudent ? (
-          <View style={[styles.heroRow, servicesUse2x2 && styles.heroRowStacked]}>
-            <View style={servicesUse2x2 ? styles.heroMainFull : styles.heroMain}>
-              <NextSessionHero
-              booking={nextBooking}
-              loading={loadingBooking}
-              onBook={onBookLesson}
-              onViewBooking={() => {
-                if (nextBooking) {
-                  setSelectedBooking(nextBooking);
-                  setEditModalVisible(true);
-                }
-              }}
-              formatDate={formatDate}
-              formatTime={formatTime}
-              language={language}
-              labels={{
-                nextOnCourt: t('nextOnCourt'),
-                noBooking: t('nothingBookedYet'),
-                noBookingSub: t('findSessionSub'),
-                bookNow: t('findSession'),
-                viewBooking: t('viewBooking'),
-                tennisLesson: t('tennisLesson'),
-                tbd: t('tbd'),
-              }}
-            />
+          servicesUse2x2 ? (
+            <>
+              <View style={styles.mobileHeroBlock}>
+                <NextSessionHero
+                  booking={nextBooking}
+                  loading={loadingBooking}
+                  compact
+                  onBook={onBookLesson}
+                  onViewBooking={() => {
+                    if (nextBooking) {
+                      setSelectedBooking(nextBooking);
+                      setEditModalVisible(true);
+                    }
+                  }}
+                  formatDate={formatDate}
+                  formatTime={formatTime}
+                  language={language}
+                  labels={{
+                    nextOnCourt: t('nextOnCourt'),
+                    noBooking: t('nothingBookedYet'),
+                    noBookingSub: t('findSessionSub'),
+                    bookNow: t('findSession'),
+                    viewBooking: t('viewBooking'),
+                    tennisLesson: t('tennisLesson'),
+                    tbd: t('tbd'),
+                  }}
+                />
+              </View>
+
+              {onBrowseAvailableSessions && (
+                <View style={styles.browseRowMobile}>
+                  <AvailableSessionsButton
+                    label={t('browseAvailableSessions')}
+                    onPress={onBrowseAvailableSessions}
+                    variant="booking"
+                  />
+                </View>
+              )}
+
+              <View style={styles.mobileCreditBlock}>
+                <CreditBalanceCard
+                  balance={creditBalance}
+                  loading={loadingBalance}
+                  onTopUp={() => setShowTopUpModal(true)}
+                  mobileCompact
+                  labels={{
+                    creditBalance: t('creditBalanceShort'),
+                    availableForBookings: t('availableForBookings'),
+                    topUp: t('topUp'),
+                  }}
+                />
+              </View>
+            </>
+          ) : (
+            <View style={styles.heroRow}>
+              <View style={styles.heroMain}>
+                <NextSessionHero
+                  booking={nextBooking}
+                  loading={loadingBooking}
+                  onBook={onBookLesson}
+                  onViewBooking={() => {
+                    if (nextBooking) {
+                      setSelectedBooking(nextBooking);
+                      setEditModalVisible(true);
+                    }
+                  }}
+                  formatDate={formatDate}
+                  formatTime={formatTime}
+                  language={language}
+                  labels={{
+                    nextOnCourt: t('nextOnCourt'),
+                    noBooking: t('nothingBookedYet'),
+                    noBookingSub: t('findSessionSub'),
+                    bookNow: t('findSession'),
+                    viewBooking: t('viewBooking'),
+                    tennisLesson: t('tennisLesson'),
+                    tbd: t('tbd'),
+                  }}
+                />
+              </View>
+              <View style={styles.heroSide}>
+                <CreditBalanceCard
+                  balance={creditBalance}
+                  loading={loadingBalance}
+                  onTopUp={() => setShowTopUpModal(true)}
+                  labels={{
+                    creditBalance: t('creditBalance'),
+                    availableForBookings: t('availableForBookings'),
+                    topUp: t('topUp'),
+                  }}
+                />
+              </View>
             </View>
-            <View style={servicesUse2x2 ? styles.heroSideFull : styles.heroSide}>
-            <CreditBalanceCard
-              balance={creditBalance}
-              loading={loadingBalance}
-              onTopUp={() => setShowTopUpModal(true)}
-              compact={servicesUse2x2}
-              labels={{
-                creditBalance: t('creditBalance'),
-                availableForBookings: t('availableForBookings'),
-                topUp: t('topUp'),
-              }}
-            />
-            </View>
-          </View>
+          )
         ) : (
           <View style={styles.statsRow}>
             <StatCard
@@ -1703,17 +1768,17 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
           </View>
         )}
 
-        {isStudent && onBrowseAvailableSessions && (
+        {isStudent && onBrowseAvailableSessions && !servicesUse2x2 && (
           <View style={styles.browseRow}>
             <AvailableSessionsButton
               label={t('browseAvailableSessions')}
               onPress={onBrowseAvailableSessions}
-              variant={servicesUse2x2 ? 'primary' : 'secondary'}
+              variant="secondary"
             />
           </View>
         )}
 
-        <View style={styles.servicesSection}>
+        <View style={[styles.servicesSection, servicesUse2x2 && isStudent && styles.servicesSectionMobile]}>
           <SectionHeader
             title={t('selectAService')}
             actionLabel={onBrowseAvailableSessions ? t('viewAllAvailable') : undefined}
@@ -1887,31 +1952,37 @@ const styles = StyleSheet.create({
       paddingTop: 28,
     }),
   },
+  contentMobile: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  mobileHeroBlock: {
+    marginBottom: 12,
+  },
+  mobileCreditBlock: {
+    marginBottom: 20,
+  },
+  browseRowMobile: {
+    marginBottom: 14,
+  },
+  servicesSectionMobile: {
+    marginBottom: 20,
+  },
   heroRow: {
     flexDirection: 'row',
     gap: 16,
     marginBottom: 32,
     alignItems: 'stretch',
   },
-  heroRowStacked: {
-    flexDirection: 'column',
-  },
   heroMain: {
     flex: 2,
-  },
-  heroMainFull: {
-    width: '100%',
   },
   heroSide: {
     flex: 1,
     maxWidth: 240,
   },
-  heroSideFull: {
-    width: '100%',
-  },
   browseRow: {
     marginBottom: 24,
-    marginTop: -8,
   },
   servicesShelf: {
     flexDirection: 'row',

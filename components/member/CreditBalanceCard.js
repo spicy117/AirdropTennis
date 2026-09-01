@@ -5,12 +5,54 @@ import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTr
 import CourtWatermark from './CourtWatermark';
 import MemberSkeleton from './MemberSkeleton';
 
-export default function CreditBalanceCard({ balance, loading, onTopUp, labels = {}, compact = false }) {
+export default function CreditBalanceCard({
+  balance,
+  loading,
+  onTopUp,
+  labels = {},
+  compact = false,
+  mobileCompact = false,
+}) {
   const {
     creditBalance = 'Credit balance',
     availableForBookings = 'Available for bookings',
     topUp = 'Top Up',
   } = labels;
+
+  if (mobileCompact) {
+    return (
+      <View style={styles.cardMobileCompact}>
+        <View style={styles.mobileCompactRow}>
+          <View style={styles.mobileCompactMain}>
+            <Text style={styles.mobileCompactLabel}>{creditBalance}</Text>
+            <View style={styles.mobileCompactAmountRow}>
+              {loading ? (
+                <MemberSkeleton width={100} height={28} radius={6} />
+              ) : (
+                <Text style={styles.mobileCompactAmount}>${balance.toFixed(2)}</Text>
+              )}
+              <Text style={styles.mobileCompactAvailable} numberOfLines={1}>
+                {availableForBookings}
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            style={({ pressed, hovered }) => [
+              styles.mobileCompactTopUp,
+              hovered && Platform.OS === 'web' && styles.topUpHovered,
+              pressed && styles.topUpPressed,
+            ]}
+            onPress={onTopUp}
+            accessibilityRole="button"
+            accessibilityLabel={topUp}
+          >
+            <Ionicons name="add" size={18} color={memberColors.court} />
+            <Text style={styles.mobileCompactTopUpText}>{topUp}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.card, compact && styles.cardCompact]}>
@@ -62,6 +104,69 @@ const styles = StyleSheet.create({
   },
   cardCompact: {
     minHeight: undefined,
+  },
+  cardMobileCompact: {
+    backgroundColor: memberColors.surfaceRaised,
+    borderRadius: memberRadius.lg,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  mobileCompactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mobileCompactMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mobileCompactLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: memberColors.inkMuted,
+    marginBottom: 4,
+  },
+  mobileCompactAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  mobileCompactAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.6,
+    color: memberColors.ink,
+    lineHeight: 28,
+  },
+  mobileCompactAvailable: {
+    flex: 1,
+    fontSize: 12,
+    color: memberColors.inkMuted,
+    lineHeight: 16,
+    minWidth: 0,
+  },
+  mobileCompactTopUp: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: memberRadius.md,
+    backgroundColor: memberColors.limeSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 249, 52, 0.35)',
+    ...memberWebTransition('background-color, transform'),
+  },
+  mobileCompactTopUpText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: memberColors.court,
+    marginTop: 2,
   },
   inner: {
     padding: 22,

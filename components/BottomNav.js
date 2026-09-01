@@ -55,7 +55,7 @@ export default function BottomNav({ activeScreen, onNavigate }) {
     <View
       style={[
         isStudent ? memberStyles.container : styles.container,
-        { paddingBottom: Math.max(insets.bottom, 8) },
+        { paddingBottom: Math.max(insets.bottom, 6) },
       ]}
     >
       {menuItems.map((item) => {
@@ -74,7 +74,7 @@ export default function BottomNav({ activeScreen, onNavigate }) {
               {isActive && <View style={memberStyles.activeIndicator} />}
               <Ionicons
                 name={isActive ? item.activeIcon : item.icon}
-                size={22}
+                size={20}
                 color={isActive ? memberColors.ink : memberColors.inkMuted}
               />
               <Text style={[memberStyles.label, isActive && memberStyles.labelActive]} numberOfLines={1}>
@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    minHeight: 52,
+    paddingVertical: 4,
+    minHeight: 44,
   },
   label: {
     marginTop: 4,
@@ -149,7 +149,7 @@ const memberStyles = StyleSheet.create({
     backgroundColor: memberColors.surfaceRaised,
     borderTopWidth: 1,
     borderTopColor: memberColors.border,
-    paddingTop: 6,
+    paddingTop: 4,
     ...(Platform.OS === 'web' && {
       position: 'fixed',
       bottom: 0,
@@ -164,7 +164,7 @@ const memberStyles = StyleSheet.create({
   activeIndicator: {
     position: 'absolute',
     top: 0,
-    width: 20,
+    width: 18,
     height: 2,
     borderRadius: 1,
     backgroundColor: memberColors.lime,
@@ -173,7 +173,7 @@ const memberStyles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     color: memberColors.inkMuted,
-    marginTop: 4,
+    marginTop: 2,
     ...memberWebTransition('color'),
   },
   labelActive: {

@@ -14,11 +14,45 @@ export default function MemberWelcomeHeader({
   onToggleLanguage,
   langEnShort,
   langZhShort,
+  compact = false,
 }) {
   const t = (key) => getTranslation(language, key);
   const firstName = userName?.split(' ')[0] || userName;
   const greeting = t(getGreetingKey());
   const greetingPunct = language === 'zh-CN' ? '，' : ',';
+
+  if (compact) {
+    return (
+      <View style={styles.headerCompact}>
+        <Text style={styles.greetingCompact}>
+          {greeting}
+          {greetingPunct} {firstName}
+        </Text>
+        {subtitle || onToggleLanguage ? (
+          <View style={styles.compactSubRow}>
+            {subtitle ? (
+              <Text style={styles.subtitleCompact} numberOfLines={2}>
+                {subtitle}
+              </Text>
+            ) : (
+              <View style={styles.textWrap} />
+            )}
+            {onToggleLanguage && (
+              <Pressable
+                style={({ pressed }) => [styles.langBtnCompact, pressed && styles.btnPressed]}
+                onPress={onToggleLanguage}
+                accessibilityRole="button"
+                accessibilityLabel={language === 'en' ? t('switchToChinese') : t('switchToEnglish')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.langTextCompact}>{language === 'en' ? langZhShort : langEnShort}</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.header}>
@@ -61,6 +95,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
   },
+  headerCompact: {
+    marginBottom: 4,
+  },
+  compactSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 4,
+  },
   left: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -92,6 +136,13 @@ const styles = StyleSheet.create({
     color: memberColors.inkMuted,
     marginBottom: 2,
   },
+  greetingCompact: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: memberColors.ink,
+    lineHeight: 26,
+  },
   name: {
     ...memberTypography.hero,
     fontSize: 30,
@@ -101,6 +152,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: memberColors.inkSecondary,
     fontWeight: '500',
+  },
+  subtitleCompact: {
+    flex: 1,
+    fontSize: 13,
+    color: memberColors.inkMuted,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   langBtn: {
     flexDirection: 'row',
@@ -114,9 +172,27 @@ const styles = StyleSheet.create({
     borderColor: memberColors.border,
     ...memberWebTransition('background-color, transform'),
   },
+  langBtnCompact: {
+    minHeight: 32,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: memberColors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+    ...memberWebTransition('background-color, transform'),
+  },
   langText: {
     fontSize: 12,
     fontWeight: '600',
     color: memberColors.inkMuted,
+  },
+  langTextCompact: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: memberColors.court,
   },
 });

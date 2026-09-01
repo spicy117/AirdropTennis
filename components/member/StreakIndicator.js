@@ -3,7 +3,7 @@ import { Pressable, Text, StyleSheet, Platform } from 'react-native';
 import { memberColors, memberRadius, memberWebTransition } from '../../theme/memberTheme';
 import { formatStreakWeeks } from '../../utils/locale';
 
-export default function StreakIndicator({ weeks = 0, onPress, labelEmpty, labelActive, t }) {
+export default function StreakIndicator({ weeks = 0, onPress, labelEmpty, labelActive, t, compact = false }) {
   const hasStreak = weeks > 0;
   const text = hasStreak
     ? (labelActive || (t ? formatStreakWeeks(weeks, t) : `${weeks} weeks`))
@@ -17,6 +17,7 @@ export default function StreakIndicator({ weeks = 0, onPress, labelEmpty, labelA
     <Pressable
       style={({ pressed, hovered }) => [
         styles.pill,
+        compact && styles.pillCompact,
         hasStreak && styles.pillActive,
         hovered && Platform.OS === 'web' && styles.pillHovered,
         pressed && styles.pillPressed,
@@ -25,8 +26,8 @@ export default function StreakIndicator({ weeks = 0, onPress, labelEmpty, labelA
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
     >
-      <Text style={styles.flame}>🔥</Text>
-      <Text style={[styles.text, hasStreak && styles.textActive]}>{text}</Text>
+      <Text style={[styles.flame, compact && styles.flameCompact]}>🔥</Text>
+      <Text style={[styles.text, compact && styles.textCompact, hasStreak && styles.textActive]}>{text}</Text>
     </Pressable>
   );
 }
@@ -45,6 +46,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     ...memberWebTransition('background-color, transform, border-color'),
   },
+  pillCompact: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
   pillActive: {
     backgroundColor: memberColors.limeSoft,
     borderColor: 'rgba(212, 249, 52, 0.3)',
@@ -62,10 +68,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginRight: 6,
   },
+  flameCompact: {
+    fontSize: 12,
+    marginRight: 4,
+  },
   text: {
     fontSize: 13,
     fontWeight: '600',
     color: memberColors.inkMuted,
+  },
+  textCompact: {
+    fontSize: 12,
   },
   textActive: {
     color: memberColors.ink,
