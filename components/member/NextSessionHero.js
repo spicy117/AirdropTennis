@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { memberColors, memberRadius, memberShadow, memberTypography, memberWebTransition } from '../../theme/memberTheme';
-import MemberButton from './MemberButton';
 import CourtWatermark from './CourtWatermark';
 import { HeroSkeleton } from './MemberSkeleton';
 import { formatHeroDateParts } from '../../utils/locale';
@@ -27,7 +26,6 @@ export default function NextSessionHero({
     nextOnCourt,
     noBooking,
     noBookingSub,
-    bookNow,
     viewBooking,
     tennisLesson,
     tbd,
@@ -44,8 +42,7 @@ export default function NextSessionHero({
         <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>
           <Text style={[styles.eyebrow, compact && styles.eyebrowCompact]}>{nextOnCourt}</Text>
           <Text style={styles.emptyTitle}>{noBooking}</Text>
-          <Text style={styles.emptySub}>{noBookingSub}</Text>
-          <MemberButton label={bookNow} onPress={onBook} variant="lime" icon="arrow-forward" style={styles.cta} />
+          <Text style={[styles.emptySub, compact && styles.emptySubCompact]}>{noBookingSub}</Text>
         </View>
       </View>
     );
@@ -147,7 +144,7 @@ const styles = StyleSheet.create({
   },
   heroEmptyCompact: {
     padding: 16,
-    minHeight: 180,
+    minHeight: 140,
   },
   heroBody: {
     padding: 22,
@@ -282,10 +279,10 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     ...memberTypography.body,
-    marginBottom: 20,
+    marginBottom: 0,
     maxWidth: 280,
   },
-  cta: {
-    alignSelf: 'flex-start',
+  emptySubCompact: {
+    marginBottom: 0,
   },
 });

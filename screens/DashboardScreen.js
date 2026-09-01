@@ -1615,7 +1615,7 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
         contentContainerStyle={[
           styles.content,
           servicesUse2x2 && isStudent && styles.contentMobile,
-          { paddingBottom: insets.bottom + (servicesUse2x2 ? 76 : isMobile ? 88 : 24) },
+          { paddingBottom: insets.bottom + (servicesUse2x2 ? 80 : isMobile ? 88 : 24) },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -1668,7 +1668,6 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                     nextOnCourt: t('nextOnCourt'),
                     noBooking: t('nothingBookedYet'),
                     noBookingSub: t('findSessionSub'),
-                    bookNow: t('findSession'),
                     viewBooking: t('viewBooking'),
                     tennisLesson: t('tennisLesson'),
                     tbd: t('tbd'),
@@ -1720,7 +1719,6 @@ export default function DashboardScreen({ onBookLesson, onSelectService, refresh
                     nextOnCourt: t('nextOnCourt'),
                     noBooking: t('nothingBookedYet'),
                     noBookingSub: t('findSessionSub'),
-                    bookNow: t('findSession'),
                     viewBooking: t('viewBooking'),
                     tennisLesson: t('tennisLesson'),
                     tbd: t('tbd'),
@@ -1954,19 +1952,19 @@ const styles = StyleSheet.create({
   },
   contentMobile: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
   },
   mobileHeroBlock: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   mobileCreditBlock: {
-    marginBottom: 20,
-  },
-  browseRowMobile: {
     marginBottom: 14,
   },
+  browseRowMobile: {
+    marginBottom: 12,
+  },
   servicesSectionMobile: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   heroRow: {
     flexDirection: 'row',

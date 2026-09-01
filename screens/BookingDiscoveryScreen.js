@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
   Dimensions,
@@ -12,14 +13,16 @@ import {
   Modal,
   Alert,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getTranslation } from '../utils/translations';
-import { getLocale, getWeekdayLabels, formatDurationFromHours } from '../utils/locale';
+import { getLocale, getWeekdayLabels, formatDurationFromHours, formatDateGroupHeader, formatMonthYear } from '../utils/locale';
 import { getSydneyToday, sydneyDateToUTCStart, sydneyDateToUTCEnd, utcToSydneyDate } from '../utils/timezone';
+import { memberColors } from '../theme/memberTheme';
 
 // Conditionally import MapView for native platforms
 let MapView, Marker, UrlTile;
@@ -527,6 +530,8 @@ export default function BookingDiscoveryScreen({
   initialTime24 = null,
 }) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const isMobileLayout = windowWidth <= 768;
   const { language } = useLanguage();
   const t = (key) => getTranslation(language, key);
   const locale = getLocale(language);
@@ -557,6 +562,9 @@ export default function BookingDiscoveryScreen({
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [selectedMapLocation, setSelectedMapLocation] = useState(null);
   const [showLocationsMap, setShowLocationsMap] = useState(false);
+  const [monthlyCalendarExpanded, setMonthlyCalendarExpanded] = useState(true);
+  const monthlyScrollRef = useRef(null);
+  const sessionsSectionY = useRef(0);
   // Use Sydney local time for today
   const todayStr = getSydneyToday();
 
@@ -621,10 +629,7 @@ export default function BookingDiscoveryScreen({
   // Get current date range label
   const getDateRangeLabel = () => {
     if (viewMode === 'monthly') {
-      return new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      });
+      return formatMonthYear(new Date(calendarYear, calendarMonth), language);
     }
     
     // For weekly view, find the visible range
@@ -731,14 +736,29 @@ export default function BookingDiscoveryScreen({
   };
 
   const handleMonthDateClick = (dateStr) => {
-    if (dateStr) {
-      setSelectedDate(dateStr);
-      // If on mobile, the time slots will show below
+    if (!dateStr) return;
+    setSelectedDate(dateStr);
+    if (isMobileLayout && viewMode === 'monthly') {
+      setMonthlyCalendarExpanded(false);
+      const reduceMotion =
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          monthlyScrollRef.current?.scrollTo({
+            y: Math.max(0, sessionsSectionY.current - 8),
+            animated: !reduceMotion,
+          });
+        }, 120);
+      });
     }
   };
 
-  // Handle view mode change with fade transition
   const handleViewModeChange = (newMode) => {
+    if (newMode === 'monthly') {
+      setMonthlyCalendarExpanded(true);
+    }
     // useNativeDriver is not supported on web
     const useNativeDriver = Platform.OS !== 'web';
     Animated.sequence([
@@ -1405,6 +1425,299 @@ export default function BookingDiscoveryScreen({
 
   const summary = calculateSummary();
   const canProceed = hasValidSelection(); // At least 1 hour (2 consecutive 30-min slots)
+  const isMobileMonthly = viewMode === 'monthly' && isMobileLayout;
+  const selectedDateSessionCount = groupedAvailabilities.reduce((sum, g) => sum + g.slots.length, 0);
+
+  const findNextAvailableDate = (fromDateStr) =>
+    Object.keys(availabilityHeatmap)
+      .filter((d) => availabilityHeatmap[d] === true && d > fromDateStr)
+      .sort()[0] || null;
+
+  const flatMobileSlots = groupedAvailabilities
+    .flatMap((group) =>
+      group.slots.map((slot) => ({
+        ...slot,
+        locationName: group.locationName,
+        locationData: group.locationData,
+      }))
+    )
+    .sort((a, b) => (a.time24 || '').localeCompare(b.time24 || ''));
+
+  const renderSlotChip = (slot, slotIndex, group) => {
+    const isSelected = isSlotSelected(slot);
+    const locationSlots = getSelectedSlotsForLocationAndService(slot.locationId, slot.serviceName);
+    const sortedSlots = [...locationSlots].sort((a, b) => (a.time24 || '').localeCompare(b.time24 || ''));
+
+    let isStartSlot = false;
+    let isEndSlot = false;
+    let isMiddleSlot = false;
+
+    if (isSelected && sortedSlots.length > 0) {
+      const slotIndexInSelection = sortedSlots.findIndex((s) => s.time24 === slot.time24);
+      isStartSlot = slotIndexInSelection === 0;
+      isEndSlot = slotIndexInSelection === sortedSlots.length - 1;
+      isMiddleSlot = slotIndexInSelection > 0 && slotIndexInSelection < sortedSlots.length - 1;
+    }
+
+    return (
+      <TouchableOpacity
+        key={`${slot.id || slot.time24}-${slotIndex}`}
+        style={[
+          styles.slotChip,
+          isSelected && styles.slotChipSelected,
+          isStartSlot && styles.slotChipStart,
+          isEndSlot && styles.slotChipEnd,
+          isMiddleSlot && styles.slotChipMiddle,
+          !isSelected && styles.slotChipUnselected,
+        ]}
+        onPress={() => handleSlotClick(slot)}
+      >
+        <Text style={[styles.slotChipText, isSelected && styles.slotChipTextSelected]}>
+          {slot.time}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCompactSessionRow = (slot, index) => {
+    const isSelected = isSlotSelected(slot);
+    const serviceName = slot.serviceName || t('tennisLesson');
+    const durationHours = SERVICE_DURATION_RULES[serviceName] || 1;
+
+    return (
+      <Pressable
+        key={`${slot.id || slot.time24}-${index}`}
+        style={({ pressed }) => [
+          styles.sessionRow,
+          isSelected && styles.sessionRowSelected,
+          pressed && styles.sessionRowPressed,
+        ]}
+        onPress={() => handleSlotClick(slot)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+      >
+        <View style={styles.sessionRowMain}>
+          <Text style={[styles.sessionRowTime, isSelected && styles.sessionRowTimeSelected]}>
+            {slot.time}
+          </Text>
+          <Text style={styles.sessionRowService} numberOfLines={1}>
+            {serviceName}
+          </Text>
+          <Text style={styles.sessionRowLocation} numberOfLines={1}>
+            {slot.locationName}
+          </Text>
+          <Text style={styles.sessionRowMeta}>
+            {formatDurationFromHours(durationHours, t)}
+          </Text>
+        </View>
+        <View style={[styles.sessionRowAction, isSelected && styles.sessionRowActionSelected]}>
+          {isSelected ? (
+            <Ionicons name="checkmark" size={16} color={memberColors.white} />
+          ) : (
+            <>
+              <Text style={styles.sessionRowActionText}>{t('selectSlot')}</Text>
+              <Ionicons name="arrow-forward" size={14} color={memberColors.court} />
+            </>
+          )}
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderAvailabilityContent = (compactRows = false) => {
+    if (loading) {
+      return (
+        <View style={styles.skeletonContainer}>
+          {[1, 2, 3].map((i) => (
+            <View key={i} style={styles.skeletonGroup}>
+              <View style={styles.skeletonHeader}>
+                <SkeletonChip />
+                <SkeletonChip />
+              </View>
+              <View style={styles.skeletonSlots}>
+                {[1, 2, 3, 4, 5, 6].map((j) => (
+                  <SkeletonChip key={j} />
+                ))}
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (groupedAvailabilities.length === 0) {
+      const nextDate = findNextAvailableDate(selectedDate);
+      return (
+        <View style={styles.emptyStateCompact}>
+          <Ionicons name="calendar-outline" size={40} color="#C7C7CC" />
+          <Text style={styles.emptyTitleCompact}>{t('noAvailability')}</Text>
+          <Text style={styles.emptyTextCompact}>
+            {t('noSessionsOnDate').replace('{{date}}', formatDateGroupHeader(selectedDate, language))}
+          </Text>
+          {nextDate && (
+            <TouchableOpacity
+              style={styles.nextDateButton}
+              onPress={() => handleMonthDateClick(nextDate)}
+            >
+              <Text style={styles.nextDateButtonText}>{t('viewNextAvailableDate')}</Text>
+              <Ionicons name="arrow-forward" size={14} color={memberColors.court} />
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
+    if (compactRows) {
+      return (
+        <View style={styles.sessionRowList}>
+          {flatMobileSlots.map((slot, index) => (
+            <React.Fragment key={`${slot.id || slot.time24}-${index}`}>
+              {renderCompactSessionRow(slot, index)}
+              {index < flatMobileSlots.length - 1 && <View style={styles.sessionRowDivider} />}
+            </React.Fragment>
+          ))}
+        </View>
+      );
+    }
+
+    return groupedAvailabilities.map((group, groupIndex) => {
+      const serviceStyle = SERVICE_STYLES[group.serviceName] || DEFAULT_SERVICE_STYLE;
+      return (
+        <View key={groupIndex} style={styles.group}>
+          <View style={styles.groupHeader}>
+            <TouchableOpacity
+              style={styles.groupHeaderTop}
+              onPress={() => handleLocationPress(group.locationData)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.locationPinIcon}>
+                <Ionicons name="location" size={18} color="#000" />
+              </View>
+              <Text style={styles.groupLocation}>{group.locationName}</Text>
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+            {group.serviceName && group.serviceName !== 'General' && (
+              <View
+                style={[
+                  styles.serviceBadge,
+                  {
+                    backgroundColor: serviceStyle.bg,
+                    borderColor: serviceStyle.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.serviceBadgeText, { color: serviceStyle.text }]}>
+                  {group.serviceName}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.slotsContainer}>
+            {group.slots.map((slot, slotIndex) => renderSlotChip(slot, slotIndex, group))}
+          </View>
+        </View>
+      );
+    });
+  };
+
+  const renderMonthlyCalendar = () => (
+    <Animated.View
+      style={[
+        styles.monthlyView,
+        isMobileLayout && styles.monthlyViewCompact,
+        { opacity: fadeAnim },
+      ]}
+    >
+      <View style={[styles.monthNav, isMobileLayout && styles.monthNavCompact]}>
+        <TouchableOpacity style={styles.monthNavButton} onPress={handlePrevMonth}>
+          <Ionicons name="chevron-back" size={22} color={memberColors.ink} />
+        </TouchableOpacity>
+        <Text style={styles.monthNavTitle}>
+          {formatMonthYear(new Date(calendarYear, calendarMonth), language)}
+        </Text>
+        <TouchableOpacity style={styles.monthNavButton} onPress={handleNextMonth}>
+          <Ionicons name="chevron-forward" size={22} color={memberColors.ink} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.calendarGrid}>
+        {weekdayLabels.map((day) => (
+          <View key={day} style={[styles.calendarDayHeader, isMobileLayout && styles.calendarDayHeaderCompact]}>
+            <Text style={styles.calendarDayHeaderText}>{day}</Text>
+          </View>
+        ))}
+
+        {monthlyDays.map((dayData, index) => {
+          if (!dayData) {
+            return <View key={`empty-${index}`} style={[styles.calendarDay, isMobileLayout && styles.calendarDayCompact]} />;
+          }
+
+          const { day, dateStr, isPast, isToday, isSelected } = dayData;
+          const hasAvailability = availabilityHeatmap[dateStr] === true;
+          const hasNoAvailability = availabilityHeatmap[dateStr] === false && !heatmapLoading && !isPast;
+
+          return (
+            <TouchableOpacity
+              key={dateStr}
+              style={[
+                styles.calendarDay,
+                isMobileLayout && styles.calendarDayCompact,
+                hasAvailability && !isSelected && !isPast && styles.calendarDayAvailable,
+                hasNoAvailability && !isSelected && styles.calendarDayUnavailable,
+                isSelected && styles.calendarDaySelected,
+                isPast && styles.calendarDayPast,
+              ]}
+              onPress={() => !isPast && handleMonthDateClick(dateStr)}
+              disabled={isPast}
+            >
+              {isToday && !isSelected && <View style={styles.calendarDayTodayRing} />}
+              <Text
+                style={[
+                  styles.calendarDayText,
+                  isSelected && styles.calendarDayTextSelected,
+                  isPast && styles.calendarDayTextPast,
+                ]}
+              >
+                {day}
+              </Text>
+              {hasAvailability && !isPast && !isSelected && <View style={styles.calendarDayDot} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </Animated.View>
+  );
+
+  const renderMonthlyDateHeader = () => (
+    <View style={[styles.monthlyDateHeader, isMobileMonthly && styles.monthlyDateHeaderMobile]}>
+      <View style={styles.monthlyDateHeaderText}>
+        <Text style={styles.monthlyDateTitle}>{formatDateGroupHeader(selectedDate, language)}</Text>
+        {!loading && selectedDateSessionCount > 0 && (
+          <Text style={styles.monthlyDateSub}>
+            {selectedDateSessionCount === 1
+              ? t('sessionAvailable')
+              : t('sessionsAvailable').replace('{{count}}', String(selectedDateSessionCount))}
+          </Text>
+        )}
+      </View>
+      {isMobileMonthly && !monthlyCalendarExpanded && (
+        <TouchableOpacity
+          style={styles.changeDateBtn}
+          onPress={() => {
+            setMonthlyCalendarExpanded(true);
+            monthlyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('changeDate')}
+        >
+          <Text style={styles.changeDateText}>{t('changeDate')}</Text>
+          <Ionicons name="chevron-down" size={14} color={memberColors.court} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const scrollBottomPadding = insets.bottom + (selectedSlots.length > 0 ? 140 : 88);
 
   // Derived locations list with valid coordinates
   const locationsWithCoords = locations.filter(
@@ -1847,215 +2160,46 @@ export default function BookingDiscoveryScreen({
         </Animated.View>
       )}
 
-      {/* Monthly View */}
-      {viewMode === 'monthly' && (
-        <Animated.View
-          style={[
-            styles.monthlyView,
-            Platform.OS !== 'web' && styles.monthlyViewMobile,
-            { opacity: fadeAnim },
+      {/* Monthly View — desktop / tablet: calendar above session list */}
+      {viewMode === 'monthly' && !isMobileMonthly && renderMonthlyCalendar()}
+
+      {/* Mobile monthly: single natural scroll (calendar + sessions) */}
+      {isMobileMonthly ? (
+        <ScrollView
+          ref={monthlyScrollRef}
+          style={styles.monthlyScroll}
+          contentContainerStyle={[
+            styles.contentContainer,
+            styles.contentContainerMobileMonthly,
+            { paddingBottom: scrollBottomPadding },
           ]}
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[monthlyCalendarExpanded ? 1 : 0]}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Month Navigation */}
-          <View style={styles.monthNav}>
-            <TouchableOpacity
-              style={styles.monthNavButton}
-              onPress={handlePrevMonth}
-            >
-              <Ionicons name="chevron-back" size={24} color="#000" />
-            </TouchableOpacity>
-            <Text style={styles.monthNavTitle}>
-              {new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', {
-                month: 'long',
-                year: 'numeric',
-              })}
-            </Text>
-            <TouchableOpacity
-              style={styles.monthNavButton}
-              onPress={handleNextMonth}
-            >
-              <Ionicons name="chevron-forward" size={24} color="#000" />
-            </TouchableOpacity>
+          {monthlyCalendarExpanded && renderMonthlyCalendar()}
+          <View
+            style={styles.monthlyDateHeaderStickyWrap}
+            onLayout={(e) => {
+              sessionsSectionY.current = e.nativeEvent.layout.y;
+            }}
+          >
+            {renderMonthlyDateHeader()}
           </View>
-
-          {/* Calendar Grid */}
-          <View style={styles.calendarGrid}>
-            {/* Day Headers */}
-            {weekdayLabels.map((day) => (
-              <View key={day} style={styles.calendarDayHeader}>
-                <Text style={styles.calendarDayHeaderText}>{day}</Text>
-              </View>
-            ))}
-
-            {/* Calendar Days */}
-            {monthlyDays.map((dayData, index) => {
-              if (!dayData) {
-                return <View key={`empty-${index}`} style={styles.calendarDay} />;
-              }
-
-              const { day, dateStr, isPast, isToday, isSelected } = dayData;
-              const hasAvailability = availabilityHeatmap[dateStr] === true;
-              const hasNoAvailability = availabilityHeatmap[dateStr] === false && !heatmapLoading && !isPast;
-
-              return (
-                <TouchableOpacity
-                  key={dateStr}
-                  style={[
-                    styles.calendarDay,
-                    hasAvailability && !isSelected && !isPast && styles.calendarDayAvailable,
-                    hasNoAvailability && !isSelected && styles.calendarDayUnavailable,
-                    isSelected && styles.calendarDaySelected,
-                    isPast && styles.calendarDayPast,
-                  ]}
-                  onPress={() => !isPast && handleMonthDateClick(dateStr)}
-                  disabled={isPast}
-                >
-                  {isToday && !isSelected && (
-                    <View style={styles.calendarDayTodayRing} />
-                  )}
-                  <Text
-                    style={[
-                      styles.calendarDayText,
-                      isSelected && styles.calendarDayTextSelected,
-                      isPast && styles.calendarDayTextPast,
-                    ]}
-                  >
-                    {day}
-                  </Text>
-                  {hasAvailability && !isPast && !isSelected && (
-                    <View style={styles.calendarDayDot} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.monthlySessionsSection}>
+            {renderAvailabilityContent(true)}
           </View>
-        </Animated.View>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: scrollBottomPadding }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderAvailabilityContent(false)}
+        </ScrollView>
       )}
-
-      {/* Availability List */}
-      <ScrollView
-        style={[
-          styles.content,
-          viewMode === 'monthly' && Platform.OS !== 'web' && styles.contentMonthlyMobile,
-        ]}
-        contentContainerStyle={styles.contentContainer}
-      >
-        {loading ? (
-          // Skeleton Loaders
-          <View style={styles.skeletonContainer}>
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.skeletonGroup}>
-                <View style={styles.skeletonHeader}>
-                  <SkeletonChip />
-                  <SkeletonChip />
-                </View>
-                <View style={styles.skeletonSlots}>
-                  {[1, 2, 3, 4, 5, 6].map((j) => (
-                    <SkeletonChip key={j} />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : groupedAvailabilities.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyTitle}>{t('noAvailability')}</Text>
-            <Text style={styles.emptyText}>
-              There are no available time slots for this date.
-            </Text>
-          </View>
-        ) : (
-          groupedAvailabilities.map((group, groupIndex) => {
-            const serviceStyle = SERVICE_STYLES[group.serviceName] || DEFAULT_SERVICE_STYLE;
-            return (
-            <View key={groupIndex} style={styles.group}>
-              <View style={styles.groupHeader}>
-                <TouchableOpacity
-                  style={styles.groupHeaderTop}
-                  onPress={() => handleLocationPress(group.locationData)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.locationPinIcon}>
-                    <Ionicons name="location" size={18} color="#000" />
-                  </View>
-                  <Text style={styles.groupLocation}>{group.locationName}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-                </TouchableOpacity>
-                {group.serviceName && group.serviceName !== 'General' && (
-                  <View
-                    style={[
-                      styles.serviceBadge,
-                      {
-                        backgroundColor: serviceStyle.bg,
-                        borderColor: serviceStyle.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.serviceBadgeText,
-                        { color: serviceStyle.text },
-                      ]}
-                    >
-                      {group.serviceName}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.slotsContainer}>
-                {group.slots.map((slot, slotIndex) => {
-                  const isSelected = isSlotSelected(slot);
-                  const locationSlots = getSelectedSlotsForLocationAndService(
-                    slot.locationId,
-                    slot.serviceName
-                  );
-                  const sortedSlots = [...locationSlots].sort((a, b) =>
-                    (a.time24 || '').localeCompare(b.time24 || '')
-                  );
-                  
-                  // Determine if this is start, middle, or end of selection
-                  let isStartSlot = false;
-                  let isEndSlot = false;
-                  let isMiddleSlot = false;
-                  
-                  if (isSelected && sortedSlots.length > 0) {
-                    const slotIndexInSelection = sortedSlots.findIndex((s) => s.time24 === slot.time24);
-                    isStartSlot = slotIndexInSelection === 0;
-                    isEndSlot = slotIndexInSelection === sortedSlots.length - 1;
-                    isMiddleSlot = slotIndexInSelection > 0 && slotIndexInSelection < sortedSlots.length - 1;
-                  }
-                  
-                  return (
-                    <TouchableOpacity
-                      key={slotIndex}
-                      style={[
-                        styles.slotChip,
-                        isSelected && styles.slotChipSelected,
-                        isStartSlot && styles.slotChipStart,
-                        isEndSlot && styles.slotChipEnd,
-                        isMiddleSlot && styles.slotChipMiddle,
-                        !isSelected && styles.slotChipUnselected, // Normal margin for unselected
-                      ]}
-                      onPress={() => handleSlotClick(slot)}
-                    >
-                      <Text
-                        style={[
-                          styles.slotChipText,
-                          isSelected && styles.slotChipTextSelected,
-                        ]}
-                      >
-                        {slot.time}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-            );
-          })
-        )}
-      </ScrollView>
 
       {/* Selection Summary Bar - Full Width Sticky Footer */}
       {selectedSlots.length > 0 && (
@@ -2529,8 +2673,13 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 12,
   },
-  monthlyViewMobile: {
-    maxHeight: '50%',
+  monthlyViewCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  monthlyScroll: {
+    flex: 1,
   },
   monthNav: {
     flexDirection: 'row',
@@ -2538,20 +2687,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  monthNavCompact: {
+    marginBottom: 10,
+  },
   monthNavButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: memberColors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: memberColors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monthNavTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
+    color: memberColors.ink,
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -2559,77 +2711,253 @@ const styles = StyleSheet.create({
   },
   calendarDayHeader: {
     width: `${100 / 7}%`,
-    paddingVertical: 8,
+    paddingVertical: 6,
     alignItems: 'center',
   },
+  calendarDayHeaderCompact: {
+    paddingVertical: 4,
+  },
   calendarDayHeaderText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#8E8E93',
+    color: memberColors.inkMuted,
     textTransform: 'uppercase',
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    minHeight: 44, // Minimum 44px for mobile touch targets
+    minHeight: 44,
     aspectRatio: 1,
-    maxHeight: 60,
+    maxHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingVertical: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: memberColors.surfaceRaised,
+  },
+  calendarDayCompact: {
+    maxHeight: 46,
+    minHeight: 40,
   },
   calendarDaySelected: {
-    backgroundColor: '#000',
-    borderRadius: 20,
+    backgroundColor: memberColors.court,
+    borderRadius: 22,
   },
   calendarDayAvailable: {
-    backgroundColor: '#F0F9F4', // Light green (similar to bg-green-50)
+    backgroundColor: memberColors.limeSoft,
   },
   calendarDayUnavailable: {
-    backgroundColor: '#FEF2F2', // Light red (similar to bg-red-50)
+    backgroundColor: '#FAFAFA',
+    opacity: 0.7,
   },
   calendarDayPast: {
-    opacity: 0.3,
+    opacity: 0.35,
   },
   calendarDayTodayRing: {
     position: 'absolute',
-    width: '80%',
-    height: '80%',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#000',
+    width: '84%',
+    height: '84%',
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: memberColors.court,
   },
   calendarDayText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: '#000',
+    color: memberColors.ink,
   },
   calendarDayTextSelected: {
-    color: '#fff',
+    color: memberColors.white,
     fontWeight: '700',
   },
   calendarDayTextPast: {
-    color: '#8E8E93',
+    color: memberColors.inkMuted,
   },
   calendarDayDot: {
     position: 'absolute',
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#34C759',
+    bottom: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: memberColors.lime,
+  },
+  monthlyDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: memberColors.border,
+    backgroundColor: memberColors.bg,
+  },
+  monthlyDateHeaderMobile: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  monthlyDateHeaderStickyWrap: {
+    backgroundColor: memberColors.bg,
+    zIndex: 10,
+    ...(Platform.OS === 'web' && {
+      position: 'sticky',
+      top: 0,
+    }),
+  },
+  monthlyDateHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  monthlyDateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: memberColors.ink,
+    lineHeight: 22,
+  },
+  monthlyDateSub: {
+    fontSize: 13,
+    color: memberColors.inkMuted,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  changeDateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: memberColors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: memberColors.border,
+    flexShrink: 0,
+  },
+  changeDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: memberColors.court,
+  },
+  monthlySessionsSection: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  sessionRowList: {
+    paddingBottom: 8,
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  sessionRowSelected: {
+    backgroundColor: memberColors.limeSoft,
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  sessionRowPressed: {
+    opacity: 0.88,
+  },
+  sessionRowMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sessionRowTime: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: memberColors.ink,
+    marginBottom: 2,
+  },
+  sessionRowTimeSelected: {
+    color: memberColors.court,
+  },
+  sessionRowService: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: memberColors.ink,
+    marginBottom: 2,
+  },
+  sessionRowLocation: {
+    fontSize: 13,
+    color: memberColors.inkMuted,
+    marginBottom: 2,
+  },
+  sessionRowMeta: {
+    fontSize: 12,
+    color: memberColors.inkMuted,
+  },
+  sessionRowAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+  },
+  sessionRowActionSelected: {
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    borderRadius: 16,
+    backgroundColor: memberColors.court,
+  },
+  sessionRowActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: memberColors.court,
+  },
+  sessionRowDivider: {
+    height: 1,
+    backgroundColor: memberColors.border,
+  },
+  emptyStateCompact: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  emptyTitleCompact: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: memberColors.ink,
+    marginTop: 12,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptyTextCompact: {
+    fontSize: 14,
+    color: memberColors.inkMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  nextDateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: memberColors.limeSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 249, 52, 0.35)',
+  },
+  nextDateButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: memberColors.court,
   },
   content: {
     flex: 1,
   },
-  contentMonthlyMobile: {
-    maxHeight: '50%',
-  },
   contentContainer: {
     padding: 20,
-    paddingBottom: 140, // Space for full-width sticky footer (accounts for safe area insets)
+    paddingBottom: 140,
+  },
+  contentContainerMobileMonthly: {
+    padding: 0,
   },
   skeletonContainer: {
     gap: 24,

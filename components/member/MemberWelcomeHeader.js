@@ -96,14 +96,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerCompact: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   compactSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 4,
+    gap: 8,
+    marginTop: 2,
   },
   left: {
     flexDirection: 'row',
@@ -173,10 +173,11 @@ const styles = StyleSheet.create({
     ...memberWebTransition('background-color, transform'),
   },
   langBtnCompact: {
-    minHeight: 32,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    minHeight: 36,
+    minWidth: 36,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 14,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: memberColors.border,
@@ -191,8 +192,8 @@ const styles = StyleSheet.create({
     color: memberColors.inkMuted,
   },
   langTextCompact: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: memberColors.court,
+    fontSize: 11,
+    fontWeight: '600',
+    color: memberColors.inkMuted,
   },
 });

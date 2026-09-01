@@ -47,9 +47,11 @@ const styles = StyleSheet.create({
     ...memberWebTransition('background-color, transform, border-color'),
   },
   pillCompact: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    marginBottom: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+    borderColor: memberColors.border,
   },
   pillActive: {
     backgroundColor: memberColors.limeSoft,
@@ -69,8 +71,9 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   flameCompact: {
-    fontSize: 12,
-    marginRight: 4,
+    fontSize: 11,
+    marginRight: 3,
+    opacity: 0.85,
   },
   text: {
     fontSize: 13,
@@ -78,7 +81,9 @@ const styles = StyleSheet.create({
     color: memberColors.inkMuted,
   },
   textCompact: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    color: memberColors.inkFaint,
   },
   textActive: {
     color: memberColors.ink,
